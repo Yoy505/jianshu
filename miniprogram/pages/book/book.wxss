@@ -1,0 +1,23 @@
+/* 预约提交 */
+.bk-service-name { font-size: 32rpx; font-weight: 700; line-height: 1.4; }
+.date-scroll { margin-top: 20rpx; white-space: nowrap; }
+.date-scroll-inner { display: inline-block; }
+.date-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 152rpx;
+  padding: 18rpx 0;
+  border: 2rpx solid #E5E7EB;
+  border-radius: 16rpx;
+  margin-right: 16rpx;
+  background: #FFFFFF;
+  transition: all 150ms ease;
+}
+.date-chip.on { background: #0F766E; border-color: #0F766E; }
+.date-md { font-size: 30rpx; font-weight: 600; color: #1F2937; }
+.date-chip.on .date-md { color: #FFFFFF; }
+.date-week { margin-top: 4rpx; font-size: 22rpx; color: #9CA3AF; }
+.date-chip.on .date-week { color: rgba(255, 255, 255, 0.85); }
+.bk-period-label { margin-top: 28rpx; }
+.bk-fee-note { margin-top: 16rpx; }

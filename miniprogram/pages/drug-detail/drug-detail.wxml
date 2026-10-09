@@ -1,0 +1,152 @@
+<view class="page page-drug">
+  <!-- 骨架 -->
+  <block wx:if="{{loading}}">
+    <view class="skeleton">
+      <view class="sk-line first sk-w60"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w40"></view>
+    </view>
+    <view class="skeleton gap-top">
+      <view class="sk-line first sk-w30"></view>
+      <view class="sk-line sk-w80"></view>
+    </view>
+  </block>
+
+  <!-- 错误 -->
+  <view class="card" wx:elif="{{error}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">{{error}}</view>
+      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+    </view>
+  </view>
+
+  <block wx:else>
+    <view class="drug-demo-notice" wx:if="{{drug.publicationClass === 'demo'}}">演示资料，仅供功能测试；字段未作为正式药品资料核实或发布。</view>
+    <!-- 药品头 + 收藏 -->
+    <view class="card">
+      <view class="row-between">
+        <view class="dd-name flex-1 ellipsis-2">{{drug.commonName}}</view>
+        <view class="btn-mini {{drug.favorited ? '' : 'btn-plain'}} fav-btn" bindtap="toggleFav">
+          {{drug.favorited ? '已收藏' : '收 藏'}}
+        </view>
+      </view>
+      <view class="drug-publication {{drug.publicationClass}}">{{drug.publicationLabel}}</view>
+      <view class="row dd-tags" wx:if="{{drug.tags.length}}">
+        <view class="tag {{t.cls}}" wx:for="{{drug.tags}}" wx:for-item="t" wx:key="key">{{t.label}}</view>
+      </view>
+      <!-- 品牌资料只在接口实际返回时展示 -->
+      <view class="brand-slot" wx:if="{{drug.brandName}}">
+        <view class="brand-slot-label">品牌名称</view>
+        <view class="brand-slot-name">{{drug.brandName}}</view>
+      </view>
+    </view>
+
+    <!-- 监管登记字段与用药内容分开，字段缺失时不填充猜测值 -->
+    <view class="card gap-top" wx:if="{{drug.approvalNo || drug.form || drug.specification || drug.licenseHolder || drug.manufacturer}}">
+      <view class="section-title">{{drug.publicationClass === 'demo' ? '演示字段' : '监管注册基础资料'}}</view>
+      <view class="dd-row" wx:if="{{drug.approvalNo}}">
+        <view class="dd-label t2">批准文号</view>
+        <view class="dd-value">{{drug.approvalNo}}</view>
+      </view>
+      <view class="dd-row" wx:if="{{drug.form}}">
+        <view class="dd-label t2">剂型</view>
+        <view class="dd-value">{{drug.form}}</view>
+      </view>
+      <view class="dd-row" wx:if="{{drug.specification}}">
+        <view class="dd-label t2">规格</view>
+        <view class="dd-value">{{drug.specification}}</view>
+      </view>
+      <view class="dd-row" wx:if="{{drug.licenseHolder}}">
+        <view class="dd-label t2">上市许可持有人</view>
+        <view class="dd-value">{{drug.licenseHolder}}</view>
+      </view>
+      <view class="dd-row" wx:if="{{drug.manufacturer}}">
+        <view class="dd-label t2">生产企业</view>
+        <view class="dd-value">{{drug.manufacturer}}</view>
+      </view>
+    </view>
+
+    <view class="card gap-top" wx:if="{{drug.sourceName || drug.sourceCheckedAt || drug.sourceUrl}}">
+      <view class="section-title">资料来源</view>
+      <view class="dd-row" wx:if="{{drug.sourceName}}">
+        <view class="dd-label t2">来源</view>
+        <view class="dd-value">{{drug.sourceName}}</view>
+      </view>
+      <view class="dd-row" wx:if="{{drug.sourceCheckedAt}}">
+        <view class="dd-label t2">查询日期</view>
+        <view class="dd-value">{{drug.sourceCheckedAt}}</view>
+      </view>
+      <view class="source-copy" wx:if="{{drug.sourceUrl}}" bindtap="copySourceUrl">复制原始来源链接</view>
+      <view class="source-note" wx:if="{{drug.publicationClass === 'published'}}">公开查询记录只说明采集时所见信息，实际登记状态请以来源网站的最新结果为准。</view>
+    </view>
+
+    <view class="medical-section-label" wx:if="{{drug.hasMedicalContent}}">科普与用药资料</view>
+
+    <view class="card gap-top" wx:if="{{drug.indication}}">
+      <view class="section-title">适应症</view>
+      <view class="article dd-text">{{drug.indication}}</view>
+    </view>
+
+    <view class="card gap-top" wx:if="{{drug.usageNote}}">
+      <view class="section-title">用法用量</view>
+      <view class="article dd-text">{{drug.usageNote}}</view>
+    </view>
+
+    <view class="card gap-top" wx:if="{{drug.contraindication}}">
+      <view class="section-title">注意事项</view>
+      <view class="article dd-text">{{drug.contraindication}}</view>
+    </view>
+
+    <view class="card gap-top" wx:if="{{drug.science}}">
+      <view class="section-title">科普园地</view>
+      <view class="article dd-text">{{drug.science}}</view>
+    </view>
+
+    <!-- 无可用视频 URL 时不显示视频承诺或占位 -->
+    <view class="card gap-top" wx:if="{{drug.videoUrl}}">
+      <view class="section-title">科普视频</view>
+      <video class="dd-video" src="{{drug.videoUrl}}" controls object-fit="cover" />
+    </view>
+
+    <!-- 留言功能：仅开发/测试环境保留演示数据，公开环境由后端关闭 -->
+    <view class="card gap-top">
+      <view class="row-between">
+        <view class="section-title">留言服务</view>
+        <view class="section-sub">{{drug.feedbackMode === 'demo' ? '演示模式' : '暂未开放'}}</view>
+      </view>
+      <view wx:if="{{drug.feedbackMode === 'demo'}}">
+        <view class="dd-board-notice">仅供本地演示：留言来自普通测试用户，未核验医师身份，也未经内容审核。请勿填写真实病情或用药信息。</view>
+        <view class="field">
+          <textarea
+            class="textarea"
+            placeholder="输入演示留言（20-500 字）"
+            value="{{boardInput}}"
+            bindinput="onBoardInput"
+            maxlength="500"
+          />
+        </view>
+        <view class="row dd-board-actions">
+          <view class="f-note t3">演示留言会直接显示，仅供功能测试</view>
+          <view class="btn-mini {{boardSubmitting ? 'disabled' : ''}}" bindtap="submitBoard">
+            {{boardSubmitting ? '提交中…' : '提交演示留言'}}
+          </view>
+        </view>
+        <block wx:if="{{drug.board.length}}">
+          <view class="board-item" wx:for="{{drug.board}}" wx:key="id">
+            <view class="row-between">
+              <view class="board-user">测试用户：{{item.userName}}</view>
+              <view class="board-time t3 f-note">{{item.time}}</view>
+            </view>
+            <view class="board-content t2">{{item.content}}</view>
+          </view>
+        </block>
+        <view class="t3 f-small dd-text" wx:else>暂无演示留言</view>
+      </view>
+      <view class="dd-board-notice" wx:else>医师资质核验与留言审核流程尚未接入。当前不接收新留言，既有未审核留言也不对外展示。</view>
+    </view>
+
+    <!-- 免责声明 -->
+    <view class="footer-note">{{drugNote}}</view>
+  </block>
+</view>

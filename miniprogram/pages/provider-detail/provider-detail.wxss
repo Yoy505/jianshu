@@ -1,0 +1,53 @@
+/* 人员详情 */
+.pd-avatar, .pd-avatar-img {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 24rpx;
+}
+.pd-avatar {
+  background: linear-gradient(135deg, #0F766E, #14B8A6);
+  color: #FFFFFF;
+  font-size: 44rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pd-name { font-size: 36rpx; font-weight: 700; }
+.p-online { margin-left: 16rpx; font-size: 22rpx; color: #15803D; display: flex; align-items: center; }
+.p-online.off { color: #9CA3AF; }
+.pd-title { margin-top: 8rpx; font-size: 26rpx; }
+.pd-stats { margin-top: 8rpx; font-size: 24rpx; }
+.pd-skill-wrap { margin-top: 20rpx; flex-wrap: wrap; }
+
+.pd-qual-row {
+  display: flex;
+  align-items: center;
+  margin-top: 24rpx;
+  font-size: 27rpx;
+}
+.pd-qual-label { width: 160rpx; flex-shrink: 0; }
+.pd-qual-value { flex: 1; min-width: 0; font-weight: 500; }
+
+.pd-text { margin-top: 16rpx; }
+
+.slot-row {
+  display: flex;
+  align-items: center;
+  margin-top: 24rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #F0F1F2;
+}
+.slot-row:last-child { border-bottom: none; padding-bottom: 4rpx; }
+.slot-date { width: 140rpx; flex-shrink: 0; }
+.slot-md { font-size: 30rpx; font-weight: 600; }
+.slot-week { font-size: 22rpx; margin-top: 4rpx; }
+.slot-periods { flex-wrap: wrap; }
+
+.review-item { margin-top: 24rpx; padding-top: 20rpx; border-top: 1rpx solid #F0F1F2; }
+.review-item:first-of-type { border-top: none; }
+.review-user { font-size: 26rpx; font-weight: 600; }
+.review-content { margin-top: 10rpx; font-size: 26rpx; }
+.review-time { margin-top: 8rpx; font-size: 22rpx; }

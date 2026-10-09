@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "dataset_name": "CDE 中药与生物制品说明书内部身份版本核验样本",
+  "records": [
+    {
+      "source_namespace": "cde_marketed",
+      "source_record_id": "7155d272a35cf88c046fa06d11c79c64",
+      "source_acceptance_no": "CXZS2500038",
+      "source_product_name": "椒七止痛凝胶贴膏",
+      "source_url": "https://www.cde.org.cn/main/xxgk/postmarketpage?acceptidCODE=7155d272a35cf88c046fa06d11c79c64",
+      "source_publication_date": "2026-08-21",
+      "claimed_approval_no": null,
+      "document_date": null,
+      "version_note": "说明书正文的批准文号栏为空，核准日期和修改日期均为 XXXX 占位。",
+      "source_checked_at": "2026-09-24",
+      "pdf_path": "CXZS2500038_椒七止痛凝胶贴膏.pdf",
+      "expected_sha256": "08d6da83296df6b1b4741183184d2e8c3066631eb8c40e1fde4f2eab88783803"
+    },
+    {
+      "source_namespace": "cde_marketed",
+      "source_record_id": "457d62d01a141c8fca2e536b49f16296",
+      "source_acceptance_no": "CXSS2101045",
+      "source_product_name": "信迪利单抗注射液",
+      "source_url": "https://www.cde.org.cn/main/xxgk/postmarketpage?acceptidCODE=457d62d01a141c8fca2e536b49f16296",
+      "source_publication_date": "2022-10-22",
+      "claimed_approval_no": "国药准字 S20180016",
+      "document_date": null,
+      "version_note": "正文末次修改日期为 2022 年 XX 月 XX 日；2018-12-24 是首次核准日期，不代表此 PDF 版本日期。",
+      "source_checked_at": "2026-09-24",
+      "pdf_path": "CXSS2101045_信迪利单抗注射液.pdf",
+      "expected_sha256": "05a85ae5ea0edf39a6211c29beeb42031af0873029bcdf8ab1a911f7c632350b"
+    }
+  ]
+}

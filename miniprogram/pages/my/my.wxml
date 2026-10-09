@@ -1,0 +1,104 @@
+<view class="page page-my">
+  <!-- 未登录：登录卡（双通道） -->
+  <view class="card login-card" wx:if="{{!logged}}">
+    <view class="login-title">登录杏临汇</view>
+    <view class="login-sub">九层守护，从登录开始</view>
+    <view class="btn-primary {{wxLoggingIn ? 'disabled' : ''}}" bindtap="wxLogin">
+      {{wxLoggingIn ? '正在登录…' : '微信一键登录'}}
+    </view>
+    <view class="login-divider"><view class="login-divider-line"></view><view class="login-divider-text">或使用手机号登录</view><view class="login-divider-line"></view></view>
+    <view class="login-form">
+      <view class="input login-input" >
+        <input class="login-input-inner" type="number" maxlength="11" placeholder="请输入手机号" value="{{smsPhone}}" bindinput="onPhone" />
+      </view>
+      <view class="login-code-row">
+        <view class="input login-input flex-1">
+          <input class="login-input-inner" type="number" maxlength="6" placeholder="验证码" value="{{smsCode}}" bindinput="onCode" />
+        </view>
+        <view class="btn-mini login-code-btn {{countdown > 0 || sending ? 'disabled' : ''}}" bindtap="sendSms">
+          {{sending ? '发送中…' : (countdown > 0 ? countdown + 's后重发' : '获取验证码')}}
+        </view>
+      </view>
+      <view class="btn-ghost {{smsLoggingIn ? 'disabled' : ''}}" bindtap="smsLogin">
+        {{smsLoggingIn ? '正在登录…' : '手机验证码登录'}}
+      </view>
+    </view>
+    <view class="login-note">平台将依法保护你的个人信息与健康数据安全。
+    登录即表示同意<text class="legal-link" bindtap="openTerms">《用户协议》</text>与<text class="legal-link" bindtap="openPrivacy">《隐私政策》</text>
+  </view>
+  </view>
+
+  <!-- 已登录：用户卡 -->
+  <view class="card user-card" wx:else>
+    <view class="avatar-circle">{{user.nickname ? user.nickname[0] : '客'}}</view>
+    <view class="flex-1 user-bd">
+      <view class="user-name ellipsis">{{user.nickname || '杏临汇用户'}}</view>
+      <view class="user-phone t3">{{user.phone || '未绑定手机号'}}</view>
+    </view>
+  </view>
+
+  <!-- 健康档案完成度 -->
+  <view class="card gap-top" wx:if="{{logged}}">
+    <view class="row-between">
+      <view class="section-title">健康档案</view>
+      <view class="f-note t3">{{profile ? '已完成 ' + profilePercent + '%' : '未建立'}}</view>
+    </view>
+    <view class="progress-track">
+      <view class="progress-bar" style="width: {{profilePercent}}%"></view>
+    </view>
+    <view class="t3 f-small profile-tip">已有档案可本人查看；填写状态以档案页面提示为准。</view>
+    <view class="btn-mini profile-btn" bindtap="goProfile">查看健康档案</view>
+  </view>
+
+  <!-- 功能列表 -->
+  <view class="cell-group gap-top">
+    <view class="cell" data-url="/pages/appointments/appointments" bindtap="goAuthPage">
+      <view class="cell-icon">约</view>
+      <view class="cell-bd"><view class="cell-title">我的预约</view></view>
+      <view class="cell-arrow"></view>
+    </view>
+    <view class="cell" data-url="/pages/consult-list/consult-list" bindtap="goAuthPage">
+      <view class="cell-icon">询</view>
+      <view class="cell-bd"><view class="cell-title">我的咨询</view></view>
+      <view class="cell-arrow"></view>
+    </view>
+    <view class="cell" bindtap="goProfile">
+      <view class="cell-icon">档</view>
+      <view class="cell-bd"><view class="cell-title">健康档案</view></view>
+      <view class="cell-arrow"></view>
+    </view>
+    <view class="cell" data-url="/pages/favorites/favorites" bindtap="goAuthPage">
+      <view class="cell-icon">藏</view>
+      <view class="cell-bd"><view class="cell-title">药品收藏</view></view>
+      <view class="cell-arrow"></view>
+    </view>
+    <view class="cell" data-url="/pages/certify/certify" bindtap="goAuthPage">
+      <view class="cell-icon">驻</view>
+      <view class="cell-bd">
+        <view class="cell-title">实名入驻</view>
+        <view class="cell-desc">专业技术人员入驻意向登记</view>
+      </view>
+      <view class="cell-arrow"></view>
+    </view>
+    <button class="cell cell-btn" open-type="contact">
+      <view class="cell-icon">客</view>
+      <view class="cell-bd"><view class="cell-title">联系客服</view></view>
+      <view class="cell-arrow"></view>
+    </button>
+  </view>
+
+  <!-- 退出登录 -->
+  <view class="btn-mini btn-danger logout-btn" wx:if="{{logged}}" bindtap="logout">退出登录</view>
+
+  <!-- 页脚免责声明 -->
+  <view class="footer-note">{{footer}}</view>
+
+
+  <!-- 法务链接与微信隐私授权弹窗 -->
+  <view class="legal-row" wx:if="{{logged}}">
+    <text class="legal-link" bindtap="openTerms">《用户协议》</text>
+    <view class="legal-divider"></view>
+    <text class="legal-link" bindtap="openPrivacy">《隐私政策》</text>
+  </view>
+  <privacy-consent />
+</view>

@@ -1,0 +1,104 @@
+<view class="page page-book has-action-bar">
+  <!-- 骨架 -->
+  <block wx:if="{{loading}}">
+    <view class="skeleton">
+      <view class="sk-line first sk-w60"></view>
+      <view class="sk-line sk-w80"></view>
+    </view>
+    <view class="skeleton gap-top">
+      <view class="sk-line first sk-w40"></view>
+      <view class="sk-line sk-w80"></view>
+    </view>
+  </block>
+
+  <!-- 错误 -->
+  <view class="card" wx:elif="{{error}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">{{error}}</view>
+      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+    </view>
+  </view>
+
+  <block wx:else>
+    <!-- 预约信息 -->
+    <view class="card">
+      <view class="bk-service-name">{{service.name}}</view>
+      <view class="t2 f-small" wx:if="{{provider.name}}">服务人员：{{provider.title ? provider.title + ' · ' : ''}}{{provider.name}}</view>
+    </view>
+
+    <!-- 选择日期（近7天，来自 slots） -->
+    <view class="card gap-top">
+      <view class="section-title">演示预约日期</view>
+      <view class="t3 f-small">以下时段仅供开发演示，不代表真实可预约时间。</view>
+      <scroll-view scroll-x class="date-scroll" enhanced show-scrollbar="{{false}}">
+        <view class="date-scroll-inner">
+          <view
+            class="date-chip {{selectedDate === item.date ? 'on' : ''}}"
+            wx:for="{{slots}}"
+            wx:key="date"
+            data-date="{{item.date}}"
+            bindtap="selectDate"
+          >
+            <view class="date-md">{{item.label}}</view>
+            <view class="date-week">{{item.week}}</view>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="t3 f-note" wx:if="{{!slots.length}}">真实排班尚未接入，预约暂未开放。</view>
+
+      <view class="field-label bk-period-label" wx:if="{{periodOptions.length}}">选择时段</view>
+      <view class="chips" wx:if="{{periodOptions.length}}">
+        <view
+          class="chip {{selectedPeriod === p ? 'on' : ''}}"
+          wx:for="{{periodOptions}}"
+          wx:for-item="p"
+          wx:key="*this"
+          data-period="{{p}}"
+          bindtap="selectPeriod"
+        >{{p}}</view>
+      </view>
+    </view>
+
+    <!-- 联系信息 -->
+    <view class="card gap-top" wx:if="{{slots.length}}">
+      <view class="section-title">联系信息</view>
+      <view class="field">
+        <view class="field-label"><text class="required">*</text>联系人</view>
+        <input class="input" placeholder="请填写联系人姓名" value="{{contactName}}" bindinput="onName" />
+      </view>
+      <view class="field">
+        <view class="field-label"><text class="required">*</text>联系电话</view>
+        <input class="input" type="number" maxlength="11" placeholder="用于服务确认与联系" value="{{contactPhone}}" bindinput="onPhone" />
+      </view>
+      <view class="field" wx:if="{{!service.isOnline}}">
+        <view class="field-label"><text class="required">*</text>服务地址</view>
+        <input class="input" placeholder="请填写上门/到店服务地址" value="{{address}}" bindinput="onAddress" />
+      </view>
+      <view class="field">
+        <view class="field-label">备注</view>
+        <textarea class="textarea" placeholder="特殊情况说明（选填）" value="{{remark}}" bindinput="onRemark" maxlength="200" />
+      </view>
+    </view>
+
+    <!-- 费用确认 -->
+    <view class="card gap-top" wx:if="{{slots.length}}">
+      <view class="row-between">
+        <view class="section-title">费用确认</view>
+        <view class="price price-sm">
+          <text class="price-symbol">¥</text>{{service.price}}<text class="price-unit">/{{service.unit}}</text>
+        </view>
+      </view>
+      <view class="t3 f-small bk-fee-note">
+        当前为开发演示，页面价格和时段均不构成真实服务或付款承诺。
+      </view>
+    </view>
+  </block>
+
+  <!-- 提交 -->
+  <view class="action-bar" wx:if="{{service && slots.length}}">
+    <view class="btn-primary {{submitting ? 'disabled' : ''}}" bindtap="submit">
+      {{submitting ? '提交中…' : '提交演示预约'}}
+    </view>
+  </view>
+</view>

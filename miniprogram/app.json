@@ -1,0 +1,58 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/steward/steward",
+    "pages/mall/mall",
+    "pages/my/my",
+    "pages/scenario/scenario",
+    "pages/service-detail/service-detail",
+    "pages/providers/providers",
+    "pages/provider-detail/provider-detail",
+    "pages/book/book",
+    "pages/appointments/appointments",
+    "pages/review/review",
+    "pages/consult-list/consult-list",
+    "pages/chat/chat",
+    "pages/drug-hall/drug-hall",
+    "pages/drug-detail/drug-detail",
+    "pages/favorites/favorites",
+    "pages/profile-edit/profile-edit",
+    "pages/certify/certify",
+    "pages/legal/legal"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTitleText": "杏临汇",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F4F7F6",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#6B7280",
+    "selectedColor": "#0F766E",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/steward/steward",
+        "text": "管家"
+      },
+      {
+        "pagePath": "pages/mall/mall",
+        "text": "商城"
+      },
+      {
+        "pagePath": "pages/my/my",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "__usePrivacyCheck__": true
+}

@@ -1,0 +1,94 @@
+<view class="page page-hall">
+  <!-- 搜索框 -->
+  <view class="search-bar">
+    <view class="search-icon"></view>
+    <input
+      class="search-input"
+      placeholder="搜索通用名 / 商品名"
+      value="{{q}}"
+      confirm-type="search"
+      bindinput="onInput"
+      bindconfirm="onSearch"
+    />
+    <view class="search-clear" wx:if="{{q}}" bindtap="onClear">清除</view>
+  </view>
+
+  <!-- 标签筛选 -->
+  <scroll-view scroll-x class="chip-scroll" enhanced show-scrollbar="{{false}}">
+    <view class="chip-scroll-inner">
+      <view
+        class="hchip {{activeTag === item.v ? 'on' : ''}}"
+        wx:for="{{tagChips}}"
+        wx:key="v"
+        data-v="{{item.v}}"
+        bindtap="onTag"
+      >{{item.n}}</view>
+    </view>
+  </scroll-view>
+
+  <!-- 结果区（右侧字母索引留白） -->
+  <view class="hall-body">
+    <!-- 骨架 -->
+    <block wx:if="{{loading && !list.length}}">
+      <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+        <view class="sk-line first sk-w60"></view>
+        <view class="sk-line sk-w80"></view>
+      </view>
+    </block>
+
+    <!-- 错误 -->
+    <view class="card" wx:elif="{{error && !list.length}}">
+      <view class="empty">
+        <view class="empty-art"></view>
+        <view class="empty-title">{{error}}</view>
+        <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
+      </view>
+    </view>
+
+    <!-- 空态 -->
+    <view class="card" wx:elif="{{!list.length}}">
+      <view class="empty">
+        <view class="empty-art"></view>
+        <view class="empty-title">{{q || activeTag || activeLetter ? '暂无匹配资料' : '尚无已审核发布的药品资料'}}</view>
+        <view class="empty-desc" wx:if="{{q || activeTag || activeLetter}}">可调整关键词或标签后重新查找。</view>
+        <view class="empty-desc" wx:else>本展厅暂未发布可供查阅的药品资料。</view>
+        <view class="official-query-tip">需核对药品注册信息，可前往国家药监局公开查询。</view>
+        <view class="official-query-copy" bindtap="copyOfficialQuery">复制官方查询入口</view>
+      </view>
+    </view>
+
+    <!-- 结果列表 -->
+    <block wx:else>
+      <view class="drug-demo-notice" wx:if="{{hasDemo}}">当前包含演示资料，仅供功能测试；不代表已核实或正式发布。</view>
+      <view class="card drug-card fade-in" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="goDetail">
+        <view class="row-between">
+          <view class="drug-name ellipsis">{{item.commonName}}</view>
+          <view class="cell-arrow"></view>
+        </view>
+        <view class="drug-publication {{item.publicationClass}}">{{item.publicationLabel}}</view>
+        <view class="row drug-tags" wx:if="{{item.tags.length}}">
+          <view class="tag {{t.cls}}" wx:for="{{item.tags}}" wx:for-item="t" wx:key="key">{{t.label}}</view>
+        </view>
+        <view class="drug-sub t2" wx:if="{{item.formSpec}}">{{item.formSpec}}</view>
+        <view class="drug-sub t2" wx:if="{{item.manufacturer}}">生产企业：{{item.manufacturer}}</view>
+        <view class="drug-meta" wx:if="{{item.approvalNo}}">批准文号：{{item.approvalNo}}</view>
+        <view class="drug-meta" wx:if="{{item.sourceName}}">资料来源：{{item.sourceName}}</view>
+      </view>
+
+      <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
+      <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
+    </block>
+  </view>
+
+  <!-- 字母索引右侧条 -->
+  <view class="letter-rail">
+    <view
+      class="letter {{activeLetter === l ? 'on' : ''}}"
+      wx:for="{{letters}}"
+      wx:for-item="l"
+      wx:key="*this"
+      data-letter="{{l}}"
+      bindtap="onLetter"
+    >{{l}}</view>
+  </view>
+</view>

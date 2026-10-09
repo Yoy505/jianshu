@@ -1,0 +1,87 @@
+<view class="chat-page">
+  <!-- 顶部合规提示条 + 通道状态 -->
+  <view class="notice-bar chat-tip">
+    <text class="tip-text">{{tip}}</text>
+    <text class="channel-dot {{realtime ? 'on' : ''}}"></text>
+  </view>
+
+  <!-- 骨架 -->
+  <view class="chat-body" wx:if="{{loading}}">
+    <view class="skeleton chat-sk">
+      <view class="sk-line first sk-w40"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w60"></view>
+    </view>
+  </view>
+
+  <!-- 错误 -->
+  <view class="chat-body" wx:elif="{{error}}">
+    <view class="card">
+      <view class="empty">
+        <view class="empty-art"></view>
+        <view class="empty-title">{{error}}</view>
+        <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 消息区 -->
+  <scroll-view
+    wx:else
+    class="msg-scroll"
+    scroll-y
+    scroll-into-view="{{scrollAnchor}}"
+    scroll-with-animation
+  >
+    <view class="msg-pad-top"></view>
+
+    <view class="sys-hint" wx:if="{{empty}}">发送第一条消息体验系统自动回执</view>
+
+    <view wx:for="{{messages}}" wx:key="id" id="msg-{{item.id}}" class="msg-row {{item.sender}}">
+      <!-- system：明确标记自动回执 -->
+      <view wx:if="{{item.sender === 'system'}}" class="msg-system">
+        <view class="msg-system-label">系统自动回执</view>
+        <view class="msg-system-content">{{item.content}}</view>
+        <view class="msg-system-time">{{item.time}}</view>
+      </view>
+      <!-- user：右侧深青 -->
+      <view wx:elif="{{item.sender === 'user'}}" class="bubble bubble-user">
+        <view class="bubble-text">{{item.content}}</view>
+        <view class="bubble-time">{{item.time}}</view>
+      </view>
+      <!-- 兼容旧会话：历史 provider 记录无法核验是否由真人发送 -->
+      <view wx:elif="{{item.sender === 'provider'}}" class="bubble bubble-provider">
+        <view class="bubble-origin">旧版会话消息 · 来源未标注</view>
+        <view class="bubble-text">{{item.content}}</view>
+        <view class="bubble-time">{{item.time}}</view>
+      </view>
+      <view wx:else class="msg-system">{{item.content}}</view>
+    </view>
+
+    <!-- 正在输入 -->
+    <view class="msg-row provider" wx:if="{{typing}}">
+      <view class="bubble bubble-provider typing-bubble">
+        <view class="tdot"></view>
+        <view class="tdot d2"></view>
+        <view class="tdot d3"></view>
+        <view class="typing-text">正在生成系统回执…</view>
+      </view>
+    </view>
+
+    <view id="anchor-bottom" class="msg-pad-bottom"></view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="input-bar">
+    <input
+      class="chat-input"
+      value="{{inputValue}}"
+      confirm-type="send"
+      confirm-hold
+      placeholder="输入演示留言…"
+      bindinput="onInput"
+      bindconfirm="send"
+    />
+    <view class="send-btn {{inputValue && !sending ? '' : 'disabled'}}" bindtap="send">发送</view>
+  </view>
+</view>

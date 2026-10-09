@@ -1,0 +1,61 @@
+<view class="page page-providers">
+  <!-- 骨架 -->
+  <block wx:if="{{loading && !list.length}}">
+    <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="sk-line first sk-w40"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w60"></view>
+    </view>
+  </block>
+
+  <!-- 错误 -->
+  <view class="card" wx:elif="{{error && !list.length}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">{{error}}</view>
+      <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
+    </view>
+  </view>
+
+  <!-- 空态 -->
+  <view class="card" wx:elif="{{!list.length}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">暂无匹配的专业人员</view>
+      <view class="empty-desc">平台正在扩充服务团队，请稍后再试</view>
+    </view>
+  </view>
+
+  <!-- 人员列表 -->
+  <block wx:else>
+    <view
+      class="card provider-card fade-in"
+      wx:for="{{list}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="goDetail"
+    >
+      <view class="row">
+        <image wx:if="{{item.avatar}}" class="p-avatar-img" src="{{item.avatar}}" mode="aspectFill" />
+        <view wx:else class="p-avatar">{{item.initial}}</view>
+        <view class="flex-1 p-base">
+          <view class="row">
+            <view class="p-name">{{item.name}}</view>
+          </view>
+          <view class="p-title ellipsis">{{item.title}}{{item.dept ? ' · ' + item.dept : ''}}</view>
+        </view>
+      </view>
+      <view class="p-org ellipsis t2" wx:if="{{item.org}}">{{item.org}}</view>
+      <view class="p-meta t3">从业年限等资料待核验</view>
+      <view class="row p-skills" wx:if="{{item.skills.length}}">
+        <view class="tag tag-brand" wx:for="{{item.skills}}" wx:for-item="sk" wx:key="*this">{{sk}}</view>
+      </view>
+      <view class="p-verified">
+        <view class="t3 f-small">人员资料尚未完成资质核验</view>
+      </view>
+    </view>
+
+    <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
+    <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
+  </block>
+</view>

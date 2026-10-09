@@ -1,0 +1,45 @@
+/* 商城 */
+.page-mall { padding-bottom: 40rpx; }
+.mall-tip { margin-bottom: 20rpx; }
+
+.cat-tabs {
+  display: flex;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  border: 1rpx solid #EDF0EF;
+  padding: 8rpx;
+  margin-bottom: 20rpx;
+}
+.cat-tab {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  color: #6B7280;
+  padding: 14rpx 0;
+  border-radius: 12rpx;
+  transition: all 150ms ease;
+}
+.cat-tab.on { background: #0F766E; color: #FFFFFF; font-weight: 600; }
+
+.skeleton + .skeleton { margin-top: 20rpx; }
+
+.product-card { margin-top: 20rpx; overflow: hidden; }
+.product-icon {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 16rpx;
+  background: #E6F2F0;
+  color: #0F766E;
+  font-size: 40rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: 20rpx;
+}
+.product-bd { min-width: 0; }
+.product-name { font-size: 30rpx; font-weight: 600; color: #1F2937; }
+.product-desc { margin-top: 8rpx; font-size: 24rpx; color: #9CA3AF; }
+.product-foot { margin-top: 16rpx; }
+.product-foot .tag { margin-right: 0; }

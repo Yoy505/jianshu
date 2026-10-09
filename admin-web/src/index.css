@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* 运营后台以紧凑的中文无衬线字体建立清晰的信息层级。 */
+@theme {
+  --font-serif: "Songti SC", "Noto Serif SC", "STSong", "SimSun", serif;
+}
+
+:root {
+  --background: #f6f7f5;
+  --foreground: #24302d;
+  --card: #ffffff;
+  --card-foreground: #24302d;
+  --popover: #ffffff;
+  --popover-foreground: #24302d;
+  --primary: #276c60;
+  --primary-foreground: #ffffff;
+  --secondary: #eff3f0;
+  --secondary-foreground: #344a43;
+  --muted: #f2f5f2;
+  --muted-foreground: #65736e;
+  --accent: #e9f0ec;
+  --accent-foreground: #22483e;
+  --destructive: #b84744;
+  --destructive-foreground: #ffffff;
+  --border: #dde5df;
+  --input: #d4dfd8;
+  --ring: #397f6e;
+  --radius: 0.625rem;
+  --chart-1: #2c7467;
+  --chart-2: #5b9b8d;
+  --chart-3: #a4bdb3;
+  --chart-4: #c5a36a;
+  --chart-5: #929e99;
+}
+
+.dark {
+  --background: #17201d;
+  --foreground: #ecf1ec;
+  --card: #222c26;
+  --card-foreground: #ecf1ec;
+  --popover: #222c26;
+  --popover-foreground: #ecf1ec;
+  --primary: #7bb8a1;
+  --primary-foreground: #15241d;
+  --secondary: #303a33;
+  --secondary-foreground: #ecf1ec;
+  --muted: #303a33;
+  --muted-foreground: #acbdb3;
+  --accent: #35453a;
+  --accent-foreground: #ecf1ec;
+  --destructive: #e8837c;
+  --destructive-foreground: #17201d;
+  --border: #3a493f;
+  --input: #3a493f;
+  --ring: #7bb8a1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55;
+  }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+}
+
+@layer components {
+  .admin-page { @apply mx-auto flex w-full max-w-[1540px] flex-col gap-6 pb-8; }
+  .admin-page-header { @apply border-b border-border pb-5; }
+  .admin-page-header h2 { @apply text-[25px] font-semibold tracking-[-0.025em] text-foreground; font-family: inherit; }
+  .admin-page-header p { @apply mt-1.5 text-sm leading-6 text-muted-foreground; }
+  .admin-filter-panel { @apply flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-5 py-4; }
+  .admin-data-panel { @apply overflow-hidden rounded-xl border border-border bg-card; }
+  .admin-section-title { @apply text-lg font-semibold tracking-[-0.015em] text-foreground; font-family: inherit; }
+  .admin-state { @apply flex min-h-36 flex-col items-center justify-center gap-2 px-6 py-8 text-center text-sm text-muted-foreground; }
+  .admin-state strong { @apply font-medium text-foreground; }
+  .admin-tab-list { @apply flex w-fit max-w-full items-center gap-1 overflow-x-auto border-b border-border; }
+  .admin-tab { @apply relative whitespace-nowrap border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground; }
+  .admin-tab[data-active="true"] { @apply border-primary text-primary; }
+  .admin-kpi { @apply rounded-xl border border-border bg-card px-5 py-4 text-left transition-colors hover:border-primary/45; }
+  .admin-kpi[data-active="true"] { @apply border-primary bg-[#f4f9f6]; }
+  .admin-kpi-value { @apply mt-2 text-[27px] font-semibold leading-none tabular-nums tracking-[-0.03em]; }
+}
+
+@media (max-width: 640px) {
+  .admin-page { gap: 20px; }
+  .admin-page-header { padding-bottom: 18px; }
+  .admin-page-header h2 { font-size: 22px; }
+  .admin-filter-panel { padding: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

@@ -1,0 +1,27 @@
+<view class="page page-review">
+  <view class="card">
+    <view class="rv-title">为本次服务评分</view>
+    <view class="rv-stars">
+      <view class="rv-star-tap" wx:for="{{[1, 2, 3, 4, 5]}}" wx:key="*this" data-n="{{item}}" bindtap="setRating">
+        <view class="star star-lg {{stars[item - 1] ? 'on' : ''}}"></view>
+      </view>
+    </view>
+    <view class="rv-rating-text" wx:if="{{ratingText}}">{{ratingText}}</view>
+    <view class="rv-rating-text t3" wx:else>点击星星打分</view>
+
+    <view class="field">
+      <view class="field-label">文字评价（选填）</view>
+      <textarea
+        class="textarea"
+        placeholder="说说服务过程与感受，帮助更多人选择"
+        value="{{content}}"
+        bindinput="onContent"
+        maxlength="200"
+      />
+    </view>
+  </view>
+
+  <view class="btn-primary rv-submit {{submitting ? 'disabled' : ''}}" bindtap="submit">
+    {{submitting ? '提交中…' : '提交评价'}}
+  </view>
+</view>

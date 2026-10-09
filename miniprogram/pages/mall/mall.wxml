@@ -1,0 +1,65 @@
+<view class="page page-mall">
+  <!-- 建设中说明条 -->
+  <view class="warn-bar mall-tip">商城正在建设中，商品陆续上架，敬请期待</view>
+
+  <!-- 分类 tabs -->
+  <view class="cat-tabs">
+    <view
+      class="cat-tab {{active === item.v ? 'on' : ''}}"
+      wx:for="{{categories}}"
+      wx:key="v"
+      data-v="{{item.v}}"
+      bindtap="onTab"
+    >{{item.n}}</view>
+  </view>
+
+  <!-- 骨架 -->
+  <block wx:if="{{loading && !list.length}}">
+    <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="sk-line first sk-w60"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w40"></view>
+    </view>
+  </block>
+
+  <!-- 错误 -->
+  <view class="card" wx:elif="{{error && !list.length}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">{{error}}</view>
+      <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
+    </view>
+  </view>
+
+  <!-- 空态 -->
+  <view class="card" wx:elif="{{!list.length}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">该分类商品筹备中</view>
+      <view class="empty-desc">商城开放后将第一时间通知你</view>
+    </view>
+  </view>
+
+  <!-- 商品列表 -->
+  <block wx:else>
+    <view class="card product-card fade-in" wx:for="{{list}}" wx:key="id">
+      <view class="badge" wx:if="{{item.coming}}">即将开放</view>
+      <view class="row">
+        <view class="product-icon">{{item.catChar}}</view>
+        <view class="flex-1 product-bd">
+          <view class="product-name ellipsis">{{item.name}}</view>
+          <view class="product-desc ellipsis-2">{{item.desc}}</view>
+          <view class="row-between product-foot">
+            <view class="price price-sm">
+              <text class="price-symbol">¥</text>{{item.price}}
+            </view>
+            <view class="tag tag-apricot" wx:if="{{item.coming}}">即将开放</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
+    <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
+  </block>
+</view>

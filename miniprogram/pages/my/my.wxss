@@ -1,0 +1,71 @@
+/* 我的 */
+.page-my { padding-bottom: 40rpx; }
+
+.login-card { padding: 40rpx 32rpx; }
+.login-title { font-size: 40rpx; font-weight: 700; color: #1F2937; }
+.login-sub { margin-top: 8rpx; font-size: 26rpx; color: #9CA3AF; }
+.login-divider { display: flex; align-items: center; margin: 36rpx 0 28rpx; }
+.login-divider-line { flex: 1; height: 1rpx; background: #E5E7EB; }
+.login-divider-text { margin: 0 20rpx; font-size: 24rpx; color: #9CA3AF; }
+.login-form .btn-ghost { width: 100%; margin-top: 24rpx; }
+.login-input { display: flex; align-items: center; }
+.login-input-inner { flex: 1; height: 100%; font-size: 28rpx; }
+.login-code-row { display: flex; align-items: center; margin-top: 20rpx; }
+.login-code-btn { margin-left: 16rpx; flex-shrink: 0; }
+.login-note { margin-top: 24rpx; text-align: center; font-size: 22rpx; color: #9CA3AF; }
+
+.user-card { display: flex; align-items: center; padding: 36rpx 32rpx; }
+.avatar-circle {
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0F766E, #14B8A6);
+  color: #FFFFFF;
+  font-size: 40rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+.user-bd { min-width: 0; }
+.user-name { font-size: 34rpx; font-weight: 600; }
+.user-phone { margin-top: 6rpx; font-size: 24rpx; }
+
+.progress-track {
+  margin-top: 24rpx;
+  height: 16rpx;
+  background: #E6F2F0;
+  border-radius: 999rpx;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #0F766E, #14B8A6);
+  transition: width 300ms ease-out;
+}
+.profile-tip { margin-top: 16rpx; }
+.profile-btn { margin-top: 20rpx; }
+
+.logout-btn { margin: 32rpx auto 0; padding: 0 48rpx; display: flex; }
+
+/* 法务链接 */
+.legal-link {
+  color: #0F766E;
+}
+
+.legal-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  padding: 32rpx 0;
+}
+
+.legal-divider {
+  width: 2rpx;
+  height: 24rpx;
+  background: #E5E7EB;
+}

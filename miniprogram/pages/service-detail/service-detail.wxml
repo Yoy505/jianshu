@@ -1,0 +1,71 @@
+<view class="page page-detail has-action-bar">
+  <!-- 骨架 -->
+  <block wx:if="{{loading}}">
+    <view class="skeleton">
+      <view class="sk-line first sk-w60"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w40"></view>
+    </view>
+    <view class="skeleton gap-top">
+      <view class="sk-line first sk-w30"></view>
+      <view class="sk-line sk-w80"></view>
+    </view>
+  </block>
+
+  <!-- 错误 -->
+  <view class="card" wx:elif="{{error}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">{{error}}</view>
+      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+    </view>
+  </view>
+
+  <block wx:else>
+    <!-- 服务头 -->
+    <view class="card">
+      <view class="row">
+        <view class="tag tag-brand" wx:if="{{service.scenarioName}}">{{service.scenarioName}}</view>
+        <view class="tag {{service.typeCls}}">{{service.typeLabel}}</view>
+      </view>
+      <view class="sd-name">{{service.name}}</view>
+      <view class="t3 f-small">服务资料演示，尚未开放真实预约或真人接诊。</view>
+      <view class="t3 f-small">参考价格</view>
+      <view class="price sd-price">
+        <text class="price-symbol">¥</text>{{service.price}}<text class="price-unit">/{{service.unit}}</text>
+      </view>
+      <view class="sd-meta t3">参考时长 {{service.duration}} · 人员资料 {{service.providerCount}} 条</view>
+    </view>
+
+    <!-- 服务内容 -->
+    <view class="card gap-top">
+      <view class="section-title">服务内容</view>
+      <view class="article sd-text">{{service.desc}}</view>
+    </view>
+
+    <!-- 适用人群 -->
+    <view class="card gap-top">
+      <view class="section-title">适用人群</view>
+      <view class="sd-text t2">{{service.audience}}</view>
+    </view>
+
+    <!-- 服务须知 -->
+    <view class="card gap-top">
+      <view class="section-title">服务须知</view>
+      <view class="sd-notice">
+        <view class="sd-notice-dot"></view>
+        <view class="flex-1 sd-text t2">{{service.notice}}</view>
+      </view>
+      <view class="sd-notice">
+        <view class="sd-notice-dot"></view>
+        <view class="flex-1 sd-text t2">当前页面价格和服务说明仅供开发演示；真实服务主体、价格和履约方式待核定。</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 底部操作 -->
+  <view class="action-bar" wx:if="{{service}}">
+    <view class="btn-ghost" wx:if="{{service.isOnline}}" bindtap="consultNow">查看演示流程</view>
+    <view class="btn-primary" bindtap="matchProviders">查看人员资料</view>
+  </view>
+</view>

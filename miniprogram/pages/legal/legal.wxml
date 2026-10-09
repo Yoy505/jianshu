@@ -1,0 +1,14 @@
+<view class="legal-page">
+  <view class="legal-header">
+    <view class="legal-title">{{doc.title}}</view>
+    <view class="legal-updated">{{doc.updated}}</view>
+  </view>
+  <view class="legal-intro">{{doc.intro}}</view>
+
+  <view class="legal-section" wx:for="{{doc.sections}}" wx:key="h">
+    <view class="legal-h">{{item.h}}</view>
+    <view class="legal-p" wx:for="{{item.ps}}" wx:for-item="p" wx:key="*this">{{p}}</view>
+  </view>
+
+  <view class="legal-footer">健树科技（天津）有限公司</view>
+</view>

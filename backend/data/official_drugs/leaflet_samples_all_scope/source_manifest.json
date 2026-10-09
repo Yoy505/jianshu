@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-09-24",
+  "purpose": "Private format and field verification only; not imported into the database or published",
+  "items": [
+    {
+      "drug_category": "中药",
+      "drug_name": "椒七止痛凝胶贴膏",
+      "acceptance_no": "CXZS2500038",
+      "source_detail_url": "https://www.cde.org.cn/main/xxgk/postmarketpage?acceptidCODE=7155d272a35cf88c046fa06d11c79c64",
+      "source_publication_date": "2026-08-21",
+      "filename": "CXZS2500038_椒七止痛凝胶贴膏.pdf",
+      "format": "text-searchable PDF 1.5",
+      "pages": 3,
+      "document_approval_date": null,
+      "document_revision_date": null,
+      "document_date_note": "The text prints XXXX placeholders for both approval and revision dates.",
+      "approval_no_in_document": null,
+      "approval_no_note": "The 【批准文号】 field is empty in the official attachment.",
+      "sha256": "08d6da83296df6b1b4741183184d2e8c3066631eb8c40e1fde4f2eab88783803"
+    },
+    {
+      "drug_category": "治疗用生物制品",
+      "drug_name": "信迪利单抗注射液",
+      "acceptance_no": "CXSS2101045",
+      "source_detail_url": "https://www.cde.org.cn/main/xxgk/postmarketpage?acceptidCODE=457d62d01a141c8fca2e536b49f16296",
+      "source_publication_date": "2022-10-22",
+      "filename": "CXSS2101045_信迪利单抗注射液.pdf",
+      "format": "text-searchable PDF 1.5",
+      "pages": 48,
+      "document_approval_date": "2018-12-24",
+      "document_revision_date": null,
+      "document_date_note": "Revision history contains multiple dates and ends with 2022 年 XX 月 XX 日.",
+      "approval_no_in_document": "国药准字S20180016",
+      "approval_no_note": "Extracted text separates the prefix and code with a space.",
+      "sha256": "05a85ae5ea0edf39a6211c29beeb42031af0873029bcdf8ab1a911f7c632350b"
+    }
+  ]
+}

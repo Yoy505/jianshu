@@ -1,0 +1,109 @@
+<view class="page-index">
+  <!-- 品牌头 -->
+  <view class="hero">
+    <view class="hero-name">杏临汇</view>
+    <view class="hero-sub">全域健康管家</view>
+    <view class="hero-slogan">医·药·护·康·养·情 九层守护</view>
+    <view class="hero-stats">
+      <view class="hs-item">
+        <view class="hs-num">{{stats.providers}}</view>
+        <view class="hs-label">人员资料</view>
+      </view>
+      <view class="hs-divider"></view>
+      <view class="hs-item">
+        <view class="hs-num">{{stats.services}}</view>
+        <view class="hs-label">服务条目</view>
+      </view>
+      <view class="hs-divider"></view>
+      <view class="hs-item">
+        <view class="hs-num">{{stats.users}}</view>
+        <view class="hs-label">注册用户</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="page">
+    <!-- 公告滚动 -->
+    <view class="card notice-card" wx:if="{{notices.length}}">
+      <view class="tag tag-apricot notice-tag">公告</view>
+      <swiper class="notice-swiper" vertical autoplay circular interval="4000" duration="500">
+        <swiper-item wx:for="{{notices}}" wx:key="id">
+          <view class="ellipsis notice-text">{{item.content}}</view>
+        </swiper-item>
+      </swiper>
+    </view>
+
+    <!-- 加载骨架 -->
+    <block wx:if="{{loading}}">
+      <view class="skeleton">
+        <view class="sk-line first sk-w40"></view>
+        <view class="sk-line sk-w80"></view>
+        <view class="sk-line sk-w60"></view>
+      </view>
+      <view class="skeleton gap-top">
+        <view class="sk-line first sk-w30"></view>
+        <view class="sk-line sk-w80"></view>
+        <view class="sk-line sk-w60"></view>
+      </view>
+    </block>
+
+    <!-- 错误重试 -->
+    <view class="card" wx:elif="{{error}}">
+      <view class="empty">
+        <view class="empty-art"></view>
+        <view class="empty-title">{{error}}</view>
+        <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+      </view>
+    </view>
+
+    <block wx:else>
+      <!-- 九大场景九宫格 -->
+      <view class="card">
+        <view class="section-title">九大健康场景</view>
+        <view class="grid-9" wx:if="{{scenarios.length}}">
+          <view
+            class="grid-9-item fade-in"
+            wx:for="{{scenarios}}"
+            wx:key="key"
+            style="animation-delay: {{index * 80}}ms"
+            data-key="{{item.key}}"
+            data-name="{{item.name}}"
+            bindtap="goScenario"
+          >
+            <view class="grid-9-icon">{{item.char}}</view>
+            <view class="grid-9-name">{{item.name}}</view>
+          </view>
+        </view>
+        <view class="empty" wx:else>
+          <view class="empty-title">场景数据加载中，请稍后再试</view>
+        </view>
+      </view>
+
+      <!-- 快捷入口 -->
+      <view class="card gap-top">
+        <view class="section-title">快捷入口</view>
+        <view class="quick-grid">
+          <view class="quick-item" bindtap="goAI">
+            <view class="quick-icon">智</view>
+            <view class="quick-name">健康问答</view>
+            <view class="quick-note">筹备中</view>
+          </view>
+          <view class="quick-item" bindtap="goDrugHall">
+            <view class="quick-icon">药</view>
+            <view class="quick-name">药品数字展厅</view>
+            <view class="quick-note">演示资料检索</view>
+          </view>
+          <view class="quick-item" bindtap="goMall">
+            <view class="quick-icon">商</view>
+            <view class="quick-name">健康商城</view>
+            <view class="quick-note">规划中</view>
+          </view>
+        </view>
+        <view class="quick-ai-note">健康问答尚未开放，目前不提供 AI 诊疗服务。</view>
+      </view>
+    </block>
+
+    <!-- 页脚免责声明 -->
+    <view class="footer-note">{{footer}}</view>
+  </view>
+</view>

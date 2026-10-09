@@ -1,0 +1,117 @@
+<view class="page page-pd has-action-bar">
+  <!-- 骨架 -->
+  <block wx:if="{{loading}}">
+    <view class="skeleton">
+      <view class="sk-line first sk-w40"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w60"></view>
+    </view>
+    <view class="skeleton gap-top">
+      <view class="sk-line first sk-w30"></view>
+      <view class="sk-line sk-w80"></view>
+    </view>
+  </block>
+
+  <!-- 错误 -->
+  <view class="card" wx:elif="{{error}}">
+    <view class="empty">
+      <view class="empty-art"></view>
+      <view class="empty-title">{{error}}</view>
+      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+    </view>
+  </view>
+
+  <block wx:else>
+    <!-- 人员头 -->
+    <view class="card">
+      <view class="row">
+        <image wx:if="{{provider.avatar}}" class="pd-avatar-img" src="{{provider.avatar}}" mode="aspectFill" />
+        <view wx:else class="pd-avatar">{{provider.initial}}</view>
+        <view class="flex-1">
+          <view class="row">
+            <view class="pd-name">{{provider.name}}</view>
+          </view>
+          <view class="pd-title ellipsis t2">{{provider.title}}{{provider.dept ? ' · ' + provider.dept : ''}}</view>
+          <view class="pd-stats t3">人员身份和服务记录待核验</view>
+        </view>
+      </view>
+      <view class="row pd-skill-wrap" wx:if="{{provider.skills.length}}">
+        <view class="tag tag-brand" wx:for="{{provider.skills}}" wx:key="*this">{{item}}</view>
+      </view>
+    </view>
+
+    <!-- 资质卡 -->
+    <view class="card gap-top">
+      <view class="row-between">
+        <view class="section-title">人员资料</view>
+        <view class="t3 f-small">资质待核验</view>
+      </view>
+      <view class="t3 f-small pd-text">以下职称和单位资料尚未完成平台核验，不代表已开通执业服务。</view>
+      <view class="pd-qual-row">
+        <view class="pd-qual-label t2">职称</view>
+        <view class="pd-qual-value">{{provider.title || '--'}}</view>
+      </view>
+      <view class="pd-qual-row">
+        <view class="pd-qual-label t2">执业单位</view>
+        <view class="pd-qual-value ellipsis">{{provider.org || '--'}}</view>
+      </view>
+      <view class="pd-qual-row">
+        <view class="pd-qual-label t2">从业年限</view>
+        <view class="pd-qual-value">{{provider.years}} 年</view>
+      </view>
+    </view>
+
+    <!-- 简介 -->
+    <view class="card gap-top">
+      <view class="section-title">个人简介</view>
+      <view class="article pd-text">{{provider.intro}}</view>
+    </view>
+
+    <!-- 可约时段 -->
+    <view class="card gap-top">
+      <view class="row-between">
+        <view class="section-title">{{slots.length ? '演示时段' : '预约时段'}}</view>
+        <view class="section-sub">近 7 天</view>
+      </view>
+      <block wx:if="{{slots.length}}">
+        <view class="t3 f-small pd-text">以下为开发演示数据，不代表真实可预约时间。</view>
+        <view class="slot-row" wx:for="{{slots}}" wx:key="date">
+          <view class="slot-date">
+            <view class="slot-md">{{item.label}}</view>
+            <view class="slot-week t3">{{item.week}}</view>
+          </view>
+          <view class="flex-1 row slot-periods">
+            <view class="tag tag-brand" wx:for="{{item.periods}}" wx:for-item="p" wx:key="*this">{{p}}</view>
+          </view>
+        </view>
+      </block>
+      <view class="t3 f-small pd-text" wx:else>真实排班尚未接入，预约暂未开放。</view>
+    </view>
+
+    <!-- 服务评价 -->
+    <view class="card gap-top">
+      <view class="section-title">{{reviews.length ? '演示评价' : '服务评价'}}</view>
+      <view class="t3 f-small pd-text" wx:if="{{reviews.length}}">评价资料仅供开发演示，尚未核实真实服务记录。</view>
+      <block wx:if="{{reviews.length}}">
+        <view class="review-item" wx:for="{{reviews}}" wx:key="id">
+          <view class="row-between">
+            <view class="review-user">{{item.userName}}</view>
+            <view class="stars">
+              <view class="star {{s ? 'on' : ''}}" wx:for="{{item.stars}}" wx:for-item="s" wx:key="*this"></view>
+            </view>
+          </view>
+          <view class="review-content t2" wx:if="{{item.content}}">{{item.content}}</view>
+          <view class="review-time t3">{{item.time}}</view>
+        </view>
+      </block>
+      <view class="t3 f-small pd-text" wx:else>暂无评价，服务完成后可评价。</view>
+    </view>
+  </block>
+
+  <!-- 底部双按钮 -->
+  <view class="action-bar" wx:if="{{provider}}">
+    <view class="btn-ghost" wx:if="{{slots.length}}" bindtap="goChat">体验留言</view>
+    <view class="btn-ghost disabled" wx:else>留言暂未开放</view>
+    <view class="btn-primary {{slots.length ? '' : 'disabled'}}" bindtap="goBook">{{slots.length ? '演示预约' : '预约暂未开放'}}</view>
+  </view>
+</view>

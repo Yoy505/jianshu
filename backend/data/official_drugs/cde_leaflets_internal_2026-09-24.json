@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "dataset_name": "CDE 官方说明书内部核验样本 2026-09-24",
+  "records": [
+    {
+      "approval_no": "国药准字H37020550",
+      "pdf_path": "国药准字H37020550_盐酸二甲双胍片.pdf",
+      "source_name": "国家药品监督管理局药品审评中心（CDE）",
+      "source_document_id": "f83a27b7934604cd80b99f4937d1c9d6",
+      "source_url": "https://www.cde.org.cn/hymlj/detailPage/4ea3fb710b568213568f1f069ca039bd",
+      "authorization_ref": "internal-evaluation-only:CDE-public-query-2026-09-24",
+      "document_date": null,
+      "document_version": null,
+      "source_checked_at": "2026-09-24",
+      "expected_sha256": "2bba0fdcc8cc20d81cd9aade9f1e9925f6924be1f787637c84f286c2e532398d"
+    },
+    {
+      "approval_no": "国药准字H20066843",
+      "pdf_path": "国药准字H20066843_苯磺酸氨氯地平片.pdf",
+      "source_name": "国家药品监督管理局药品审评中心（CDE）",
+      "source_document_id": "3f963d3a7ef427eb3a7b5396452d0bd2",
+      "source_url": "https://www.cde.org.cn/hymlj/detailPage/9a8cb5405ae33833d3edebd023ccfa8a",
+      "authorization_ref": "internal-evaluation-only:CDE-public-query-2026-09-24",
+      "document_date": null,
+      "document_version": null,
+      "source_checked_at": "2026-09-24",
+      "expected_sha256": "9225c7012ccc7f9a6bb48e0801b3cffbc0023c530eadf1e9ab65f0e0a06a5bfa"
+    },
+    {
+      "approval_no": "国药准字H20066208",
+      "pdf_path": "国药准字H20066208_布洛芬颗粒.pdf",
+      "source_name": "国家药品监督管理局药品审评中心（CDE）",
+      "source_document_id": "281068a6629e2da2ef7a4a7a10e08077",
+      "source_url": "https://www.cde.org.cn/hymlj/detailPage/cb1bd0770d1ca3a29c69b93c50370758",
+      "authorization_ref": "internal-evaluation-only:CDE-public-query-2026-09-24",
+      "document_date": null,
+      "document_version": null,
+      "source_checked_at": "2026-09-24",
+      "expected_sha256": "0e29acce2c21140ebd8afbeed4693941a77d367a96b6527601662015fdc54dbe"
+    }
+  ]
+}

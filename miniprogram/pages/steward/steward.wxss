@@ -1,0 +1,57 @@
+/* 管家（服务列表） */
+.page-list { padding-bottom: 40rpx; }
+
+.search-bar {
+  background: #FFFFFF;
+  border-radius: 999rpx;
+  border: 1rpx solid #EDF0EF;
+  display: flex;
+  align-items: center;
+  padding: 0 24rpx;
+  height: 80rpx;
+}
+.search-icon {
+  width: 24rpx;
+  height: 24rpx;
+  border: 3rpx solid #9CA3AF;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+.search-icon::after {
+  content: "";
+  position: absolute;
+  right: -10rpx;
+  bottom: -6rpx;
+  width: 12rpx;
+  height: 3rpx;
+  background: #9CA3AF;
+  border-radius: 2rpx;
+  transform: rotate(45deg);
+}
+.search-input { flex: 1; margin-left: 16rpx; font-size: 26rpx; height: 100%; }
+.search-clear { font-size: 24rpx; color: #0F766E; padding: 10rpx 0 10rpx 16rpx; }
+
+.chip-scroll { margin-top: 20rpx; white-space: nowrap; }
+.chip-scroll-inner { display: inline-block; }
+.hchip {
+  display: inline-block;
+  padding: 12rpx 30rpx;
+  background: #FFFFFF;
+  border: 2rpx solid #E5E7EB;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #6B7280;
+  margin-right: 16rpx;
+  transition: all 150ms ease;
+}
+.hchip.on { background: #0F766E; border-color: #0F766E; color: #FFFFFF; font-weight: 600; }
+
+.skeleton + .skeleton { margin-top: 20rpx; }
+
+.service-card { margin-top: 20rpx; }
+.service-name { font-size: 30rpx; font-weight: 600; color: #1F2937; flex: 1; margin-right: 16rpx; }
+.service-type { flex-shrink: 0; margin-right: 0; }
+.service-desc { margin-top: 12rpx; font-size: 26rpx; color: #6B7280; }
+.service-meta { margin-top: 12rpx; font-size: 24rpx; }
+.service-bottom { margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx solid #F0F1F2; }

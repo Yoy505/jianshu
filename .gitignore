@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+*.local
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Uploads & exports (runtime artifacts)
+backend/uploads/
+!backend/uploads/.gitkeep
+backend/private_exports/
+backend/private_drug_leaflets/
+backend/private_drug_leaflet_intake/
+backend/data/official_drugs/leaflet_samples*/*.pdf
+
+# Local demo databases (sqlite)
+*.db
+backend/dev.db
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Logs / celery
+*.log
+celerybeat-schedule
+
+# 与本项目无关的会话产物 / 设计大文件（不入库）
+/output/
+/outputs/
+/tmp/
+/work/
+/design/
+essay-h5/.qa/
+backend/dev.db.before-*.db
+
+# 职业健康投稿私有文件（运行时产物）
+backend/private_occupational_submissions/
+
+# 本地私有备忘（真实 IP/主体信息，公开仓库已脱敏）
+docs/private/

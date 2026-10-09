@@ -1,0 +1,19 @@
+<view class="pc-mask" wx:if="{{visible}}" catchtouchmove="noop">
+  <view class="pc-dialog">
+    <view class="pc-title">隐私保护指引</view>
+    <view class="pc-body">
+      在你使用本小程序前，请阅读并同意
+      <text class="pc-link" bindtap="openPrivacyDoc">《隐私政策》</text>
+      。我们会按政策说明收集和使用你的个人信息（含健康档案等敏感信息，仅在单独同意后收集）。
+    </view>
+    <button
+      id="agree-btn"
+      class="pc-btn pc-btn-agree"
+      open-type="agreePrivacyAuthorization"
+      bindagreeprivacyauthorization="handleAgree"
+    >
+      同意并继续
+    </button>
+    <view class="pc-btn pc-btn-deny" bindtap="handleDisagree">不同意</view>
+  </view>
+</view>

@@ -1,0 +1,16 @@
+<view class="page page-certify">
+  <view class="card ct-status-card">
+    <view class="section-title">专业人员入驻</view>
+    <view class="ct-status-title">线上申请暂未开放</view>
+    <view class="t2 ct-status-desc">入驻申请和执业资质核验流程正在建设中。目前本页面不会接收或保存你的姓名、单位、电话等资料。</view>
+  </view>
+
+  <view class="card gap-top">
+    <view class="section-title">后续申请流程</view>
+    <view class="ct-line"><view class="ct-dot"></view><view class="flex-1">阅读资料用途及隐私告知，提交入驻申请</view></view>
+    <view class="ct-line"><view class="ct-dot"></view><view class="flex-1">平台核验身份、执业资格和执业单位</view></view>
+    <view class="ct-line"><view class="ct-dot"></view><view class="flex-1">审核通过并签约培训后，才开放相应服务</view></view>
+  </view>
+
+  <view class="btn-primary ct-back" bindtap="backHome">返回首页</view>
+</view>

@@ -1,0 +1,138 @@
+<view class="page page-profile">
+  <!-- 敏感信息单独同意提示 -->
+  <view class="consent-tip">
+    健康档案属于敏感个人信息。填写并保存即表示你同意我们按<text class="consent-link" bindtap="openPrivacy">《隐私政策》</text>收集与使用这些信息；你可随时查看、更正，删除请联系客服。
+  </view>
+
+  <view class="notice-bar pf-note" wx:if="{{!loading}}">{{statusMessage}}</view>
+
+  <!-- 骨架 -->
+  <block wx:if="{{loading}}">
+    <view class="skeleton gap-top">
+      <view class="sk-line first sk-w40"></view>
+      <view class="sk-line sk-w80"></view>
+      <view class="sk-line sk-w60"></view>
+    </view>
+  </block>
+
+  <block wx:elif="{{profileMode !== 'demo'}}">
+    <view class="card gap-top">
+      <view class="section-title">健康档案暂不可编辑</view>
+      <view class="pf-status-detail">当前不收集新的健康档案信息，也不接受修改。</view>
+      <view class="btn-mini pf-retry" wx:if="{{statusUnavailable}}" bindtap="fetch">重试读取状态</view>
+    </view>
+    <view class="card gap-top pf-empty" wx:if="{{profileLoadFailed}}">暂无法读取已有档案，请稍后重试。</view>
+    <view class="card gap-top" wx:elif="{{hasExistingProfile}}">
+      <view class="section-title">已有档案 · 仅本人查看</view>
+      <view class="pf-read-row" wx:for="{{readOnlyRows}}" wx:key="label">
+        <view class="pf-read-label">{{item.label}}</view>
+        <view class="pf-read-value">{{item.value}}</view>
+      </view>
+    </view>
+    <view class="card gap-top pf-empty" wx:else>暂无可查看的健康档案。</view>
+  </block>
+
+  <block wx:else>
+    <!-- 基础信息 -->
+    <view class="card gap-top">
+      <view class="section-title">基础信息</view>
+      <view class="field">
+        <view class="field-label"><text class="required">*</text>姓名</view>
+        <input class="input" placeholder="请填写演示姓名" value="{{form.name}}" data-field="name" bindinput="onField" maxlength="20" />
+      </view>
+      <view class="field">
+        <view class="field-label"><text class="required">*</text>性别</view>
+        <view class="chips pf-gender">
+          <view class="chip {{form.gender === 'male' ? 'on' : ''}}" data-v="male" bindtap="selectGender">男</view>
+          <view class="chip {{form.gender === 'female' ? 'on' : ''}}" data-v="female" bindtap="selectGender">女</view>
+        </view>
+      </view>
+      <view class="field">
+        <view class="field-label"><text class="required">*</text>出生年月</view>
+        <picker mode="date" fields="month" value="{{form.birth}}" start="1900-01" end="{{maxBirth}}" bindchange="onBirth">
+          <view class="picker-box">
+            <view wx:if="{{form.birth}}">{{form.birth}}</view>
+            <view wx:else class="placeholder">请选择出生年月</view>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <!-- 身体指标 -->
+    <view class="card gap-top">
+      <view class="section-title">身体指标</view>
+      <view class="pf-cols">
+        <view class="field flex-1">
+          <view class="field-label">身高（cm）</view>
+          <input class="input" type="digit" placeholder="如 170" value="{{form.height}}" data-field="height" bindinput="onField" />
+        </view>
+        <view class="field flex-1 pf-col-r">
+          <view class="field-label">体重（kg）</view>
+          <input class="input" type="digit" placeholder="如 65" value="{{form.weight}}" data-field="weight" bindinput="onField" />
+        </view>
+      </view>
+      <view class="field">
+        <view class="field-label">血型</view>
+        <picker range="{{bloods}}" value="{{bloodIndex}}" bindchange="onBlood">
+          <view class="picker-box">
+            <view wx:if="{{form.blood}}">{{form.blood}} 型</view>
+            <view wx:else class="placeholder">请选择血型</view>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <!-- 健康状况 -->
+    <view class="card gap-top">
+      <view class="section-title">健康状况</view>
+      <view class="field">
+        <view class="field-label">慢病标签（可多选）</view>
+        <view class="chips">
+          <view
+            class="chip {{form.chronicTags.indexOf(c) > -1 ? 'on' : ''}}"
+            wx:for="{{chronicOptions}}"
+            wx:for-item="c"
+            wx:key="*this"
+            data-tag="{{c}}"
+            bindtap="toggleChronic"
+          >{{c}}</view>
+        </view>
+      </view>
+      <view class="field">
+        <view class="field-label">过敏史</view>
+        <textarea class="textarea" placeholder="药物/食物过敏等（选填）" value="{{form.allergy}}" data-field="allergy" bindinput="onField" maxlength="200" />
+      </view>
+      <view class="field">
+        <view class="field-label">手术史</view>
+        <textarea class="textarea" placeholder="既往手术情况（选填）" value="{{form.surgery}}" data-field="surgery" bindinput="onField" maxlength="200" />
+      </view>
+    </view>
+
+    <!-- 生活方式 -->
+    <view class="card gap-top">
+      <view class="section-title">生活方式</view>
+      <view class="pf-switch-row">
+        <view class="pf-switch-label">吸烟</view>
+        <switch checked="{{form.smoke}}" color="#0F766E" bindchange="onSmoke" />
+      </view>
+      <view class="pf-switch-row">
+        <view class="pf-switch-label">饮酒</view>
+        <switch checked="{{form.drink}}" color="#0F766E" bindchange="onDrink" />
+      </view>
+      <view class="field">
+        <view class="field-label">运动频率</view>
+        <picker range="{{sports}}" value="{{sportIndex}}" bindchange="onSport">
+          <view class="picker-box">
+            <view wx:if="{{form.sport}}">{{form.sport}}</view>
+            <view wx:else class="placeholder">请选择运动频率</view>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="btn-primary pf-save {{saving ? 'disabled' : ''}}" bindtap="save">
+      {{saving ? '保存中…' : '保存演示档案'}}
+    </view>
+  </block>
+  <privacy-consent />
+</view>
