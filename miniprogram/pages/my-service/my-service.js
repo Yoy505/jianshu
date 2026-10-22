@@ -54,6 +54,7 @@ Page(require('../../utils/hifi-page')({
     timeline: [],
     consentRecords: [],
     outreach: {},
+    professional: null,
     busy: false,
     activating: false
   },
@@ -114,6 +115,7 @@ Page(require('../../utils/hifi-page')({
       this.loadTimeline();
       this.loadConsentRecords();
       this.loadOutreachStatus();
+      this.loadProfessional();
       if (this.data.view === 'calendar') this.loadCalendar();
     }).catch((err) => {
       this.setData({ error: err.detail || '服务详情加载失败' });
@@ -137,6 +139,22 @@ Page(require('../../utils/hifi-page')({
           actor: ev.actor_type === 'user' ? '本人' : (ev.actor_type === 'admin' ? '服务方' : '系统'),
           created: format.full(ev.created_at)
         }))
+      });
+    }).catch(() => {});
+  },
+
+  loadProfessional() {
+    api.getInstanceProfessional(this.data.currentId).then((data) => {
+      this.setData({
+        professional: {
+          orders: (data.orders || []).map((o) => Object.assign({}, o, {
+            typeLabel: ({ initial_assessment: '初评', data_quality: '数据质量', physician_review: '医师复核', final_review: '期末复评', exception: '异常跟进' })[o.order_type] || o.order_type,
+            statusLabel: ({ pending: '待处理', in_progress: '处理中', done: '已完成', cancelled: '已取消' })[o.status] || o.status
+          })),
+          reports: data.reports || [],
+          followups: data.followups || [],
+          emergencyNote: data.emergency_note || ''
+        }
       });
     }).catch(() => {});
   },

@@ -675,7 +675,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 # 第五部分 · 全域健康管家服务履约（工作二，2026-10-22 起）
 
 覆盖：服务实例与激活门禁、45 天日历与履约任务、暂停 / 补时 / 到期 / 退款联动 / 续期、履约人员、服务时间线、触达任务框架（切片 B，见第七节）。
-表名前缀 `steward_`（触达域 `outreach_`、设备域 `device_`）。医师工单（D）、CCC 电话（E）后续以第五之子部分追加。
+表名前缀 `steward_`（触达域 `outreach_`、设备域 `device_`）。CCC 电话（E）后续以第五之子部分追加。
 **通道边界**：本部分不包含任何消息发送能力；无发送 API、无发送回执字段。每日触达通道未决策前，任何界面与接口不得出现「已发送 / 已送达」状态。
 
 ## 枚举
@@ -1035,3 +1035,53 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 
 后台：`device.vendor.create` · `device.binding.create/unbind` · `device.sync.trigger` · `device.cursor.reset` · `device.metric.review`。
 系统（actor_type=system）：`device.sync.run`（每次同步结果摘要，detail 不含健康数值明细）。
+## 九）专业任务与异常工单（切片 D，2026-10-22 起）
+
+**医疗边界（最高优先级）**：无签发资料时只做格式及数据质量检查，**不运行任何医学判断**；本节接口不做自动诊断、治疗建议、风险分级，不自行决定电话对象。医学阈值只能来自签发计划内容并关联签发人与机构规则版本。设备指标不单独触发疾病或紧急判断。紧急提示为固定经确认文案：「如遇紧急症状，请立即拨打 120 或前往当地急救机构」；平台不提供夜间连续监护。**签发身份一致**：工单结果与报告签发须由与指派医师绑定的后台账号录入，通用运营账号不能冒充医师意见。
+
+### 枚举
+
+| 枚举 | 取值 |
+|---|---|
+| 工单类型 order_type | `initial_assessment`(初评) `data_quality`(数据质量任务) `physician_review`(医师复核) `final_review`(期末复评) `exception`(异常工单) |
+| 工单优先级 | `normal` `high`（high 未结且未转交 → 阻断结案） |
+| 工单状态 | `pending`(待处理) `in_progress`(处理中) `done`(已完成) `cancelled`(已取消) |
+| 工单事件 action | `created` `started` `transferred` `escalated` `completed` `cancelled` |
+| 报告类型 | `closure`(结案报告) `correction`(结案后更正) |
+
+### 对象与规则
+
+- `steward_care_rules`（机构规则版本）：`(org_name, version)` 唯一；发布新版本即转旧版 `retired`；签发计划可引用 `rules_version`（引用时校验该机构该版本存在且 active，撤销后不能被新计划引用）。
+- 签发计划（第五部分对象）新增可选 `rules_version`：内容中的任何阈值展示均随计划快照固化；计划 / 规则升级不改写已引用快照（任务与工单在创建时固化 `care_plan_version` / `rules_version`）。
+- `steward_staff_admin_links`：后台账号 ↔ 履约人员（管家 / 医师）受控绑定；`UNIQUE(staff_id, admin_id)`。工单结果录入与报告签发校验当前账号绑定 = 工单指派医师，否则 403。
+- `steward_professional_orders`（专业工单）：`(instance_id, order_type, task_id?)`；`physician_id` 指派；`due_at` 超时依据；`transferred_at/transfer_reason` 转交事实（接收人、时间、依据）；创建时若类型属医学判断类（`physician_review` / `final_review`）必须存在该用户 + 该医师的有效签发计划（无签发阻断 422）。数据质量类不需要签发。
+- `steward_professional_events`（只追加）：全部流转留痕。
+- `steward_service_reports`（版本化报告）：`(instance_id, version)` 唯一；结案时自动生成 v1（含服务数据摘要与高优先级转交依据）；结案后更正形成新版本（`supersedes_id` 链），不覆盖。
+- `steward_followup_records`（结构化随访）：第 7/14/21/28/35/42 天 `follow_up` 任务的结构化结果（摘要 / 数据质量备注 / 下一步安排），`UNIQUE(task_id)`。
+
+### 超时升级与结案联动
+
+- `professional_sweep`（beat 每 15 分钟）：`pending/in_progress` 且 `due_at` 已过且未升级的工单 → 记 `escalated_at` + 事件 + 审计（升级为待人工处置标记，不自动外呼）。
+- `close_instance`（第 5.x 节）的高优先级检查接真表：存在 `priority=high` 且状态 `pending/in_progress` 且 `transferred_at IS NULL` 的工单 → 409；明确转交（有接收人 / 时间 / 依据）不阻断。结案成功同事务写报告 v1。
+
+### 后台端点（`steward.read` 查询 / `steward.manage` 操作；结果录入另校验账号绑定）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/admin/steward/care-rules` | 规则版本列表 / 发布新版本 `{org_name(1–100), version: v\d+, content(JSON), note?}`（同机构旧版自动 retired） |
+| GET/POST | `/admin/steward/staff-links`；DELETE | `/admin/steward/staff-links/{id}` | 账号↔人员绑定管理 `{staff_id, admin_id}`（绑定不改变权限点，仅建立录入身份） |
+| GET/POST | `/admin/steward/professional/orders` | 工单列表（按实例/状态/优先级/类型筛选）/ 创建 `{instance_id, order_type, title(1–100), detail?, priority, physician_id, task_id?, due_at?}`；医学判断类无有效签发计划 → 422 |
+| GET | `/admin/steward/professional/orders/{id}` | 详情含全部事件 |
+| POST | `/admin/steward/professional/orders/{id}/start` · `/{id}/cancel` | `pending→in_progress`；`{reason}` 取消 |
+| POST | `/admin/steward/professional/orders/{id}/transfer` | `{to_physician_id, reason(1–200)}`：接收人须在职医师；留事件与转交事实 |
+| POST | `/admin/steward/professional/orders/{id}/complete` | `{result(1–1000), result_meta?}`：当前账号须绑定指派医师（403 冒充防护）→ `done` |
+| GET/POST | `/admin/steward/reports`；`/admin/steward/reports/{id}` | 报告列表（按实例）/ 结案后更正 `{instance_id, title, content(1–5000), basis?}` → 新版本（须绑定实例签约医师） |
+| GET/POST | `/admin/steward/followups` | 结构化随访列表（按实例）/ 录制 `{task_id, summary(1–500), data_quality_note?, next_action?}`（任务须为本人实例 `follow_up` 且未录过） |
+
+### C 端 `/mp/steward/instances/{id}/professional`
+
+本人实例的专业进展聚合：工单（类型 / 状态 / 标题 / 截止，不含内部备注）、报告（版本 / 标题 / 签发时间 / 正文）、随访记录（第 N 天 / 摘要 / 下一步）；固定急救文案随响应返回（`emergency_note`），不承诺夜间连续监护。
+
+### 审计 action（本节新增）
+
+`steward.carerules.publish` · `steward.stafflink.create/delete` · `steward.proforder.create/start/transfer/complete/cancel`（系统：`steward.proforder.escalate`）· `steward.report.correct` · `steward.followup.record`。

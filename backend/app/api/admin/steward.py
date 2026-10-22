@@ -25,6 +25,20 @@ from app.models import (
 from app.schemas.common import Page, mask_phone
 from app.schemas.steward import (
     AssignIn,
+    CareRulesOut,
+    CareRulesPublishIn,
+    FollowupRecordIn,
+    FollowupRecordOut,
+    OrderCompleteIn,
+    OrderCreateIn,
+    OrderDetailOut,
+    OrderOut,
+    OrderTransferIn,
+    ReasonIn,
+    ReportCorrectIn,
+    ReportOut,
+    StaffLinkCreateIn,
+    StaffLinkOut,
     CalendarDayOut,
     CarePlanCreateIn,
     CarePlanOut,
@@ -50,6 +64,7 @@ from app.schemas.steward import (
     TermsPublishIn,
     TimelineOut,
 )
+from app.services import professional_service as prof
 from app.services import steward_service as svc
 
 router = APIRouter(prefix="/admin/steward", tags=["admin-steward"])
@@ -503,6 +518,7 @@ def _care_plan_out(p) -> CarePlanOut:
         physician_id=p.physician_id,
         org_name=p.org_name,
         version=p.version,
+        rules_version=p.rules_version,
         content=p.content or {},
         issued_at=p.issued_at,
         valid_until=p.valid_until,
@@ -610,3 +626,311 @@ async def update_staff(
         raise HTTPException(status_code=404, detail="人员不存在")
     staff = await svc.update_staff(db, admin, staff, payload.model_dump(exclude_unset=True))
     return _staff_out(staff)
+
+
+# ───────────────────── 专业任务与异常工单（切片 D） ─────────────────────
+
+
+def _rules_out(r) -> CareRulesOut:
+    return CareRulesOut(
+        id=r.id, org_name=r.org_name, version=r.version, content=r.content or {},
+        status=r.status, retired_at=r.retired_at, note=r.note, created_at=r.created_at,
+    )
+
+
+@router.get("/care-rules", response_model=list[CareRulesOut])
+async def list_care_rules(
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[CareRulesOut]:
+    return [_rules_out(r) for r in await prof.list_care_rules(db)]
+
+
+@router.post("/care-rules", response_model=CareRulesOut, status_code=201)
+async def publish_care_rules(
+    payload: CareRulesPublishIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> CareRulesOut:
+    rules = await prof.publish_care_rules(
+        db, admin, payload.org_name, payload.version, payload.content, payload.note
+    )
+    return _rules_out(rules)
+
+
+@router.get("/staff-links", response_model=list[StaffLinkOut])
+async def list_staff_links(
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[StaffLinkOut]:
+    from app.models import AdminUser, StewardStaffAdminLink
+
+    rows = (
+        (await db.execute(select(StewardStaffAdminLink).order_by(StewardStaffAdminLink.id.desc())))
+        .scalars()
+        .all()
+    )
+    items = []
+    for link in rows:
+        staff = await db.get(StewardStaff, link.staff_id)
+        target = await db.get(AdminUser, link.admin_id)
+        items.append(
+            StaffLinkOut(
+                id=link.id, staff_id=link.staff_id, staff_name=staff.name if staff else None,
+                admin_id=link.admin_id, admin_username=target.username if target else None,
+                created_at=link.created_at,
+            )
+        )
+    return items
+
+
+@router.post("/staff-links", status_code=201)
+async def create_staff_link(
+    payload: StaffLinkCreateIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    await prof.create_staff_link(db, admin, payload.staff_id, payload.admin_id)
+    return {"ok": True}
+
+
+@router.delete("/staff-links/{link_id}")
+async def delete_staff_link(
+    link_id: int,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    await prof.delete_staff_link(db, admin, link_id)
+    return {"ok": True}
+
+
+async def _order_out(db: AsyncSession, o) -> OrderOut:
+    physician = await db.get(StewardStaff, o.physician_id)
+    return OrderOut(
+        id=o.id, instance_id=o.instance_id, user_id=o.user_id, order_type=o.order_type,
+        title=o.title, detail=o.detail, priority=o.priority, status=o.status,
+        physician_id=o.physician_id, physician_name=physician.name if physician else None,
+        task_id=o.task_id, care_plan_version=o.care_plan_version, rules_version=o.rules_version,
+        due_at=o.due_at, escalated_at=o.escalated_at, transferred_at=o.transferred_at,
+        transfer_reason=o.transfer_reason, result=o.result, completed_at=o.completed_at,
+        created_at=o.created_at,
+    )
+
+
+@router.get("/professional/orders", response_model=Page[OrderOut])
+async def list_professional_orders(
+    instance_id: int | None = Query(default=None),
+    status: str | None = Query(default=None, max_length=12),
+    priority: str | None = Query(default=None, max_length=8),
+    order_type: str | None = Query(default=None, max_length=24),
+    pagination: tuple[int, int] = Depends(pagination_params),
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> Page[OrderOut]:
+    from app.models import StewardProfessionalOrder
+
+    page, page_size = pagination
+    filters = []
+    if instance_id:
+        filters.append(StewardProfessionalOrder.instance_id == instance_id)
+    if status:
+        filters.append(StewardProfessionalOrder.status == status)
+    if priority:
+        filters.append(StewardProfessionalOrder.priority == priority)
+    if order_type:
+        filters.append(StewardProfessionalOrder.order_type == order_type)
+    count_stmt = select(func.count()).select_from(StewardProfessionalOrder)
+    list_stmt = select(StewardProfessionalOrder).order_by(StewardProfessionalOrder.id.desc())
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+        list_stmt = list_stmt.where(*filters)
+    total = (await db.execute(count_stmt)).scalar()
+    rows = (
+        (await db.execute(list_stmt.offset((page - 1) * page_size).limit(page_size))).scalars().all()
+    )
+    items = [await _order_out(db, o) for o in rows]
+    return Page(items=items, total=int(total or 0), page=page, page_size=page_size)
+
+
+@router.post("/professional/orders", response_model=OrderOut, status_code=201)
+async def create_professional_order(
+    payload: OrderCreateIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await prof.create_order(db, admin, payload.model_dump())
+    return await _order_out(db, order)
+
+
+@router.get("/professional/orders/{order_id}", response_model=OrderDetailOut)
+async def professional_order_detail(
+    order_id: int,
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> OrderDetailOut:
+    from app.models import StewardProfessionalEvent, StewardProfessionalOrder
+    from app.schemas.steward import OrderEventOut
+
+    order = await db.get(StewardProfessionalOrder, order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="工单不存在")
+    base = await _order_out(db, order)
+    events = (
+        (
+            await db.execute(
+                select(StewardProfessionalEvent)
+                .where(StewardProfessionalEvent.order_id == order.id)
+                .order_by(StewardProfessionalEvent.id.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return OrderDetailOut(
+        **base.model_dump(),
+        events=[
+            OrderEventOut(
+                id=e.id, order_id=e.order_id, action=e.action, actor_admin_id=e.actor_admin_id,
+                actor_name=e.actor_name, detail=e.detail, created_at=e.created_at,
+            )
+            for e in events
+        ],
+    )
+
+
+async def _get_order(db: AsyncSession, order_id: int):
+    from app.models import StewardProfessionalOrder
+
+    order = await db.get(StewardProfessionalOrder, order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="工单不存在")
+    return order
+
+
+@router.post("/professional/orders/{order_id}/start", response_model=OrderOut)
+async def start_professional_order(
+    order_id: int,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await prof.start_order(db, admin, await _get_order(db, order_id))
+    return await _order_out(db, order)
+
+
+@router.post("/professional/orders/{order_id}/transfer", response_model=OrderOut)
+async def transfer_professional_order(
+    order_id: int,
+    payload: OrderTransferIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await prof.transfer_order(
+        db, admin, await _get_order(db, order_id), payload.to_physician_id, payload.reason
+    )
+    return await _order_out(db, order)
+
+
+@router.post("/professional/orders/{order_id}/complete", response_model=OrderOut)
+async def complete_professional_order(
+    order_id: int,
+    payload: OrderCompleteIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await prof.complete_order(
+        db, admin, await _get_order(db, order_id), payload.result, payload.result_meta
+    )
+    return await _order_out(db, order)
+
+
+@router.post("/professional/orders/{order_id}/cancel", response_model=OrderOut)
+async def cancel_professional_order(
+    order_id: int,
+    payload: ReasonIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await prof.cancel_order(db, admin, await _get_order(db, order_id), payload.reason)
+    return await _order_out(db, order)
+
+
+@router.get("/reports", response_model=list[ReportOut])
+async def list_reports(
+    instance_id: int | None = Query(default=None),
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[ReportOut]:
+    from app.models import StewardServiceReport
+
+    stmt = select(StewardServiceReport).order_by(StewardServiceReport.id.desc())
+    if instance_id:
+        stmt = stmt.where(StewardServiceReport.instance_id == instance_id)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        ReportOut(
+            id=r.id, instance_id=r.instance_id, version=r.version, report_type=r.report_type,
+            title=r.title, content=r.content, data_summary=r.data_summary, basis=r.basis,
+            physician_id=r.physician_id, issued_at=r.issued_at, supersedes_id=r.supersedes_id,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/reports", response_model=ReportOut, status_code=201)
+async def correct_report(
+    payload: ReportCorrectIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> ReportOut:
+    instance = await svc.instance_for_admin(db, payload.instance_id)
+    report = await prof.create_correction_report(
+        db, admin, instance, payload.title, payload.content, payload.basis
+    )
+    return ReportOut(
+        id=report.id, instance_id=report.instance_id, version=report.version,
+        report_type=report.report_type, title=report.title, content=report.content,
+        data_summary=report.data_summary, basis=report.basis, physician_id=report.physician_id,
+        issued_at=report.issued_at, supersedes_id=report.supersedes_id, created_at=report.created_at,
+    )
+
+
+@router.get("/followups", response_model=list[FollowupRecordOut])
+async def list_followups(
+    instance_id: int | None = Query(default=None),
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[FollowupRecordOut]:
+    from app.models import StewardFollowupRecord
+
+    stmt = select(StewardFollowupRecord).order_by(StewardFollowupRecord.service_day.asc())
+    if instance_id:
+        stmt = stmt.where(StewardFollowupRecord.instance_id == instance_id)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        FollowupRecordOut(
+            id=r.id, instance_id=r.instance_id, task_id=r.task_id, service_day=r.service_day,
+            summary=r.summary, data_quality_note=r.data_quality_note, next_action=r.next_action,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/followups", response_model=FollowupRecordOut, status_code=201)
+async def record_followup(
+    payload: FollowupRecordIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> FollowupRecordOut:
+    task = await db.get(StewardTask, payload.task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="随访任务不存在")
+    instance = await svc.instance_for_admin(db, task.instance_id)
+    record = await prof.record_followup(db, admin, instance, payload.task_id, payload.model_dump())
+    return FollowupRecordOut(
+        id=record.id, instance_id=record.instance_id, task_id=record.task_id,
+        service_day=record.service_day, summary=record.summary,
+        data_quality_note=record.data_quality_note, next_action=record.next_action,
+        created_at=record.created_at,
+    )

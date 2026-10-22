@@ -173,6 +173,24 @@ async def _run_device_sync() -> dict:
         await engine.dispose()
 
 
+async def _run_professional_sweep() -> dict:
+    from app.services import professional_service
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            return await professional_service.professional_sweep(session)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.professional_sweep")
+def professional_sweep_task() -> dict:
+    """每 15 分钟（beat，切片 D）：工单超时升级（标记 + 事件 + 审计，不自动外呼）。"""
+    return asyncio.run(_run_professional_sweep())
+
+
 @celery_app.task(name="app.workers.tasks.device_sync_sweep")
 def device_sync_sweep() -> dict:
     """每 15 分钟（beat，切片 C）：批量同步 active 绑定。适配器未注册时逐条

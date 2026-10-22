@@ -1319,9 +1319,10 @@ async def resume_instance(
 async def _open_high_priority_tickets(
     db: AsyncSession, instance_id: int
 ) -> int:
-    """未结高优先级医师工单数（A3 落地钩子；切片 D 接入专业工单表后查真表）。"""
-    # 切片 D 落地前专业工单表不存在，返回 0；接线点在此，结案检查已生效。
-    return 0
+    """未结高优先级医师工单数（切片 D 起查真表；口径：high 且未结且未明确转交）。"""
+    from app.services import professional_service
+
+    return await professional_service.open_high_priority_count(db, instance_id)
 
 
 async def close_instance(
@@ -1357,6 +1358,10 @@ async def close_instance(
     if result.rowcount != 1:
         await db.refresh(instance)
         raise HTTPException(status_code=409, detail="结案状态冲突，请刷新后重试")
+    # 切片 D：结案同事务生成版本化报告 v1（服务数据摘要 + 高优先级转交依据）
+    from app.services import professional_service
+
+    await professional_service.create_closure_report(db, instance, closure_report)
     await add_timeline(
         db,
         instance,
@@ -1600,12 +1605,18 @@ async def create_care_plan(
     ).scalar_one_or_none()
     if duplicate is not None:
         raise HTTPException(status_code=409, detail="该用户已有同版本签发计划")
+    rules_version = payload.get("rules_version")
+    if rules_version:
+        from app.services import professional_service
+
+        await professional_service.validate_rules_version(db, payload["org_name"], rules_version)
     plan = StewardCarePlan(
         user_id=payload["user_id"],
         physician_id=payload["physician_id"],
         org_name=payload["org_name"],
         version=payload["version"],
         content=payload.get("content") or {},
+        rules_version=rules_version,
         valid_until=payload.get("valid_until"),
         created_by_admin_id=admin.id,
     )

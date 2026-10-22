@@ -205,6 +205,9 @@ module.exports = {
   getDeviceTrend(metric, days) {
     return request({ url: '/mp/steward/devices/trend', data: { metric: metric, days: days }, silent: true });
   },
+  getInstanceProfessional(id) {
+    return request({ url: '/mp/steward/instances/' + id + '/professional', silent: true });
+  },
   unbindDevice(bindingId, reason) {
     return request({ url: '/mp/steward/devices/bindings/' + bindingId + '/unbind', method: 'POST', data: { reason: reason } });
   }

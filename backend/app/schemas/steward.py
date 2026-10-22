@@ -245,6 +245,7 @@ class CarePlanCreateIn(BaseModel):
     version: str = Field(pattern=r"^v\d+$")
     org_name: str = Field(min_length=1, max_length=100)
     content: dict = Field(default_factory=dict)
+    rules_version: str | None = Field(default=None, pattern=r"^v\d+$")
     valid_until: UTCDateTime | None = None
 
 
@@ -259,6 +260,7 @@ class CarePlanOut(BaseModel):
     physician_id: int
     org_name: str
     version: str
+    rules_version: str | None = None
     content: dict
     issued_at: UTCDateTime
     valid_until: UTCDateTime | None
@@ -298,3 +300,152 @@ class StaffOut(BaseModel):
     status: str
     note: str | None
     created_at: UTCDateTime
+
+
+# ───────────────────────── 切片 D：专业任务与异常工单 ─────────────────────────
+
+
+class CareRulesPublishIn(BaseModel):
+    org_name: str = Field(min_length=1, max_length=100)
+    version: str = Field(pattern=r"^v\d+$")
+    content: dict = Field(default_factory=dict)
+    note: str | None = Field(default=None, max_length=200)
+
+
+class CareRulesOut(BaseModel):
+    id: int
+    org_name: str
+    version: str
+    content: dict
+    status: str
+    retired_at: UTCDateTime | None
+    note: str | None
+    created_at: UTCDateTime
+
+
+class StaffLinkCreateIn(BaseModel):
+    staff_id: int
+    admin_id: int
+
+
+class StaffLinkOut(BaseModel):
+    id: int
+    staff_id: int
+    staff_name: str | None = None
+    admin_id: int
+    admin_username: str | None = None
+    created_at: UTCDateTime
+
+
+OrderTypeIn = Literal[
+    "initial_assessment", "data_quality", "physician_review", "final_review", "exception"
+]
+
+
+class OrderCreateIn(BaseModel):
+    instance_id: int
+    order_type: OrderTypeIn
+    title: str = Field(min_length=1, max_length=100)
+    detail: str | None = Field(default=None, max_length=1000)
+    priority: Literal["normal", "high"] = "normal"
+    physician_id: int
+    task_id: int | None = None
+    due_at: UTCDateTime | None = None
+
+
+class OrderOut(BaseModel):
+    id: int
+    instance_id: int
+    user_id: int
+    order_type: str
+    title: str
+    detail: str | None
+    priority: str
+    status: str
+    physician_id: int
+    physician_name: str | None = None
+    task_id: int | None
+    care_plan_version: str | None
+    rules_version: str | None
+    due_at: UTCDateTime | None
+    escalated_at: UTCDateTime | None
+    transferred_at: UTCDateTime | None
+    transfer_reason: str | None
+    result: str | None
+    completed_at: UTCDateTime | None
+    created_at: UTCDateTime
+
+
+class OrderEventOut(BaseModel):
+    id: int
+    order_id: int
+    action: str
+    actor_admin_id: int | None
+    actor_name: str
+    detail: dict | None
+    created_at: UTCDateTime
+
+
+class OrderDetailOut(OrderOut):
+    events: list[OrderEventOut] = []
+
+
+class OrderTransferIn(BaseModel):
+    to_physician_id: int
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class OrderCompleteIn(BaseModel):
+    result: str = Field(min_length=1, max_length=1000)
+    result_meta: dict | None = None
+
+
+class ReasonIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class ReportCorrectIn(BaseModel):
+    instance_id: int
+    title: str = Field(min_length=1, max_length=100)
+    content: str = Field(min_length=1, max_length=5000)
+    basis: str | None = Field(default=None, max_length=500)
+
+
+class ReportOut(BaseModel):
+    id: int
+    instance_id: int
+    version: int
+    report_type: str
+    title: str
+    content: str
+    data_summary: dict | None
+    basis: str | None
+    physician_id: int | None
+    issued_at: UTCDateTime
+    supersedes_id: int | None
+    created_at: UTCDateTime
+
+
+class FollowupRecordIn(BaseModel):
+    task_id: int
+    summary: str = Field(min_length=1, max_length=500)
+    data_quality_note: str | None = Field(default=None, max_length=500)
+    next_action: str | None = Field(default=None, max_length=200)
+
+
+class FollowupRecordOut(BaseModel):
+    id: int
+    instance_id: int
+    task_id: int
+    service_day: int
+    summary: str
+    data_quality_note: str | None
+    next_action: str | None
+    created_at: UTCDateTime
+
+
+class ProfessionalViewOut(BaseModel):
+    orders: list[dict]
+    reports: list[dict]
+    followups: list[dict]
+    emergency_note: str

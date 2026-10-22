@@ -219,6 +219,21 @@ async def complete_task(
     return _task_out(task)
 
 
+@router.get("/instances/{instance_id}/professional")
+async def instance_professional(
+    instance_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """专业进展聚合（切片 D）：工单进度 / 版本化报告 / 随访记录 + 固定急救文案。"""
+    from app.schemas.steward import ProfessionalViewOut
+    from app.services import professional_service
+
+    instance = await svc.instance_for_user(db, user, instance_id)
+    data = await professional_service.instance_professional_view(db, instance)
+    return ProfessionalViewOut(**data).model_dump()
+
+
 @router.get("/instances/{instance_id}/timeline", response_model=list[TimelineOut])
 async def my_timeline(
     instance_id: int,

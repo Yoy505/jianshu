@@ -40,5 +40,10 @@ celery_app.conf.update(
             "task": "app.workers.tasks.device_sync_sweep",
             "schedule": crontab(minute="*/15"),
         },
+        # 工作二切片 D：每 15 分钟工单超时升级（标记留痕，不自动外呼）
+        "professional-sweep": {
+            "task": "app.workers.tasks.professional_sweep",
+            "schedule": crontab(minute="*/15"),
+        },
     },
 )

@@ -156,6 +156,25 @@
           <button class="secondary act-btn" bindtap="goDeviceData">设备数据</button>
         </view>
 
+        <view class="card" wx:if="{{professional && (professional.orders.length || professional.reports.length || professional.followups.length)}}">
+          <view class="t-h3">专业进展</view>
+          <view class="check-line" wx:for="{{professional.orders}}" wx:key="id">
+            <view class="grow">
+              <view class="t-h3">{{item.typeLabel}} · {{item.title}}</view>
+              <view class="t-p">{{item.statusLabel}}{{item.escalated ? ' · 已升级处理' : ''}}{{item.transferred ? ' · 已转交跟进' : ''}}</view>
+            </view>
+          </view>
+          <view class="kv" wx:for="{{professional.followups}}" wx:key="id">
+            <text class="t-span">第 {{item.service_day}} 天随访</text>
+            <text class="t-b">{{item.summary}}</text>
+          </view>
+          <view class="kv" wx:for="{{professional.reports}}" wx:key="id">
+            <text class="t-span">报告 v{{item.version}}</text>
+            <text class="t-b">{{item.title}}</text>
+          </view>
+          <view class="t-p quiet-note">{{professional.emergencyNote}}</view>
+        </view>
+
         <view class="card" wx:if="{{timeline.length}}">
           <view class="t-h3">服务动态</view>
           <view class="kv" wx:for="{{timeline}}" wx:key="id">
