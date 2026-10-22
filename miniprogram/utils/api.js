@@ -192,5 +192,11 @@ module.exports = {
   },
   getStewardConsentRecords() {
     return request({ url: '/mp/steward/consent-records', silent: true });
+  },
+  getOutreachStatus() {
+    return request({ url: '/mp/steward/outreach/status', silent: true });
+  },
+  setOutreachSubscription(subscribed) {
+    return request({ url: '/mp/steward/outreach/subscription', method: 'POST', data: { subscribed: subscribed } });
   }
 };

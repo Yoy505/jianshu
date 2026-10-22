@@ -53,6 +53,7 @@ Page(require('../../utils/hifi-page')({
     selectedTasks: [],
     timeline: [],
     consentRecords: [],
+    outreach: {},
     busy: false,
     activating: false
   },
@@ -112,6 +113,7 @@ Page(require('../../utils/hifi-page')({
       this.setData({ instance, month });
       this.loadTimeline();
       this.loadConsentRecords();
+      this.loadOutreachStatus();
       if (this.data.view === 'calendar') this.loadCalendar();
     }).catch((err) => {
       this.setData({ error: err.detail || '服务详情加载失败' });
@@ -137,6 +139,35 @@ Page(require('../../utils/hifi-page')({
         }))
       });
     }).catch(() => {});
+  },
+
+  loadOutreachStatus() {
+    api.getOutreachStatus().then((st) => {
+      this.setData({ outreach: st || {} });
+    }).catch(() => {});
+  },
+
+  toggleOutreach() {
+    const st = this.data.outreach || {};
+    const next = !st.subscribed;
+    const self = this;
+    wx.showModal({
+      title: next ? '恢复每日提醒' : '退订每日提醒',
+      content: next
+        ? '恢复后服务期内的每日事项提醒将继续安排（当前提醒通道待配置，由管家人工跟进）。'
+        : '退订后立即停止后续提醒安排；不影响服务履约本身，也不代表申请退款。',
+      confirmText: next ? '恢复' : '退订',
+      cancelText: '暂不',
+      success(res) {
+        if (!res.confirm) return;
+        api.setOutreachSubscription(next).then(() => {
+          wx.showToast({ title: next ? '已恢复' : '已退订', icon: 'success' });
+          self.loadOutreachStatus();
+        }).catch((err) => {
+          wx.showToast({ title: err.detail || '操作失败', icon: 'none' });
+        });
+      }
+    });
   },
 
   loadConsentRecords() {

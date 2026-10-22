@@ -45,6 +45,8 @@ async def publish_default_terms(client: httpx.AsyncClient, a: dict) -> None:
             json={"purpose": purpose, "version": "v1", "title": title, "text": text},
             headers=a,
         )
+        if resp.status_code == 409:
+            continue  # 同一测试内二次造数：v1 已发布，幂等跳过
         assert resp.status_code == 201, resp.text
 
 
@@ -149,7 +151,7 @@ async def get_my_instance(client: httpx.AsyncClient) -> dict:
     assert resp.status_code == 200, resp.text
     items = resp.json()
     assert items, "应已懒创建服务实例"
-    return items[0]
+    return items[-1]  # 最新实例（同一测试内多次造数时取新的一份）
 
 
 async def full_setup(client: httpx.AsyncClient, *, phone: str = USER1["phone"], with_release: bool = True) -> dict:
@@ -166,9 +168,19 @@ async def full_setup(client: httpx.AsyncClient, *, phone: str = USER1["phone"], 
 
     await publish_default_terms(client, a)
 
+    # 先查已有有效 v1 签发计划：复用时实例须指派同一医师（门禁按医师一致判定）
+    resp = await client.get(
+        f"{API}/admin/steward/care-plans", params={"user_id": USER1["id"]}, headers=a
+    )
+    existing = [p for p in resp.json() if p["version"] == "v1" and not p["revoked_at"]]
+
     butler = await create_staff(client, a, "butler", "管家甲")
     backup = await create_staff(client, a, "butler", "管家乙")
-    physician = await create_staff(client, a, "physician", "医师丙")
+    if existing:
+        physician = {"id": existing[0]["physician_id"]}
+        care_plan = existing[0]
+    else:
+        physician = await create_staff(client, a, "physician", "医师丙")
     resp = await client.post(
         f"{API}/admin/steward/instances/{instance['id']}/assign",
         json={
@@ -180,19 +192,20 @@ async def full_setup(client: httpx.AsyncClient, *, phone: str = USER1["phone"], 
     )
     assert resp.status_code == 200, resp.text
 
-    resp = await client.post(
-        f"{API}/admin/steward/care-plans",
-        json={
-            "user_id": USER1["id"],
-            "physician_id": physician["id"],
-            "version": "v1",
-            "org_name": "杏临汇签约服务机构",
-            "content": {"sleep_window": "23:00-07:00", "followup_focus": "睡眠效率"},
-        },
-        headers=a,
-    )
-    assert resp.status_code == 201, resp.text
-    care_plan = resp.json()
+    if not existing:
+        resp = await client.post(
+            f"{API}/admin/steward/care-plans",
+            json={
+                "user_id": USER1["id"],
+                "physician_id": physician["id"],
+                "version": "v1",
+                "org_name": "杏临汇签约服务机构",
+                "content": {"sleep_window": "23:00-07:00", "followup_focus": "睡眠效率"},
+            },
+            headers=a,
+        )
+        assert resp.status_code == 201, resp.text
+        care_plan = resp.json()
 
     release = None
     if with_release:

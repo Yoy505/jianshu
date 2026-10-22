@@ -113,6 +113,18 @@
             </view>
           </view>
           <view class="t-p quiet-note">各用途授权相互独立；撤回后对应服务准备项回退，撤回授权不代表申请退款。</view>
+          <view class="check-line" wx:if="{{outreach.subscribed !== undefined}}">
+            <view class="grow">
+              <view class="row between">
+                <view class="grow">
+                  <view class="t-h3">每日提醒</view>
+                  <view class="t-p">{{outreach.status_note}}</view>
+                  <view class="t-p">当前状态：{{outreach.subscribed ? '已订阅' : '已退订'}}</view>
+                </view>
+                <button class="mini" size="mini" bindtap="toggleOutreach">{{outreach.subscribed ? '退订' : '恢复'}}</button>
+              </view>
+            </view>
+          </view>
         </view>
 
         <view class="card" wx:if="{{instance.status === 'active' || instance.status === 'paused'}}">

@@ -26,6 +26,7 @@ from app.schemas.steward import (
     TermsOut,
 )
 from app.schemas.commerce import BenefitItem, ConsentOut
+from app.schemas.outreach import SubscriptionSetIn
 from app.services import steward_service as svc
 from app.schemas.common import mask_phone
 
@@ -294,3 +295,35 @@ async def grant_consent(
         granted_at=consent.granted_at,
         revoked_at=consent.revoked_at,
     )
+
+
+# ───────────────── 触达状态与退订（切片 B，渠道无关） ─────────────────
+
+
+@router.get("/outreach/status")
+async def outreach_status(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """本人触达状态：通道未决策时如实展示待配置与人工跟进，不承诺每日送达。"""
+    from app.schemas.outreach import SubscriptionStatusOut
+    from app.services import outreach_service
+
+    data = await outreach_service.subscription_status(db, user.id)
+    return SubscriptionStatusOut(**data).model_dump()
+
+
+@router.post("/outreach/subscription")
+async def set_outreach_subscription(
+    payload: SubscriptionSetIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """退订 / 重新订阅每日提醒。退订立即停止本人全部未完成触达；不影响履约，不等于退款。"""
+    from app.schemas.outreach import SubscriptionStatusOut
+    from app.services import outreach_service
+
+    data = await outreach_service.set_subscription(db, user, payload.subscribed)
+    return SubscriptionStatusOut(
+        **{k: v for k, v in data.items() if k != "stopped"}
+    ).model_dump() | {"stopped": data.get("stopped", 0)}

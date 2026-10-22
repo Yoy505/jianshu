@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     # 条款未发布时授权 503 待配置、门禁恒 pending；试点放行表无有效记录时激活一律阻断。
     STEWARD_SERVICE_DAYS: int = 45
     STEWARD_FOLLOWUP_DAYS: str = "7,14,21,28,35,42"
+    # 触达（切片 B）：人工驳回重办次数上限，达到后意图置 failed（失败队列终态）
+    STEWARD_OUTREACH_MAX_ATTEMPTS: int = 3
 
     # 阿里云 OSS（生产预留）
     OSS_ACCESS_KEY_ID: str = ""

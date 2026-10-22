@@ -30,5 +30,10 @@ celery_app.conf.update(
             "task": "app.workers.tasks.steward_lifecycle_sweep",
             "schedule": crontab(minute="*/5"),
         },
+        # 工作二切片 B：每 5 分钟生成当日触达意图（幂等）并停止失效意图；无发送调用
+        "outreach-sweep": {
+            "task": "app.workers.tasks.outreach_sweep",
+            "schedule": crontab(minute="*/5"),
+        },
     },
 )

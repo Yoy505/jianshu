@@ -38,6 +38,8 @@ Base URL：`http://<host>:8000/api/v1`
 | `commerce.batch.confirm`（批次确认发放 / 取消、权益作废 / 改号） | ✓ | ✗ |
 | `steward.read`（服务履约实例、日历、时间线、人员名单查询，2026-10-22 起） | ✓ | ✓ |
 | `steward.manage`（门禁录入、指派、暂停/恢复/结案、任务登记、人员管理） | ✓ | ✗ |
+| `outreach.read`（触达待办、详情、尝试记录查询，2026-10-22 切片 B 起） | ✓ | ✓ |
+| `outreach.manage`（触达转人工、领取/退回、提交结果、确认/驳回、取消、离岗交接） | ✓ | ✗ |
 
 ### 限流与防重复提交（2026-09-22 起）
 
@@ -670,8 +672,8 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 
 # 第五部分 · 全域健康管家服务履约（工作二，2026-10-22 起）
 
-覆盖：服务实例与激活门禁、45 天日历与履约任务、暂停 / 补时 / 到期 / 退款联动 / 续期、履约人员、服务时间线。
-表名前缀 `steward_`。触达任务框架（切片 B）、设备（C）、医师工单（D）、CCC 电话（E）后续以第五之子部分追加。
+覆盖：服务实例与激活门禁、45 天日历与履约任务、暂停 / 补时 / 到期 / 退款联动 / 续期、履约人员、服务时间线、触达任务框架（切片 B，见第七节）。
+表名前缀 `steward_`（触达域 `outreach_`）。设备（C）、医师工单（D）、CCC 电话（E）后续以第五之子部分追加。
 **通道边界**：本部分不包含任何消息发送能力；无发送 API、无发送回执字段。每日触达通道未决策前，任何界面与接口不得出现「已发送 / 已送达」状态。
 
 ## 枚举
@@ -849,7 +851,90 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 
 ## 六）审计 action（第五部分新增）
 
-后台：`steward.prep.pass/reset` · `steward.assign` · `steward.pause/resume/close` · `steward.task.result` · `steward.staff.create/update` · `steward.terms.publish` · `steward.release.create/revoke` · `steward.careplan.create/revoke`。
-用户（actor_type=user）：`steward.instance.activate` · `steward.task.complete` · `steward.consent.grant` · `steward.consent.revoke`。
+后台：`steward.prep.pass/reset` · `steward.assign` · `steward.pause/resume/close` · `steward.task.result` · `steward.staff.create/update` · `steward.terms.publish` · `steward.release.create/revoke` · `steward.careplan.create/revoke` · `outreach.intent.route/assign/release/submit/confirm/reject/cancel` · `outreach.handover`。
+用户（actor_type=user）：`steward.instance.activate` · `steward.task.complete` · `steward.consent.grant` · `steward.consent.revoke` · `outreach.subscription.set`。
 系统（actor_type=system）：`steward.instance.create/expire/terminate`（读路径懒迁移与 sweep 共用同一组 action）。
 审计 detail 不含手机号全号与健康档案正文。
+
+## 七）触达任务框架（切片 B，2026-10-22 起，渠道无关）
+
+表前缀 `outreach_`。**通道边界（最高优先级）**：本节不包含任何消息发送能力——无发送 API、无通道凭据、无发送/送达/阅读回执字段；每日触达通道未决策前，任何界面与接口不得出现「已发送 / 已送达 / 已读」。通道选定后另开接入切片，届时增加 `channel_receipt_ref`（真实回执引用）并区分「通道受理 / 发送成功 / 用户打开 / 事项办理」为独立真实事实。
+
+身份绑定：意图直接以 `(instance_id, user_id)` 关联本人与权益实例，**禁止**凭昵称、头像、手机号相似性合并或推断触达对象。
+
+### 枚举
+
+| 枚举 | 取值 |
+|---|---|
+| 意图状态 | `pending_channel`(待通道配置) `pending_manual`(待人工处理) `pending_confirm`(待确认) `resolved`(事项已办理) `failed`(失败，尝试耗尽) `cancelled`(已取消) |
+| 意图目的 purpose | `daily_reminder`(每日提醒) `follow_up`(随访跟进) |
+| 停止原因 stop_reason | `instance_expired`(到期) `instance_terminated`(终止) `service_paused`(暂停，恢复后按顺延日期重新生成) `unsubscribed`(本人退订) `consent_revoked`(平台服务授权撤回) `manual_cancel`(人工取消) |
+| 尝试动作 action | `generated`(系统生成) `routed_manual`(转人工) `assigned`(领取/指派) `released`(退回) `submitted`(提交联系结果) `confirmed`(确认办理) `rejected`(驳回重办) `cancelled`(取消) `stopped`(条件停止) `reassigned`(交接) |
+| 联系方式 contact_method | `phone`(电话) `chat`(咚咚会话) `other`(其他) |
+
+### 幂等与生成规则
+
+- 业务幂等键 `UNIQUE(instance_id, purpose, service_date)`：重复调度、多 worker 并发生成只建一份意图（冲突读回原记录）。
+- 生成来源：`outreach_sweep`（Celery beat 每 5 分钟，与人工触发共用同一服务函数）为 `active` 且可联系（未退订、平台服务授权未撤回）实例的当日（Asia/Shanghai）`daily` 与 `follow_up` 任务生成意图；`preparing/paused/expired/closed/terminated` 或不可联系时不生成。通道日去重与目标人群策略属将来通道配置边界，当前不实现。
+- 意图复活：同一幂等键至多一条意图。被 `service_paused` / `unsubscribed` / `consent_revoked` 停止的意图，在条件恢复（实例恢复服务、重新订阅、重新授权）后由 sweep 复活为 `pending_channel` 并重挂当日任务（补时平移后日期可能对应不同服务日）；全部历史经尝试记录保留。`manual_cancel` 与实例终态不自动复活。
+- 初始状态恒为 `pending_channel`（通道未决策的准确状态，绝不伪装「已提交通道」）。
+- 内容版本：`daily_reminder` 固定 `daily_v1`；`follow_up` 取任务 `plan_version`（无则 `followup_v1`）。
+
+### 停止规则（执行器副作用前重查）
+
+`outreach_sweep` 及每次人工流转前重查：实例 `expired/terminated` → 取消；`paused` → 取消（恢复服务后同一意图复活并重挂当日任务）；本人退订 → 取消（重新订阅后复活）；`steward_service` 授权撤回 → 取消（重新授权后复活）。取消写尝试记录 `stopped/cancelled` + 原因，不删除历史。任务完成（`steward_tasks.done`）与触达状态**互不冒充**：任务完成不自动把触达标为已办理，触达办理也不替用户完成任务。
+
+### 对象结构
+
+```jsonc
+// 触达意图
+{ "id": 1, "instance_id": 1, "user_id": 1, "task_id": 10, "service_date": "2026-11-05",
+  "purpose": "daily_reminder", "content_version": "daily_v1",
+  "status": "pending_channel",            // 见枚举；pending_channel=通道未决策
+  "contactable": true, "contact_note": null,  // 可联系判断快照（退订/撤回时 false+原因）
+  "assignee_staff_id": 2,                 // 责任管家（StewardStaff）；未指派为 null
+  "attempts": 0,                          // 人工驳回重办次数（上限配置）
+  "stop_reason": null, "channel_receipt_ref": null,  // 回执引用：通道接入前恒 null
+  "result": null, "created_at": "...Z", "updated_at": "...Z" }
+
+// 尝试记录（只追加）
+{ "id": 1, "intent_id": 1, "action": "submitted", "actor_type": "admin",
+  "actor_admin_id": 1, "actor_name": "管理员", "contact_method": "phone",
+  "outcome": "已电话提醒完成今日记录", "detail": {...}, "created_at": "...Z" }
+
+// 退订状态（user 级，默认订阅）
+{ "user_id": 1, "subscribed": true, "updated_at": "...Z" }
+```
+
+### 后台 · 触达工作台 `/admin/outreach`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/outreach/intents?status=&instance_id=&assignee_staff_id=&service_date=&page=&page_size=` | `outreach.read`；意图列表（含用户号掩码、状态、责任人、原因） |
+| GET | `/admin/outreach/intents/{id}` | `outreach.read`；详情含全部尝试记录（谁、何时、做了什么、结果） |
+| POST | `/admin/outreach/intents/{id}/route-manual` | `outreach.manage`；`{assignee_staff_id, note?}`：仅 `pending_channel` → `pending_manual`；管家须在职；写尝试 `routed_manual` |
+| POST | `/admin/outreach/intents/{id}/assign` | `outreach.manage`；`{assignee_staff_id, note?}`：`pending_manual` 内改派/领取（改派留 `reassigned` 记录） |
+| POST | `/admin/outreach/intents/{id}/release` | `outreach.manage`；`{reason}`：退回未指派池（`assignee_staff_id=null`，仍 `pending_manual`），写 `released` |
+| POST | `/admin/outreach/intents/{id}/submit` | `outreach.manage`；`{contact_method, outcome(1–500), note?}`：`pending_manual`（已指派）→ `pending_confirm`；记录方式、处理人、结果——**人工联系不得冒充通道成功**，回执引用恒空；执行前重查实例/退订/授权，失效则 409 |
+| POST | `/admin/outreach/intents/{id}/confirm` | `outreach.manage`；`{note?}`：`pending_confirm` → `resolved`（事项已办理） |
+| POST | `/admin/outreach/intents/{id}/reject` | `outreach.manage`；`{reason}`：`pending_confirm` → `pending_manual`（attempts+1）；attempts ≥ `STEWARD_OUTREACH_MAX_ATTEMPTS`(默认 3) → `failed`（失败队列终态，需人工另建意图或线下处理） |
+| POST | `/admin/outreach/intents/{id}/cancel` | `outreach.manage`；`{reason(1–200)}`：人工取消（`manual_cancel`） |
+| POST | `/admin/outreach/handover` | `outreach.manage`；`{from_staff_id, to_staff_id, reason(1–200)}`：批量转交该管家全部未终态意图（`reassigned` 留痕）；`to` 须在职管家 |
+| GET | `/admin/outreach/summary?date=` | `outreach.read`；按状态汇总当日意图数量（工作台概览） |
+
+流转均为条件 UPDATE（rowcount 校验），并发重复提交只生效一次；越状态操作 409。
+
+**人员离岗联动**：`PATCH /admin/steward/staff/{id}` 将管家置 `inactive` 时，若其名下仍有未终态触达意图 → 409「须先完成触达交接」（防任务丢失与旧账号继续处理）；处理路径 = 先 `handover` 再停用。已停用人员不能被指派（422）。
+
+### C 端 · 小程序可见状态 `/mp/steward/outreach`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/steward/outreach/status` | `{subscribed, channel_decided: false, status_note}`：通道未决策时如实显示「提醒通道待配置，服务期事项由管家人工跟进」，不承诺每日送达 |
+| POST | `/mp/steward/outreach/subscription` | `{subscribed: false|true}`：退订立即取消本人全部未终态意图（`unsubscribed`）；重新订阅后恢复生成（当日未完结意图复活为待通道配置）。退订不影响服务履约本身，也不等于申请退款。写审计 `outreach.subscription.set` |
+
+### 配置
+
+| 配置 | 说明 |
+|---|---|
+| `STEWARD_OUTREACH_MAX_ATTEMPTS`(默认 3) | 人工驳回重办次数上限，达到后意图 `failed` |

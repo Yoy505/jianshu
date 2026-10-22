@@ -140,3 +140,22 @@ def steward_lifecycle_sweep() -> dict:
     """每 5 分钟（beat）：批量推进服务实例到期与权益作废终止（A3）。
     条件 UPDATE 幂等；与读路径懒迁移共用同一组迁移函数与审计 action。"""
     return asyncio.run(_run_steward_sweep())
+
+
+async def _run_outreach_sweep() -> dict:
+    from app.services import outreach_service
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            return await outreach_service.outreach_sweep(session)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.outreach_sweep")
+def outreach_sweep() -> dict:
+    """每 5 分钟（beat，切片 B）：生成当日触达意图（幂等）并停止失效意图。
+    无任何发送调用；通道未决策期间意图保持待通道配置。"""
+    return asyncio.run(_run_outreach_sweep())

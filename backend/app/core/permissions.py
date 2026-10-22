@@ -34,6 +34,9 @@ COMMERCE_BATCH_CONFIRM = "commerce.batch.confirm"
 # 服务履约（工作二，2026-10-22）：查询对编辑开放；门禁录入 / 指派 / 暂停 / 结案等仅管理员
 STEWARD_READ = "steward.read"
 STEWARD_MANAGE = "steward.manage"
+# 触达工作台（工作二切片 B）：查询对编辑开放；流转与交接仅管理员
+OUTREACH_READ = "outreach.read"
+OUTREACH_MANAGE = "outreach.manage"
 
 _ALL = {
     ESSAY_REVIEW,
@@ -57,6 +60,8 @@ _ALL = {
     COMMERCE_BATCH_CONFIRM,
     STEWARD_READ,
     STEWARD_MANAGE,
+    OUTREACH_READ,
+    OUTREACH_MANAGE,
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -76,6 +81,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         COMMERCE_ORDER_READ,
         COMMERCE_BATCH_MANAGE,
         STEWARD_READ,
+        OUTREACH_READ,
     },
 }
 

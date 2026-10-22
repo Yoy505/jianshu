@@ -266,6 +266,10 @@ async def _terminate_instance(
         detail={"reason": reason},
         actor_type="system",
     )
+    # 即时停止该实例触达意图（sweep 兜底；延迟导入避免循环依赖）
+    from app.services import outreach_service
+
+    await outreach_service.stop_for_instance(db, instance.id, "instance_terminated")
     return True
 
 
@@ -1178,6 +1182,10 @@ async def pause_instance(
         actor_id=admin.id,
         actor_name=admin.name,
     )
+    # 暂停即时停止该实例触达意图（恢复后按顺延日期重新生成；sweep 兜底）
+    from app.services import outreach_service
+
+    await outreach_service.stop_for_instance(db, instance.id, "service_paused")
     await db.commit()
     await db.refresh(instance)
     return instance
@@ -1550,6 +1558,10 @@ async def on_consent_revoked(db: AsyncSession, consent: MpUserConsent) -> None:
         actor_id=consent.user_id,
         actor_name=user_actor_name(user),
     )
+    if consent.purpose == CONSENT_PURPOSE_STEWARD_SERVICE:
+        from app.services import outreach_service
+
+        await outreach_service.stop_for_user(db, consent.user_id, "consent_revoked")
     await db.commit()
 
 
@@ -1565,6 +1577,16 @@ async def create_care_plan(
     user = await db.get(User, payload["user_id"])
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
+    duplicate = (
+        await db.execute(
+            select(StewardCarePlan).where(
+                StewardCarePlan.user_id == payload["user_id"],
+                StewardCarePlan.version == payload["version"],
+            )
+        )
+    ).scalar_one_or_none()
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="该用户已有同版本签发计划")
     plan = StewardCarePlan(
         user_id=payload["user_id"],
         physician_id=payload["physician_id"],
@@ -1792,6 +1814,19 @@ async def create_staff(db: AsyncSession, admin, payload: dict) -> StewardStaff:
 
 
 async def update_staff(db: AsyncSession, admin, staff: StewardStaff, payload: dict) -> StewardStaff:
+    if (
+        payload.get("status") == "inactive"
+        and staff.status == "active"
+        and staff.role == "butler"
+    ):
+        from app.services import outreach_service
+
+        open_count = await outreach_service.open_intent_count_for_staff(db, staff.id)
+        if open_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"该管家名下仍有 {open_count} 条未完成触达待办，须先完成触达交接再停用",
+            )
     for field, value in payload.items():
         setattr(staff, field, value)
     await audit(

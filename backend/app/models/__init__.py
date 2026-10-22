@@ -59,6 +59,14 @@ from app.models.steward import (
     StewardTimelineEvent,
     TaskAssigneeType,
 )
+from app.models.outreach import (
+    OUTREACH_OPEN_STATUSES,
+    OutreachAttempt,
+    OutreachIntent,
+    OutreachIntentStatus,
+    OutreachPurpose,
+    OutreachSubscription,
+)
 from app.models.commerce import (
     BatchRowStatus,
     BatchStatus,
