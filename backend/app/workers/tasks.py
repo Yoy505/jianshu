@@ -191,6 +191,24 @@ def professional_sweep_task() -> dict:
     return asyncio.run(_run_professional_sweep())
 
 
+async def _run_phone_sweep() -> dict:
+    from app.services import phone_service
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            return await phone_service.phone_call_sweep(session)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.phone_call_sweep")
+def phone_call_sweep() -> dict:
+    """每 5 分钟（beat，切片 E）：调度到期电话工单（单飞保护；无适配器保持待配置）。"""
+    return asyncio.run(_run_phone_sweep())
+
+
 @celery_app.task(name="app.workers.tasks.device_sync_sweep")
 def device_sync_sweep() -> dict:
     """每 15 分钟（beat，切片 C）：批量同步 active 绑定。适配器未注册时逐条

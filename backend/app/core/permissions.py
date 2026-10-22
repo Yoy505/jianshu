@@ -40,6 +40,9 @@ OUTREACH_MANAGE = "outreach.manage"
 # 设备云数据（工作二切片 C）：查询对编辑开放；厂商/绑定/同步/复核仅管理员
 DEVICE_READ = "device.read"
 DEVICE_MANAGE = "device.manage"
+# 电话通路（工作二切片 E）：查询对编辑开放；话术审核/工单流转/接管/回调仅管理员
+PHONE_READ = "phone.read"
+PHONE_MANAGE = "phone.manage"
 
 _ALL = {
     ESSAY_REVIEW,
@@ -67,6 +70,8 @@ _ALL = {
     OUTREACH_MANAGE,
     DEVICE_READ,
     DEVICE_MANAGE,
+    PHONE_READ,
+    PHONE_MANAGE,
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -88,6 +93,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         STEWARD_READ,
         OUTREACH_READ,
         DEVICE_READ,
+        PHONE_READ,
     },
 }
 

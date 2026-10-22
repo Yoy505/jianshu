@@ -42,6 +42,8 @@ Base URL：`http://<host>:8000/api/v1`
 | `outreach.manage`（触达转人工、领取/退回、提交结果、确认/驳回、取消、离岗交接） | ✓ | ✗ |
 | `device.read`（设备厂商/绑定/同步记录/数据与质量查询，2026-10-22 切片 C 起） | ✓ | ✓ |
 | `device.manage`（厂商注册、绑定/解绑、触发同步、游标重置、质量复核） | ✓ | ✗ |
+| `phone.read`（电话话术/联系人/工单与尝试记录查询，2026-10-22 切片 E 起） | ✓ | ✓ |
+| `phone.manage`（话术审核、联系人及授权核验、工单审核/接管/完成/停止、回调） | ✓ | ✗ |
 
 ### 限流与防重复提交（2026-09-22 起）
 
@@ -675,7 +677,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 # 第五部分 · 全域健康管家服务履约（工作二，2026-10-22 起）
 
 覆盖：服务实例与激活门禁、45 天日历与履约任务、暂停 / 补时 / 到期 / 退款联动 / 续期、履约人员、服务时间线、触达任务框架（切片 B，见第七节）。
-表名前缀 `steward_`（触达域 `outreach_`、设备域 `device_`）。CCC 电话（E）后续以第五之子部分追加。
+表名前缀 `steward_`（触达域 `outreach_`、设备域 `device_`、电话域 `phone_`）。
 **通道边界**：本部分不包含任何消息发送能力；无发送 API、无发送回执字段。每日触达通道未决策前，任何界面与接口不得出现「已发送 / 已送达」状态。
 
 ## 枚举
@@ -1085,3 +1087,91 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 ### 审计 action（本节新增）
 
 `steward.carerules.publish` · `steward.stafflink.create/delete` · `steward.proforder.create/start/transfer/complete/cancel`（系统：`steward.proforder.escalate`）· `steward.report.correct` · `steward.followup.record`。
+
+## 十）CCC 电话通路（切片 E，2026-10-22 起，隔离状态机 + 适配接口）
+
+**外部边界**：CCC 号码、业务准入、合同与话术审核流程均未落实——本节交付隔离的电话工单状态机、分立授权、话术版本、回调验证与适配接口；**真实外呼保持关闭**（生产适配器注册表为空：工单审核后进入 `pending_config` 待配置并如实展示，不拨打、不伪造接通）。mock / 合成适配器结果**不计真实电话接通**，仅用于状态机与异常路径测试。
+
+**AI 边界**：AI（若将来接入自动外呼）仅执行经审核话术的**有限告知**——不解释疾病与药量、不承诺救援、不自行选择联系对象；接通先核实对象，错号不披露任何服务或健康信息；紧急情况按固定文案引导拨打 120。必须支持人工接管与结果审计。
+
+### 授权（三类分立，缺一拦截）
+
+| 授权 | purpose | 说明 |
+|---|---|---|
+| 本人电话外呼 | `steward_phone_outreach` | 本人授权平台为其服务目的外呼其电话（条款版本化管理，同 S1） |
+| 指定联系人外呼 | `steward_contact_outreach` | 平台可外呼指定联系人的**框架授权**；每次外呼还须该联系人自身的授权状态为 `granted`（记录于联系人档案，含来源与时间）——**本人同意不等于联系人已同意** |
+| 通话录音 | `steward_call_recording` | 单独授权；引用 `requires_recording` 话术的工单在录音授权缺失时拦截 |
+
+撤回任一授权 → 本人全部未终态电话工单按原因停止（不自动退款）；退订（触达域）不影响电话工单。
+
+### 枚举
+
+| 枚举 | 取值 |
+|---|---|
+| 工单状态 | `pending_review`(待审核) `queued`(待拨打) `pending_config`(待配置·CCC 未接) `in_progress`(执行中) `no_answer`(未接通) `busy`(座席忙) `wrong_number`(错号) `refused`(拒绝) `transferred_human`(转人工) `completed`(完成) `failed`(失败·重试耗尽) `cancelled`(已停止) |
+| 对象类型 | `self`(本人) `contact`(指定联系人) |
+| 联系人授权状态 | `none` `granted` `refused` `revoked` |
+| 尝试结果 outcome | `no_answer` `busy` `wrong_number` `refused` `needs_human` `completed` `blocked` |
+
+重试口径：`no_answer` / `busy` 有限重试（`STEWARD_PHONE_MAX_ATTEMPTS` 默认 3，间隔 `STEWARD_PHONE_RETRY_DELAY_MINUTES` 默认 30），耗尽 → `failed`；`refused` / `wrong_number` **立即终态不重试**（拒绝停止；错号不披露信息）。
+
+### 对象结构
+
+```jsonc
+// 话术版本（审核通过才可被引用）
+{ "id": 1, "code": "followup_reminder", "version": "v1", "title": "随访提醒话术",
+  "content": "……有限告知内容……", "target_type": "self", "requires_recording": false,
+  "status": "active", "reviewed_by_admin_id": 1, "review_note": "合规审核通过" }
+
+// 指定联系人（身份关系须核验；授权状态独立于本人）
+{ "id": 1, "user_id": 1, "name": "王某某", "relation": "子女", "phone": "139****0002",
+  "identity_note": "核验来源与依据", "consent_status": "granted",
+  "consent_source": "首次核身通话中口头确认（录音引用）", "consent_at": "...Z" }
+
+// 电话工单（话术版本与对象快照随单固化）
+{ "id": 1, "instance_id": 1, "purpose": "followup_reminder", "target_type": "self",
+  "contact_id": null, "script_code": "followup_reminder", "script_version": "v1",
+  "requires_recording": false, "status": "pending_review", "attempts": 0,
+  "next_retry_at": null, "result": null, "receipt_ref": null,  // 真实回执引用；mock 恒 null
+  "taken_over_by_admin_id": null, "taken_over_at": null }
+
+// 尝试记录（只追加；真实回执经验签后落 receipt_ref，mock 结果标记 simulated）
+{ "id": 1, "order_id": 1, "outcome": "no_answer", "actor": "system",
+  "simulated": false, "receipt_ref": null, "detail": {...}, "started_at": "...Z" }
+```
+
+### 后台 `/admin/phone`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/admin/phone/scripts` | 话术列表 / 发布 `{code(2–32), version: v\d+, title, content(1–5000), target_type, requires_recording}`——创建为 `draft`，**审核通过才 active** |
+| POST | `/admin/phone/scripts/{id}/review` | `phone.manage`；`{approve: bool, note(1–200)}` → `active` / `retired`；同 code 旧 active 自动 retired |
+| GET/POST | `/admin/phone/contacts` | 联系人列表 / 登记 `{user_id, name(1–50), relation(1–50), phone, identity_note(1–200)}`（身份关系来源必填） |
+| POST | `/admin/phone/contacts/{id}/consent` | `phone.manage`；`{status: granted|refused|revoked, source(1–200), note?}`——联系人自身授权状态（来源必填）；`refused/revoked` 即停止其未终态工单 |
+| GET/POST | `/admin/phone/orders` | 工单列表（按实例/状态/对象）/ 创建 `{instance_id, purpose(1–32), target_type, contact_id?, script_id}`——校验：话术 `active`；`self` 须本人电话授权（版本匹配）；`contact` 须联系人 `granted`；创建即 `pending_review` |
+| GET | `/admin/phone/orders/{id}` | 详情含尝试记录（回执与签名密钥不回显） |
+| POST | `/admin/phone/orders/{id}/review` | `{approve: bool, note}` → `queued`；无适配器时置 `pending_config`（配置接通后由 sweep 转回 `queued`） |
+| POST | `/admin/phone/orders/{id}/takeover` | 转人工：`{note}` → `transferred_human` 并记录接管人 |
+| POST | `/admin/phone/orders/{id}/complete` | 人工结果：`{result(1–500)}`（须已接管）→ `completed` |
+| POST | `/admin/phone/orders/{id}/cancel` | `{reason}` 停止（授权撤回 / 业务取消） |
+| POST | `/admin/phone/callback` | CCC 回调：`X-Phone-Signature`（HMAC-SHA256，密钥 `STEWARD_PHONE_CCC_SECRET`；未配置密钥 → 403 拒收）`{order_id, outcome, receipt_ref?, detail?}`——验签、幂等（重复回调返回现状不重复应用）、超时 / 未知单先查原状态 |
+
+### 调度（`phone_call_sweep`，beat 每 5 分钟）
+
+`queued` 且到达重试时间且未超限的工单：执行前重查（实例在服务、三类授权有效、话术 active、适配器已注册）→ 任一失效按原因 `cancelled` / 保持 `pending_config`；通过则 `in_progress` → 适配器拨打 → 结果落尝试记录并按口径流转（见枚举重试口径）。多 worker 由条件 UPDATE 保证单飞（同一时刻至多一个进行中尝试）。
+
+### C 端 `/mp/steward/phone/status`
+
+本人电话通路状态：三类授权现状（含 outdated）、联系人列表（号码掩码、授权状态）、近期电话工单状态（不含通话内容与回执）。授权 / 撤回复用 `GET /mp/steward/consent-terms` + `POST /mp/steward/consents` + `POST /mp/consents/{id}/revoke`（条款发布后自动出现在授权管理卡片）。
+
+### 配置
+
+| 配置 | 说明 |
+|---|---|
+| `STEWARD_PHONE_MAX_ATTEMPTS`(默认 3) | 未接通 / 忙线重试上限 |
+| `STEWARD_PHONE_RETRY_DELAY_MINUTES`(默认 30) | 重试间隔 |
+| `STEWARD_PHONE_CCC_SECRET`(默认空) | 回调验签密钥；为空即拒收回调（真实 CCC 未接入的安全态） |
+
+### 审计 action（本节新增）
+
+`phone.script.publish/review` · `phone.contact.create/consent` · `phone.order.create/review/takeover/complete/cancel`（系统：`phone.order.dispatch` · `phone.callback`）。detail 不含完整号码与通话内容。

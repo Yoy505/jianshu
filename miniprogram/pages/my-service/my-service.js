@@ -55,6 +55,7 @@ Page(require('../../utils/hifi-page')({
     consentRecords: [],
     outreach: {},
     professional: null,
+    phone: null,
     busy: false,
     activating: false
   },
@@ -116,6 +117,7 @@ Page(require('../../utils/hifi-page')({
       this.loadConsentRecords();
       this.loadOutreachStatus();
       this.loadProfessional();
+      this.loadPhoneStatus();
       if (this.data.view === 'calendar') this.loadCalendar();
     }).catch((err) => {
       this.setData({ error: err.detail || '服务详情加载失败' });
@@ -139,6 +141,22 @@ Page(require('../../utils/hifi-page')({
           actor: ev.actor_type === 'user' ? '本人' : (ev.actor_type === 'admin' ? '服务方' : '系统'),
           created: format.full(ev.created_at)
         }))
+      });
+    }).catch(() => {});
+  },
+
+  loadPhoneStatus() {
+    api.getPhoneStatus().then((data) => {
+      this.setData({
+        phone: {
+          note: data.note || '',
+          contactCount: (data.contacts || []).length,
+          recentOrders: (data.orders || []).slice(0, 3).map((o) => ({
+            id: o.id,
+            purpose: o.purpose,
+            statusLabel: ({ pending_review: '待审核', queued: '待拨打', pending_config: '待配置', in_progress: '执行中', no_answer: '未接通', busy: '忙线', wrong_number: '错号', refused: '对方拒绝', transferred_human: '人工跟进', completed: '已完成', failed: '失败', cancelled: '已停止' })[o.status] || o.status
+          }))
+        }
       });
     }).catch(() => {});
   },

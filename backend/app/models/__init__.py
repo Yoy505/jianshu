@@ -71,6 +71,18 @@ from app.models.steward import (
     StewardTimelineEvent,
     TaskAssigneeType,
 )
+from app.models.phone import (
+    PHONE_OPEN_STATUSES,
+    PHONE_TERMINAL_STATUSES,
+    PhoneCallAttempt,
+    PhoneCallOrder,
+    PhoneContact,
+    PhoneContactConsent,
+    PhoneOrderStatus,
+    PhoneScript,
+    PhoneScriptStatus,
+    PhoneTargetType,
+)
 from app.models.device import (
     DEVICE_METRIC_RANGES,
     TREND_QUALITIES,
@@ -96,6 +108,7 @@ from app.models.commerce import (
     BatchRowStatus,
     BatchStatus,
     CONSENT_PURPOSE_PACKAGE_PURCHASE,
+    CONSENT_PURPOSE_STEWARD_CALL_RECORDING,
     CONSENT_PURPOSE_STEWARD_CONTACT_OUTREACH,
     CONSENT_PURPOSE_STEWARD_DEVICE_DATA,
     CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH,
@@ -184,6 +197,7 @@ __all__ = [
     "BatchRowStatus",
     "BatchStatus",
     "CONSENT_PURPOSE_PACKAGE_PURCHASE",
+    "CONSENT_PURPOSE_STEWARD_CALL_RECORDING",
     "CONSENT_PURPOSE_STEWARD_CONTACT_OUTREACH",
     "CONSENT_PURPOSE_STEWARD_DEVICE_DATA",
     "CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH",

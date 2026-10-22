@@ -111,6 +111,7 @@ CONSENT_PURPOSE_STEWARD_SERVICE = "steward_service"
 CONSENT_PURPOSE_STEWARD_DEVICE_DATA = "steward_device_data"
 CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH = "steward_phone_outreach"
 CONSENT_PURPOSE_STEWARD_CONTACT_OUTREACH = "steward_contact_outreach"
+CONSENT_PURPOSE_STEWARD_CALL_RECORDING = "steward_call_recording"
 
 
 class MpPackage(TimestampMixin, Base):
@@ -501,7 +502,7 @@ class MpUserConsent(TimestampMixin, Base):
         Index("ix_mp_user_consents_user_purpose", "user_id", "purpose", "id"),
         CheckConstraint(
             "purpose IN ('package_purchase', 'steward_service', 'steward_device_data', "
-            "'steward_phone_outreach', 'steward_contact_outreach')",
+            "'steward_phone_outreach', 'steward_contact_outreach', 'steward_call_recording')",
             name="ck_mp_user_consents_purpose",
         ),
     )

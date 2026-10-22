@@ -8,7 +8,13 @@ from pydantic import BaseModel, Field
 from app.schemas.common import UTCDateTime
 from app.schemas.commerce import BenefitItem
 
-StewardPurposeType = Literal["steward_service", "steward_device_data"]
+StewardPurposeType = Literal[
+    "steward_service",
+    "steward_device_data",
+    "steward_phone_outreach",
+    "steward_contact_outreach",
+    "steward_call_recording",
+]
 StaffRoleType = Literal["butler", "physician"]
 PauseCauseType = Literal["provider_interruption", "physician_advised", "user_request", "other"]
 

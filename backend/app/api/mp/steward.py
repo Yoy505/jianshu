@@ -312,6 +312,22 @@ async def grant_consent(
     )
 
 
+# ───────────────── 电话通路状态（切片 E，真实外呼关闭） ─────────────────
+
+
+@router.get("/phone/status")
+async def phone_status(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """本人电话通路状态：三类授权现状、联系人（掩码）、近期工单状态；不含通话内容。"""
+    from app.schemas.phone import PhoneStatusOut
+    from app.services import phone_service
+
+    data = await phone_service.user_phone_status(db, user)
+    return PhoneStatusOut(**data).model_dump()
+
+
 # ───────────────── 触达状态与退订（切片 B，渠道无关） ─────────────────
 
 

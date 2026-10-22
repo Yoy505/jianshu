@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     # 设备云数据（切片 C）：晚到判定窗口（天）与连续同步失败上限（达限 blocked 须人工重置）
     STEWARD_DEVICE_LATE_DAYS: int = 7
     STEWARD_DEVICE_MAX_SYNC_FAILURES: int = 5
+    # CCC 电话通路（切片 E）：真实外呼关闭；重试上限与间隔；回调验签密钥（空=拒收）
+    STEWARD_PHONE_MAX_ATTEMPTS: int = 3
+    STEWARD_PHONE_RETRY_DELAY_MINUTES: int = 30
+    STEWARD_PHONE_CCC_SECRET: str = ""
 
     # 阿里云 OSS（生产预留）
     OSS_ACCESS_KEY_ID: str = ""

@@ -28,7 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models import (
+    CONSENT_PURPOSE_STEWARD_CALL_RECORDING,
+    CONSENT_PURPOSE_STEWARD_CONTACT_OUTREACH,
+    PhoneCallOrder,
     CONSENT_PURPOSE_STEWARD_DEVICE_DATA,
+    CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH,
     CONSENT_PURPOSE_STEWARD_SERVICE,
     EntitlementStatus,
     MpEntitlement,
@@ -65,6 +69,9 @@ UTC = timezone.utc
 STEWARD_CONSENT_PURPOSES = (
     CONSENT_PURPOSE_STEWARD_SERVICE,
     CONSENT_PURPOSE_STEWARD_DEVICE_DATA,
+    CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH,
+    CONSENT_PURPOSE_STEWARD_CONTACT_OUTREACH,
+    CONSENT_PURPOSE_STEWARD_CALL_RECORDING,
 )
 _CONSENT_PURPOSE_MAP = {
     PrepCheckType.DEVICE_VENDOR_CONSENT.value: CONSENT_PURPOSE_STEWARD_DEVICE_DATA,
@@ -618,18 +625,23 @@ async def activate_instance(
     plan = await valid_care_plan(db, instance.user_id, instance.physician_id)
     if plan is None:  # 理论上已被门禁拦下，防御性兜底
         raise HTTPException(status_code=409, detail={"message": "激活条件未全部满足", "missing": ["physician_plan"]})
+    # 激活凭证只覆盖两项门禁授权（平台服务 + 设备数据）；电话类授权（切片 E）
+    # 不是激活门禁，不在此复核
     consent_versions: dict[str, str] = {}
-    for purpose in STEWARD_CONSENT_PURPOSES:
+    for purpose, check_key in (
+        (CONSENT_PURPOSE_STEWARD_SERVICE, "platform_consent"),
+        (CONSENT_PURPOSE_STEWARD_DEVICE_DATA, "device_vendor_consent"),
+    ):
         terms = await current_terms(db, purpose)
         matched = (
             await _matched_consent(db, instance.user_id, purpose, terms.version)
             if terms is not None
             else None
         )
-        if matched is None:
+        if terms is None or matched is None:
             raise HTTPException(
                 status_code=409,
-                detail={"message": "激活条件未全部满足", "missing": ["platform_consent", "device_vendor_consent"]},
+                detail={"message": "激活条件未全部满足", "missing": [check_key]},
             )
         consent_versions[purpose] = terms.version
 
@@ -1580,6 +1592,15 @@ async def on_consent_revoked(db: AsyncSession, consent: MpUserConsent) -> None:
         from app.services import outreach_service
 
         await outreach_service.stop_for_user(db, consent.user_id, "consent_revoked")
+    if consent.purpose in (
+        CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH,
+        CONSENT_PURPOSE_STEWARD_CALL_RECORDING,
+    ):
+        from app.services import phone_service
+
+        await phone_service.stop_orders(
+            db, [phone_service.PhoneCallOrder.user_id == consent.user_id], "consent_revoked"
+        )
     await db.commit()
 
 

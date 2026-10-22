@@ -378,7 +378,8 @@ class StewardConsentTerms(TimestampMixin, Base):
         UniqueConstraint("purpose", "version", name="uq_steward_consent_terms_version"),
         Index("ix_steward_consent_terms_purpose", "purpose", "status", "id"),
         CheckConstraint(
-            "purpose IN ('steward_service', 'steward_device_data')",
+            "purpose IN ('steward_service', 'steward_device_data', 'steward_phone_outreach', "
+            "'steward_contact_outreach', 'steward_call_recording')",
             name="ck_steward_consent_terms_purpose",
         ),
         CheckConstraint("status IN ('active', 'retired')", name="ck_steward_consent_terms_status"),

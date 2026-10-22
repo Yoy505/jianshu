@@ -45,5 +45,10 @@ celery_app.conf.update(
             "task": "app.workers.tasks.professional_sweep",
             "schedule": crontab(minute="*/15"),
         },
+        # 工作二切片 E：每 5 分钟调度电话工单（单飞保护；真实外呼关闭）
+        "phone-call-sweep": {
+            "task": "app.workers.tasks.phone_call_sweep",
+            "schedule": crontab(minute="*/5"),
+        },
     },
 )

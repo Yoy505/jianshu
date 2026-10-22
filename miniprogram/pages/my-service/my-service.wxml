@@ -113,6 +113,15 @@
             </view>
           </view>
           <view class="t-p quiet-note">各用途授权相互独立；撤回后对应服务准备项回退，撤回授权不代表申请退款。</view>
+          <block wx:if="{{phone}}">
+            <view class="t-h3">电话联系</view>
+            <view class="t-p">{{phone.note}}</view>
+            <view class="kv" wx:for="{{phone.recentOrders}}" wx:key="id">
+              <text class="t-span">来电安排</text>
+              <text class="t-b">{{item.statusLabel}}</text>
+            </view>
+            <view class="t-p quiet-note" wx:if="{{phone.contactCount}}">已登记指定联系人 {{phone.contactCount}} 名（联系人授权独立于本人）。</view>
+          </block>
           <view class="check-line" wx:if="{{outreach.subscribed !== undefined}}">
             <view class="grow">
               <view class="row between">
