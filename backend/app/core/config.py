@@ -36,11 +36,31 @@ class Settings(BaseSettings):
     DRUG_LEAFLET_INTAKE_DIR: str = "./private_drug_leaflet_intake"
     DRUG_REGULATORY_SOURCE_DIR: str = "./private_drug_regulatory_sources"
     OCCUPATIONAL_SUBMISSIONS_ENABLED: bool = False
+    VOLUNTEER_APPLICATIONS_ENABLED: bool = False
     FFPROBE_BIN: str = "ffprobe"
     STORAGE_DRIVER: str = "local"  # local | oss
 
     WX_APPID: str = ""
     WX_SECRET: str = ""
+
+    # 微信支付 v3（工作一服务包交易）。全部配置齐全才开放微信支付；缺任一项时
+    # 下单/预支付/查单/退款返回 503，回调拒绝并审计。私钥与平台证书只从文件读取。
+    WXPAY_MCHID: str = ""
+    WXPAY_API_V3_KEY: str = ""
+    WXPAY_CERT_SERIAL_NO: str = ""
+    WXPAY_PRIVATE_KEY_PATH: str = ""
+    WXPAY_PLATFORM_CERT_PATH: str = ""
+    WXPAY_NOTIFY_URL: str = ""
+    # 待支付订单超时（分钟）；超时后懒更新为 closed，支付成功晚到仍可入账
+    COMMERCE_ORDER_TTL_MINUTES: int = 30
+
+    # 服务履约（工作二，2026-10-22）。服务期天数在激活时快照到实例；
+    # 授权条款文本为空时对应授权不能授予（503 待配置），门禁项恒 pending，无法激活——
+    # 条款必须由运营/合规定稿后注入，不接受客户端自备文本。
+    STEWARD_SERVICE_DAYS: int = 45
+    STEWARD_SERVICE_CONSENT_TEXT: str = ""
+    STEWARD_DEVICE_CONSENT_TEXT: str = ""
+    STEWARD_FOLLOWUP_DAYS: str = "7,14,21,28,35,42"
 
     # 阿里云 OSS（生产预留）
     OSS_ACCESS_KEY_ID: str = ""

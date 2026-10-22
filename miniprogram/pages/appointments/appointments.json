@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "我的预约",
   "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
+  "backgroundTextStyle": "dark",
+  "navigationStyle": "custom"
 }

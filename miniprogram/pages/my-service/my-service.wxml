@@ -1,0 +1,176 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <block wx:if="{{loading && !instance}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+
+    <view wx:elif="{{error && !instance}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">服务加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+
+    <view wx:elif="{{!instance}}" class="empty-card">
+      <text class="ph ph-heart"></text>
+      <view class="t-h2">暂无进行中的服务</view>
+      <view class="t-p">领取或购买服务包后，45 天健康管家服务会出现在这里</view>
+      <button class="primary" bindtap="goBenefits">查看我的权益</button>
+    </view>
+
+    <block wx:else>
+      <view class="chips" wx:if="{{instances.length > 1}}">
+        <button wx:for="{{instances}}" wx:key="id"
+          class="{{currentId === item.id ? 'active' : ''}}"
+          bindtap="onPickInstance" data-id="{{item.id}}">{{item.statusLabel}} · {{item.packageName}}</button>
+      </view>
+
+      <view class="card status-card">
+        <view class="row between">
+          <view class="grow">
+            <view class="t-h3">{{instance.package_name}}</view>
+            <view class="t-p">服务编号 {{instance.instance_no}}</view>
+          </view>
+          <text class="badge {{instance.status === 'active' ? 'teal' : ''}}">{{instance.statusLabel}}</text>
+        </view>
+        <block wx:if="{{instance.status === 'active' || instance.status === 'paused'}}">
+          <view class="progress">
+            <view class="progress-bar" style="width: {{instance.current_day ? (instance.current_day / instance.service_days * 100) : 0}}%"></view>
+          </view>
+          <view class="kv"><text class="t-span">服务进度</text><text class="t-b">第 {{instance.current_day || '—'}} / {{instance.service_days}} 天</text></view>
+          <view class="kv" wx:if="{{instance.endsAtText}}"><text class="t-span">结束时间</text><text class="t-b">{{instance.endsAtText}}</text></view>
+          <view class="kv" wx:if="{{instance.compensated_seconds > 0}}"><text class="t-span">中断补时</text><text class="t-b">{{instance.compensated_seconds}} 秒（已顺延）</text></view>
+          <view class="quiet paused-tip" wx:if="{{instance.status === 'paused'}}">
+            <view class="t-p">服务暂停中，计时已停止；恢复后将按规则顺延结束时间。</view>
+          </view>
+        </block>
+        <block wx:elif="{{instance.status === 'preparing'}}">
+          <view class="t-p">完成以下准备项并经本人确认后，开始计算 {{instance.service_days}} 天服务期。</view>
+        </block>
+        <block wx:elif="{{instance.status === 'expired'}}">
+          <view class="t-p">服务期已结束。医师完成期末复评并出具结案报告后，服务将转为已结案。</view>
+        </block>
+        <block wx:elif="{{instance.status === 'closed'}}">
+          <view class="t-p">45 天服务已结案。如需继续服务，可在权益页续购。</view>
+          <button class="secondary" bindtap="goBenefits">去续购</button>
+        </block>
+        <block wx:elif="{{instance.status === 'terminated'}}">
+          <view class="t-p">{{instance.termination_reason || '服务已终止'}}</view>
+        </block>
+      </view>
+
+      <view class="chips">
+        <button class="{{view === 'overview' ? 'active' : ''}}" bindtap="onTab" data-v="overview">概览</button>
+        <button class="{{view === 'calendar' ? 'active' : ''}}" bindtap="onTab" data-v="calendar" wx:if="{{instance.activated_at}}">服务日历</button>
+      </view>
+
+      <block wx:if="{{view === 'overview'}}">
+        <view class="card" wx:if="{{instance.status === 'preparing'}}">
+          <view class="t-h3">准备清单（{{instance.passedCount}}/{{instance.prepChecks.length}}）</view>
+          <view class="check-line" wx:for="{{instance.prepChecks}}" wx:key="check_type">
+            <text class="ph {{item.status === 'passed' ? 'ph-check' : 'ph-circle-dashed'}}"></text>
+            <view class="grow">
+              <view class="row between">
+                <view class="grow">
+                  <view class="t-h3">{{item.title}}</view>
+                  <view class="t-p" wx:if="{{item.status !== 'passed'}}">{{item.missing_reason}}</view>
+                  <view class="t-p" wx:if="{{item.status === 'passed'}}">已完成</view>
+                </view>
+                <button wx:if="{{item.canGrant}}" class="mini" size="mini"
+                  bindtap="grantConsent" data-purpose="{{item.consentPurpose}}" loading="{{busy}}">去授权</button>
+              </view>
+            </view>
+          </view>
+          <button class="primary act-btn" bindtap="activate"
+            loading="{{activating}}"
+            disabled="{{instance.passedCount < instance.prepChecks.length}}">确认开通服务</button>
+          <view class="t-p quiet-note">开通即从确认时刻起连续计算 {{instance.service_days}}×24 小时服务期。</view>
+        </view>
+
+        <view class="card" wx:if="{{instance.status === 'active' || instance.status === 'paused'}}">
+          <view class="t-h3">今日事项</view>
+          <block wx:if="{{instance.todayTasks.length}}">
+            <view class="check-line" wx:for="{{instance.todayTasks}}" wx:key="id">
+              <text class="ph {{item.completed ? 'ph-check' : 'ph-circle-dashed'}}"></text>
+              <view class="grow">
+                <view class="t-h3">{{item.title}}</view>
+                <view class="t-p" wx:if="{{item.completed}}">{{item.result || '已完成'}}</view>
+                <view class="t-p" wx:else>{{item.typeLabel}} · 今天 23:59 前完成</view>
+              </view>
+              <button wx:if="{{item.assignee_type === 'user' && !item.completed}}"
+                class="mini" size="mini" bindtap="completeTask" data-id="{{item.id}}">完成</button>
+              <text class="badge {{item.completed ? 'teal' : ''}}" wx:else>{{item.completed ? '已完成' : '服务方办理'}}</text>
+            </view>
+          </block>
+          <view wx:else class="t-p">今天没有安排事项；打开服务日历查看整体安排。</view>
+        </view>
+
+        <view class="card" wx:if="{{instance.butler || instance.physician}}">
+          <view class="t-h3">服务团队</view>
+          <view class="kv" wx:if="{{instance.butler}}"><text class="t-span">负责管家</text><text class="t-b">{{instance.butler.name}}</text></view>
+          <view class="kv" wx:if="{{instance.backup_butler}}"><text class="t-span">替补管家</text><text class="t-b">{{instance.backup_butler.name}}</text></view>
+          <view class="kv" wx:if="{{instance.physician}}"><text class="t-span">签约医师</text><text class="t-b">{{instance.physician.name}}</text></view>
+          <view class="quiet paused-tip">
+            <view class="t-p">随访、复评等安排以服务日历为准；服务期内可通过客服渠道联系管家。</view>
+          </view>
+        </view>
+
+        <view class="card" wx:if="{{timeline.length}}">
+          <view class="t-h3">服务动态</view>
+          <view class="kv" wx:for="{{timeline}}" wx:key="id">
+            <text class="t-span">{{item.created}}</text>
+            <text class="t-b">{{item.actor}} · {{item.type}}</text>
+          </view>
+        </view>
+      </block>
+
+      <block wx:if="{{view === 'calendar'}}">
+        <view class="card">
+          <view class="row between cal-head">
+            <button class="mini" size="mini" bindtap="shiftMonth" data-d="-1">上月</button>
+            <view class="t-h3">{{month}}</view>
+            <button class="mini" size="mini" bindtap="shiftMonth" data-d="1">下月</button>
+          </view>
+          <view class="cal-grid cal-week">
+            <text wx:for="{{['日','一','二','三','四','五','六']}}" wx:key="*this" class="cal-cell t-span">{{item}}</text>
+          </view>
+          <view class="cal-grid" wx:for="{{calendarWeeks}}" wx:key="index" wx:for-item="week">
+            <view wx:for="{{week}}" wx:key="index" wx:for-item="day"
+              class="cal-cell {{day && day.isToday ? 'today' : ''}} {{day && selectedDate === day.date ? 'selected' : ''}}"
+              bindtap="{{day ? 'pickDay' : ''}}" data-date="{{day ? day.date : ''}}">
+              <block wx:if="{{day}}">
+                <text>{{day.label}}</text>
+                <view class="dot {{day.pendingCount ? 'pending' : ''}}" wx:if="{{day.hasTasks}}"></view>
+              </block>
+            </view>
+          </view>
+        </view>
+
+        <view class="card">
+          <view class="t-h3">{{selectedDate || '选择日期查看安排'}}</view>
+          <block wx:if="{{selectedTasks.length}}">
+            <view class="check-line" wx:for="{{selectedTasks}}" wx:key="id">
+              <text class="ph {{item.completed ? 'ph-check' : 'ph-circle-dashed'}}"></text>
+              <view class="grow">
+                <view class="t-h3">{{item.title}}</view>
+                <view class="t-p">{{item.typeLabel}} · 第 {{item.service_day}} 天{{item.completed ? ' · 已完成' : ''}}</view>
+                <view class="t-p" wx:if="{{item.result}}">{{item.result}}</view>
+              </view>
+            </view>
+          </block>
+          <view wx:elif="{{selectedDate}}" class="t-p">这一天没有安排事项。</view>
+        </view>
+      </block>
+    </block>
+  </view>
+</view>
+</block>

@@ -2,5 +2,6 @@
   "navigationBarTitleText": "我的",
   "usingComponents": {
     "privacy-consent": "/components/privacy-consent/privacy-consent"
-  }
+  },
+  "navigationStyle": "custom"
 }

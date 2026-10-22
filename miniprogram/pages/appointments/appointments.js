@@ -30,7 +30,7 @@ function toVM(a) {
   };
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     tabs: TABS,
     active: '',
@@ -136,6 +136,6 @@ Page({
   },
 
   review(e) {
-    wx.navigateTo({ url: '/pages/review/review?id=' + e.currentTarget.dataset.id });
+    require('../../utils/access').navigate({ url: '/pages/review/review?id=' + e.currentTarget.dataset.id });
   }
-});
+}, 'appointments'));

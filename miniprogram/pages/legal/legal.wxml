@@ -1,14 +1,26 @@
-<view class="legal-page">
-  <view class="legal-header">
-    <view class="legal-title">{{doc.title}}</view>
-    <view class="legal-updated">{{doc.updated}}</view>
+<view class="hf " style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
+    </view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
   </view>
-  <view class="legal-intro">{{doc.intro}}</view>
-
-  <view class="legal-section" wx:for="{{doc.sections}}" wx:key="h">
-    <view class="legal-h">{{item.h}}</view>
-    <view class="legal-p" wx:for="{{item.ps}}" wx:for-item="p" wx:key="*this">{{p}}</view>
+  <view class="pad" >
+    <view class="legal-tabs" >
+      <button class="t-a {{hfDoc === 'terms' ? 'active' : ''}}" bindtap="hfLegal" data-doc="terms">用户协议</button>
+      <button class="t-a {{hfDoc === 'privacy' ? 'active' : ''}}" bindtap="hfLegal" data-doc="privacy">隐私政策</button>
+    </view>
+    <view class="legal-copy" >
+      <view class="t-h1" >{{doc.title}}</view>
+      <view class="t-p updated" >{{doc.updated}}</view>
+      <view class="t-p intro" >{{doc.intro}}</view>
+      <view class="" wx:for="{{doc.sections}}" wx:key="h">
+        <view class="t-h2" >{{item.h}}</view>
+        <view class="t-p" wx:for="{{item.ps}}" wx:for-item="paragraph" wx:key="*this">{{paragraph}}</view>
+      </view>
+    </view>
+    <view class="legal-brand" >健树科技（天津）有限公司</view>
   </view>
-
-  <view class="legal-footer">健树科技（天津）有限公司</view>
 </view>

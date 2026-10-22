@@ -1,5 +1,6 @@
 {
-  "navigationBarTitleText": "匹配专业人员",
+  "navigationBarTitleText": "人员资料",
   "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
+  "backgroundTextStyle": "dark",
+  "navigationStyle": "custom"
 }

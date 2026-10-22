@@ -1,65 +1,130 @@
-<view class="page page-mall">
-  <!-- 建设中说明条 -->
-  <view class="warn-bar mall-tip">商城正在建设中，商品陆续上架，敬请期待</view>
-
-  <!-- 分类 tabs -->
-  <view class="cat-tabs">
-    <view
-      class="cat-tab {{active === item.v ? 'on' : ''}}"
-      wx:for="{{categories}}"
-      wx:key="v"
-      data-v="{{item.v}}"
-      bindtap="onTab"
-    >{{item.n}}</view>
-  </view>
-
-  <!-- 骨架 -->
-  <block wx:if="{{loading && !list.length}}">
-    <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="sk-line first sk-w60"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w40"></view>
+<view class="hf hf-tab" style="padding-top:{{hfStatus}}px">
+  <view class="hero" >
+    <image class="hero-photo t-img" src="/assets/hifi-v2/mall-still-life.jpg" mode="aspectFill" />
+    <view class="brandbar" >
+      <image class="t-img" src="/assets/brand/xinglinhui-mark.png" mode="aspectFit" />
+      <text class="t-strong">健康商城</text>
+      <text class="t-span">杏临汇</text>
     </view>
-  </block>
-
-  <!-- 错误 -->
-  <view class="card" wx:elif="{{error && !list.length}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">{{error}}</view>
-      <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
+    <view class="hero-copy" >
+      <text class="eyebrow">全域健康 · 生活所需</text>
+      <view class="t-h1" >把健康关怀
+        带进日常</view>
+        <view class="t-p " >从日常营养到康复支持</view>
+      </view>
+      <text class="image-note">场景示意</text>
     </view>
-  </view>
-
-  <!-- 空态 -->
-  <view class="card" wx:elif="{{!list.length}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">该分类商品筹备中</view>
-      <view class="empty-desc">商城开放后将第一时间通知你</view>
-    </view>
-  </view>
-
-  <!-- 商品列表 -->
-  <block wx:else>
-    <view class="card product-card fade-in" wx:for="{{list}}" wx:key="id">
-      <view class="badge" wx:if="{{item.coming}}">即将开放</view>
-      <view class="row">
-        <view class="product-icon">{{item.catChar}}</view>
-        <view class="flex-1 product-bd">
-          <view class="product-name ellipsis">{{item.name}}</view>
-          <view class="product-desc ellipsis-2">{{item.desc}}</view>
-          <view class="row-between product-foot">
-            <view class="price price-sm">
-              <text class="price-symbol">¥</text>{{item.price}}
-            </view>
-            <view class="tag tag-apricot" wx:if="{{item.coming}}">即将开放</view>
-          </view>
+    <view class="content" >
+      <view class="list-heading">
+        <view class="t-h2">健康服务包</view>
+        <text class="t-span">真实购买 · 权益可查</text>
+      </view>
+      <view class="pkg-state loading" wx:if="{{packagesLoading}}">
+        <view class="t-span"></view>
+        <view class="t-span"></view>
+        <view class="t-span"></view>
+      </view>
+      <view class="pkg-state" wx:elif="{{!packages.length}}">
+        <text class="ph ph-package"></text>
+        <view>
+          <view class="t-h3">服务包整理中</view>
+          <view class="t-p">可购买的服务包上架后会展示在这里</view>
         </view>
       </view>
-    </view>
+      <button class="pkg-card" wx:for="{{packages}}" wx:key="id" bindtap="goPackage" data-id="{{item.id}}">
+        <view class="pkg-icon"><text class="ph ph-package"></text></view>
+        <view class="pkg-copy">
+          <view class="t-h3">{{item.name}}</view>
+          <view class="t-p">{{item.subtitle || (item.benefitCount + ' 项权益 · ' + item.validityDays + ' 天服务期')}}</view>
+          <view class="pkg-price-row">
+            <text class="pkg-price">{{item.price}}</text><text class="pkg-unit">元</text>
+            <text class="badge" wx:if="{{item.pointsCost}}">{{item.pointsCost}} 积分可兑</text>
+            <text class="badge {{item.purchasable ? 'teal' : ''}}">{{item.purchasable ? '可购买' : (item.blockReasons || '暂不可购买')}}</text>
+          </view>
+        </view>
+      </button>
 
-    <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
-    <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
-  </block>
-</view>
+      <view class="list-heading" >
+        <view class="t-h2" >健康好物分类</view>
+        <button class="" bindtap="onTab" data-v="">全部分类</button>
+      </view>
+      <view class="category-grid" >
+        <button class="category {{active === 'food' ? 'selected' : ''}}" bindtap="onTab" data-v="food">
+          <view class="category-top" >
+            <image class="t-img" src="/assets/home-v1/scene-diet.png" mode="aspectFit" />
+          </view>
+          <view class="t-h3" >药食同源</view>
+          <view class="t-p " >日常膳食 · 食养生活</view>
+        </button>
+        <button class="category {{active === 'fsmp' ? 'selected' : ''}}" bindtap="onTab" data-v="fsmp">
+          <view class="category-top" >
+            <view class="category-icon" >
+              <text class="ph ph-bowl-food">
+              </text>
+            </view>
+          </view>
+          <view class="t-h3" >特医食品</view>
+          <view class="t-p " >特殊营养 · 遵循专业指导</view>
+        </button>
+        <button class="category {{active === 'package' ? 'selected' : ''}}" bindtap="onTab" data-v="package">
+          <view class="category-top" >
+            <image class="t-img" src="/assets/home-v1/scene-checkup.png" mode="aspectFit" />
+          </view>
+          <view class="t-h3" >健康服务包</view>
+          <view class="t-p " >健康管理 · 康复支持</view>
+        </button>
+        <button class="category {{active === 'device' ? 'selected' : ''}}" bindtap="onTab" data-v="device">
+          <view class="category-top" >
+            <image class="t-img" src="/assets/home-v1/scene-rehab.png" mode="aspectFit" />
+          </view>
+          <view class="t-h3" >器械耗材</view>
+          <view class="t-p " >居家照护 · 日常辅助</view>
+        </button>
+      </view>
+      <view class="catalog-state loading" wx:if="{{loading}}">
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="catalog-state error" wx:elif="{{error}}">
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="" >
+          <view class="t-h3" >商品目录加载失败</view>
+          <view class="t-p " >请检查网络连接后重试</view>
+          <button class="" bindtap="reload" >重新加载</button>
+        </view>
+      </view>
+      <view class="catalog-state" wx:elif="{{!list.length}}">
+        <text class="ph ph-storefront">
+        </text>
+        <view class="" >
+          <view class="t-h3" >暂无商品信息</view>
+          <view class="t-p " >可以切换分类，或稍后刷新商品目录</view>
+          </view>
+        </view>
+        <view class="catalog-state" wx:if="{{!loading && !error && list.length}}" wx:for="{{list}}" wx:key="id">
+          <text class="ph ph-storefront">
+          </text>
+          <view class="" >
+            <view class="t-h3" >{{item.name}}</view>
+            <view class="t-p " >{{item.desc}}</view>
+            <text class="badge">{{item.coming ? '即将开放' : '资料展示'}}</text>
+          </view>
+        </view>
+        <button class="service-entry" bindtap="hfGo" data-url="/pages/steward/steward">
+          <view class="entry-icon" >
+            <text class="ph ph-heart">
+            </text>
+          </view>
+          <view class="" >
+            <view class="t-h3" >先了解适合的健康服务</view>
+            <view class="t-p " >前往健康管家，查看服务目录</view>
+          </view>
+        </button>
+        <view class="disclaimer" >商品信息以详情及实际服务说明为准</view>
+      </view>
+    </view>

@@ -1,0 +1,84 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <view class="card balance-card">
+      <view class="row between">
+        <view class="grow">
+          <view class="t-h3">我的积分</view>
+          <view class="t-p">积分可在下单时兑换服务包</view>
+        </view>
+        <view class="balance-num">{{balance}}</view>
+      </view>
+    </view>
+
+    <view class="chips">
+      <button wx:for="{{tabs}}" wx:key="key" class="{{active === item.key ? 'active' : ''}}"
+        bindtap="onTab" data-v="{{item.key}}">{{item.label}}</button>
+    </view>
+
+    <block wx:if="{{loading && !list.length}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+
+    <view wx:elif="{{error && !list.length}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">权益加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+
+    <view wx:elif="{{!list.length}}" class="empty-card">
+      <text class="ph ph-seal-check"></text>
+      <view class="t-h2">暂无相关权益</view>
+      <view class="t-p">购买服务包或单位分配后，权益会出现在这里</view>
+    </view>
+
+    <block wx:else>
+      <view class="card ent-card" wx:for="{{list}}" wx:key="id">
+        <view class="row between" bindtap="toggle" data-id="{{item.id}}">
+          <view class="grow">
+            <view class="t-h3">{{item.packageName}}</view>
+            <view class="t-p">{{item.sourceLabel}} · v{{item.versionNo}} · {{item.validityDays}} 天
+              {{item.orgName ? ' · ' + item.orgName : ''}}</view>
+          </view>
+          <text class="badge {{item.status === 'active' ? 'teal' : ''}}">{{item.statusLabel}}</text>
+        </view>
+
+        <block wx:if="{{expandedId === item.id}}">
+          <view class="kv" wx:if="{{item.validUntil}}"><text class="t-span">有效期至</text><text class="t-b">{{item.validUntil}}</text></view>
+          <view class="kv"><text class="t-span">发放时间</text><text class="t-b">{{item.created}}</text></view>
+          <view class="benefit-line" wx:for="{{item.benefits}}" wx:for-item="b" wx:key="name">
+            <text class="ph ph-check"></text>
+            <view class="grow">
+              <view class="t-h3">{{b.name}}</view>
+              <view class="t-p" wx:if="{{b.desc}}">{{b.desc}}</view>
+            </view>
+          </view>
+          <view class="quiet prepare" wx:if="{{item.status === 'active'}}" bindtap="hfGo" data-url="/pages/my-service/my-service">
+            <text class="ph ph-heart"></text>
+            <view class="grow">
+              <view class="t-h3">我的服务</view>
+              <view class="t-p">45 天服务准备与开通、每日安排、随访记录都在这里查看。</view>
+            </view>
+          </view>
+        </block>
+
+        <view class="ent-actions" wx:if="{{item.status === 'pending'}}">
+          <button class="primary" bindtap="claim" data-id="{{item.id}}" loading="{{busyId === item.id}}">领取权益</button>
+          <button class="secondary" bindtap="reject" data-id="{{item.id}}">拒绝</button>
+        </view>
+      </view>
+      <view class="hf-more" wx:if="{{!finished}}">上拉加载更多</view>
+      <view class="hf-more" wx:if="{{finished}}">共 {{total}} 项</view>
+    </block>
+  </view>
+</view>
+</block>

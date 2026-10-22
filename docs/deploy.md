@@ -80,8 +80,11 @@ server {
 ## 6. 微信小程序
 
 1. mp.weixin.qq.com → 开发设置，填入服务器域名（request 合法域名 = API HTTPS 域名）。
-2. 后端 `.env` 配置同一个小程序的 `WX_APPID` / `WX_SECRET`（code2session 用）。
-3. H5 如需微信网页授权，另需公众号 appid，并在 `essay-h5` 中替换 wx oauth 接入点。
+2. 后端 `.env` 配置同一个小程序的 `WX_APPID` / `WX_SECRET`（code2session、stable_token、getuserphonenumber 使用，密钥不进入小程序）。
+3. 微信公众平台需具备手机号快速验证组件使用权限及可用额度；隐私保护指引填写“手机号”及登录用途。后端 Redis 应可用，服务端可访问 api.weixin.qq.com。该能力须在对应 AppID 真机测试，模拟器桩不能证明授权成功。
+4. 先部署支持 `{code, phone_code}` 的后端，再发布带微信手机号授权按钮的小程序；旧版仅传 code 的真实微信登录将返回 400，需安排版本同步更新。保留 H5 原有短信登录接口。
+5. 真机验收：游客浏览、点击使用提示、取消授权、同意授权后真实手机号掩码、回到原入口、退出登录、过期重登与账号绑定冲突；不记录 code、手机号明文、AppSecret 或 access_token。
+6. H5 如需微信网页授权，另需公众号 appid，并在 `essay-h5` 中替换 wx oauth 接入点。
 
 ## 7. 文件存储与私有导出
 

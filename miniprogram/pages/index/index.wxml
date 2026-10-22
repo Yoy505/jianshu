@@ -1,109 +1,40 @@
-<view class="page-index">
-  <!-- 品牌头 -->
-  <view class="hero">
-    <view class="hero-name">杏临汇</view>
-    <view class="hero-sub">全域健康管家</view>
-    <view class="hero-slogan">医·药·护·康·养·情 九层守护</view>
-    <view class="hero-stats">
-      <view class="hs-item">
-        <view class="hs-num">{{stats.providers}}</view>
-        <view class="hs-label">人员资料</view>
-      </view>
-      <view class="hs-divider"></view>
-      <view class="hs-item">
-        <view class="hs-num">{{stats.services}}</view>
-        <view class="hs-label">服务条目</view>
-      </view>
-      <view class="hs-divider"></view>
-      <view class="hs-item">
-        <view class="hs-num">{{stats.users}}</view>
-        <view class="hs-label">注册用户</view>
-      </view>
+<view class="home-page">
+  <view class="home-chrome {{navScrolled ? 'home-chrome-scrolled' : ''}}" style="height: {{navBottom}}px">
+    <view class="home-status-fill" style="height: {{statusBarHeight}}px"></view>
+    <view class="home-brandbar" style="top: {{menuTop}}px; height: {{menuHeight}}px; right: {{menuRightSpace}}px">
+      <image class="home-brandmark" src="/assets/brand/xinglinhui-mark.png" mode="aspectFit" aria-hidden="true" />
+      <text class="home-brandname">杏临汇</text><text class="home-brand-sub">全域健康管家</text>
     </view>
   </view>
-
-  <view class="page">
-    <!-- 公告滚动 -->
-    <view class="card notice-card" wx:if="{{notices.length}}">
-      <view class="tag tag-apricot notice-tag">公告</view>
-      <swiper class="notice-swiper" vertical autoplay circular interval="4000" duration="500">
-        <swiper-item wx:for="{{notices}}" wx:key="id">
-          <view class="ellipsis notice-text">{{item.content}}</view>
-        </swiper-item>
-      </swiper>
+  <view class="home-hero" style="height: calc(64.615384616vw + {{statusBarHeight}}px)">
+    <image class="home-hero-photo" src="/assets/home-v1/hero-rehab.jpg" mode="aspectFill" aria-hidden="true" />
+    <view class="home-hero-copy" style="top: calc(20.0vw + {{statusBarHeight}}px)">
+      <view class="home-hero-title">让康复融入日常</view>
+      <view class="home-project-name">团泊·全科康复医学赋能计划</view>
+      <view class="home-hero-summary">专业康复 · 科学管理 · 更有温度</view>
+      <button class="home-hero-action" bindtap="goRehab" hover-class="home-pressed" aria-label="了解康复服务，查看术后康复场景"><text>了解康复服务</text></button>
     </view>
-
-    <!-- 加载骨架 -->
-    <block wx:if="{{loading}}">
-      <view class="skeleton">
-        <view class="sk-line first sk-w40"></view>
-        <view class="sk-line sk-w80"></view>
-        <view class="sk-line sk-w60"></view>
-      </view>
-      <view class="skeleton gap-top">
-        <view class="sk-line first sk-w30"></view>
-        <view class="sk-line sk-w80"></view>
-        <view class="sk-line sk-w60"></view>
-      </view>
-    </block>
-
-    <!-- 错误重试 -->
-    <view class="card" wx:elif="{{error}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">{{error}}</view>
-        <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
-      </view>
+  </view>
+  <view class="home-notices" wx:if="{{notices.length}}"><text class="home-notice-label">公告</text><swiper class="home-notice-swiper" vertical autoplay circular interval="4000" duration="400"><swiper-item wx:for="{{notices}}" wx:key="id"><view class="home-notice-text">{{item.content}}</view></swiper-item></swiper></view>
+  <view class="home-scenes">
+    <view class="home-section-heading"><view class="home-section-title">九大健康场景</view><text class="home-section-note">{{loading ? '目录加载中' : (error ? '目录暂不可用' : '按需求探索')}}</text></view>
+    <view class="home-fetch-error" wx:if="{{error}}" bindtap="retry" role="button" aria-label="目录加载失败，点击重新加载"><text>{{error}}</text><text class="home-retry">重新加载</text></view>
+    <view class="home-scene-grid">
+      <button class="home-scene {{index % 3 === 1 ? 'home-scene-middle' : ''}} {{index >= 3 ? 'home-scene-next' : ''}}" wx:for="{{scenarios}}" wx:key="key" data-key="{{item.key}}" data-name="{{item.name}}" bindtap="goScenario" hover-class="home-pressed" aria-label="{{item.name}}，{{item.description}}">
+        <image class="home-scene-icon" src="{{item.icon}}" mode="aspectFit" aria-hidden="true" /><text class="home-scene-name">{{item.name}}</text><text class="home-scene-desc">{{item.description}}</text>
+      </button>
     </view>
+  </view>
+  <view class="home-support">
+    <button class="home-drug-hall" bindtap="goDrugHall" hover-class="home-pressed" aria-label="药品数字展厅">
+      <image class="home-drug-art" src="/assets/home-v1/drug-exhibit.jpg" mode="aspectFill" aria-hidden="true" />
+      <view class="home-drug-copy"><view class="home-drug-title">药品数字展厅</view><view class="home-drug-sub">药品查询 · 合理用药资料</view><view class="home-drug-caption"><text>通用名检索与资料查阅</text></view></view>
 
-    <block wx:else>
-      <!-- 九大场景九宫格 -->
-      <view class="card">
-        <view class="section-title">九大健康场景</view>
-        <view class="grid-9" wx:if="{{scenarios.length}}">
-          <view
-            class="grid-9-item fade-in"
-            wx:for="{{scenarios}}"
-            wx:key="key"
-            style="animation-delay: {{index * 80}}ms"
-            data-key="{{item.key}}"
-            data-name="{{item.name}}"
-            bindtap="goScenario"
-          >
-            <view class="grid-9-icon">{{item.char}}</view>
-            <view class="grid-9-name">{{item.name}}</view>
-          </view>
-        </view>
-        <view class="empty" wx:else>
-          <view class="empty-title">场景数据加载中，请稍后再试</view>
-        </view>
-      </view>
-
-      <!-- 快捷入口 -->
-      <view class="card gap-top">
-        <view class="section-title">快捷入口</view>
-        <view class="quick-grid">
-          <view class="quick-item" bindtap="goAI">
-            <view class="quick-icon">智</view>
-            <view class="quick-name">健康问答</view>
-            <view class="quick-note">筹备中</view>
-          </view>
-          <view class="quick-item" bindtap="goDrugHall">
-            <view class="quick-icon">药</view>
-            <view class="quick-name">药品数字展厅</view>
-            <view class="quick-note">演示资料检索</view>
-          </view>
-          <view class="quick-item" bindtap="goMall">
-            <view class="quick-icon">商</view>
-            <view class="quick-name">健康商城</view>
-            <view class="quick-note">规划中</view>
-          </view>
-        </view>
-        <view class="quick-ai-note">健康问答尚未开放，目前不提供 AI 诊疗服务。</view>
-      </view>
-    </block>
-
-    <!-- 页脚免责声明 -->
-    <view class="footer-note">{{footer}}</view>
+    </button>
+    <view class="home-quick-links">
+      <button class="home-quick" bindtap="goAI" hover-class="home-pressed" aria-label="健康问答"><view class="home-quick-icon"><image src="/assets/home-v1/chat-centered-text-teal.png" mode="aspectFit" aria-hidden="true" /></view><view class="home-quick-copy"><view class="home-quick-title">健康问答</view><view class="home-quick-desc">健康知识信息服务</view></view></button>
+      <button class="home-quick" bindtap="goMall" hover-class="home-pressed" aria-label="健康商城"><view class="home-quick-icon"><image src="/assets/home-v1/bag-teal.png" mode="aspectFit" aria-hidden="true" /></view><view class="home-quick-copy"><view class="home-quick-title">健康商城</view><view class="home-quick-desc">甄选健康好物</view></view></button>
+    </view>
+    <view class="home-disclaimer">健康管理与信息服务，不替代诊疗</view>
   </view>
 </view>

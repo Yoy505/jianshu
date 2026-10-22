@@ -24,7 +24,7 @@ function checkedDate(value) {
   return /^\d{4}-\d{2}-\d{2}/.test(date) ? date.slice(0, 10) : date;
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     loading: true,
     error: '',
@@ -139,4 +139,4 @@ Page({
         this.setData({ boardSubmitting: false });
       });
   }
-});
+}, 'drug-detail'));

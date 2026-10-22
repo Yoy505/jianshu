@@ -1,152 +1,181 @@
-<view class="page page-drug">
-  <!-- 骨架 -->
-  <block wx:if="{{loading}}">
-    <view class="skeleton">
-      <view class="sk-line first sk-w60"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w40"></view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf {{(drug && !loading && !error) ? 'has-actions' : ''}}" style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
     </view>
-    <view class="skeleton gap-top">
-      <view class="sk-line first sk-w30"></view>
-      <view class="sk-line sk-w80"></view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
+  </view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
     </view>
   </block>
-
-  <!-- 错误 -->
-  <view class="card" wx:elif="{{error}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">{{error}}</view>
-      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+    </view>
+  </block>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="pad" >
+      <block wx:if="{{drug}}">
+        <view class="notice " >
+          <text class="ph ph-info">
+          </text>
+          <view class="t-p " >{{drug.publicationLabel}}</view>
+        </view>
+        <view class="card drug-cover" >
+          <view class="row between" >
+            <text class="eyebrow">杏临汇 · 药品资料</text>
+            <text class="ph ph-pill">
+            </text>
+          </view>
+          <view class="t-h1" >{{drug.commonName}}</view>
+          <view class="t-p small" >{{drug.brandName || '通用名与登记信息以审核发布资料为准'}}</view>
+          <view class="tags" >
+            <text class="t-span" wx:for="{{drug.tags}}" wx:key="key">{{item.label}}</text>
+          </view>
+        </view>
+        <view class="card " >
+          <view class="t-h2" >监管注册基础资料</view>
+          <view class="kv" >
+            <text class="t-span">批准文号</text>
+            <text class="t-b">{{drug.approvalNo || '待载入'}}</text>
+          </view>
+          <view class="kv" >
+            <text class="t-span">剂型 / 规格</text>
+            <text class="t-b">{{drug.form || '待载入'}} {{drug.specification}}</text>
+          </view>
+          <view class="kv" >
+            <text class="t-span">上市许可持有人</text>
+            <text class="t-b">{{drug.licenseHolder || '待载入'}}</text>
+          </view>
+          <view class="kv" >
+            <text class="t-span">生产企业</text>
+            <text class="t-b">{{drug.manufacturer || '待载入'}}</text>
+          </view>
+        </view>
+        <view class="card " >
+          <view class="t-h2" >资料来源</view>
+          <view class="kv" >
+            <text class="t-span">来源名称</text>
+            <text class="t-b">{{drug.sourceName || '待载入'}}</text>
+          </view>
+          <view class="kv" >
+            <text class="t-span">查询日期</text>
+            <text class="t-b">{{drug.sourceCheckedAt || '待载入'}}</text>
+          </view>
+          <view class="t-p small" wx:if="{{!drug.sourceUrl}}">只有接口实际返回来源时才展示来源链接。</view>
+          <button class="text-action" bindtap="copySourceUrl" wx:if="{{drug.sourceUrl}}">复制来源链接</button>
+        </view>
+        <view class="card " wx:if="{{drug.indication}}">
+          <view class="t-h2" >适应症</view>
+          <view class="t-p " >{{drug.indication}}</view>
+        </view>
+        <view class="card " wx:if="{{drug.usageNote}}">
+          <view class="t-h2" >用法用量</view>
+          <view class="t-p " >{{drug.usageNote}}</view>
+        </view>
+        <view class="card " wx:if="{{drug.contraindication}}">
+          <view class="t-h2" >注意事项</view>
+          <view class="t-p " >{{drug.contraindication}}</view>
+        </view>
+        <view class="card " wx:if="{{drug.science}}">
+          <view class="t-h2" >科普资料</view>
+          <view class="t-p " >{{drug.science}}</view>
+        </view>
+        <view class="card " wx:if="{{!drug.hasMedicalContent}}">
+          <view class="t-h2" >科普与用药资料</view>
+          <view class="t-p " >适应症、用法用量、注意事项与科普内容仅在有对应资料时展示，不填充猜测内容。</view>
+        </view>
+        <video wx:if="{{drug.videoUrl}}" src="{{drug.videoUrl}}" style="width:100%" />
+        <view class="card " >
+          <view class="t-h2" >留言服务</view>
+          <text class="badge">{{drug.feedbackMode === 'demo' ? '演示留言' : '暂未开放'}}</text>
+          <view class="t-p " >医师资质核验与留言审核流程尚未接入，当前不接收真实诊疗留言。</view>
+          <view class="" wx:if="{{drug.feedbackMode === 'demo'}}">
+            <view class="field" >
+              <view class="t-label" >留言</view>
+              <textarea value="{{boardInput}}" bindinput="onBoardInput" placeholder="仅演示资料反馈" maxlength="500" />
+            </view>
+            <button class="secondary" bindtap="submitBoard" >提交演示留言</button>
+          </view>
+          <view class="receipt" wx:for="{{drug.board}}" wx:key="id">
+            <view class="t-p " >{{item.content}}</view>
+            <view class="t-p small" >{{item.time}}</view>
+          </view>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="empty-card" >
+          <text class="ph ph-file-text">
+          </text>
+          <view class="t-h2" >该资料暂不可用</view>
+          <view class="t-p hf-empty-text" >资料可能已更新或下架，
+            请返回展厅重新查找。</view>
+            <button class="secondary" bindtap="hfGo" data-url="/pages/drug-hall/drug-hall">返回药品展厅</button>
+          </view>
+        </block>
+        <view class="footer-note" >药品资料仅供查阅，不构成个人用药建议</view>
+      </view>
+    </block>
+    <view class="actions" wx:if="{{drug && !loading && !error}}">
+      <button class="secondary" bindtap="toggleFav" >{{drug.favorited ? '已收藏' : '收藏资料'}}</button>
+      <button class="primary" bindtap="hfGo" data-url="/pages/drug-hall/drug-hall">返回展厅</button>
     </view>
   </view>
 
-  <block wx:else>
-    <view class="drug-demo-notice" wx:if="{{drug.publicationClass === 'demo'}}">演示资料，仅供功能测试；字段未作为正式药品资料核实或发布。</view>
-    <!-- 药品头 + 收藏 -->
-    <view class="card">
-      <view class="row-between">
-        <view class="dd-name flex-1 ellipsis-2">{{drug.commonName}}</view>
-        <view class="btn-mini {{drug.favorited ? '' : 'btn-plain'}} fav-btn" bindtap="toggleFav">
-          {{drug.favorited ? '已收藏' : '收 藏'}}
-        </view>
-      </view>
-      <view class="drug-publication {{drug.publicationClass}}">{{drug.publicationLabel}}</view>
-      <view class="row dd-tags" wx:if="{{drug.tags.length}}">
-        <view class="tag {{t.cls}}" wx:for="{{drug.tags}}" wx:for-item="t" wx:key="key">{{t.label}}</view>
-      </view>
-      <!-- 品牌资料只在接口实际返回时展示 -->
-      <view class="brand-slot" wx:if="{{drug.brandName}}">
-        <view class="brand-slot-label">品牌名称</view>
-        <view class="brand-slot-name">{{drug.brandName}}</view>
-      </view>
-    </view>
-
-    <!-- 监管登记字段与用药内容分开，字段缺失时不填充猜测值 -->
-    <view class="card gap-top" wx:if="{{drug.approvalNo || drug.form || drug.specification || drug.licenseHolder || drug.manufacturer}}">
-      <view class="section-title">{{drug.publicationClass === 'demo' ? '演示字段' : '监管注册基础资料'}}</view>
-      <view class="dd-row" wx:if="{{drug.approvalNo}}">
-        <view class="dd-label t2">批准文号</view>
-        <view class="dd-value">{{drug.approvalNo}}</view>
-      </view>
-      <view class="dd-row" wx:if="{{drug.form}}">
-        <view class="dd-label t2">剂型</view>
-        <view class="dd-value">{{drug.form}}</view>
-      </view>
-      <view class="dd-row" wx:if="{{drug.specification}}">
-        <view class="dd-label t2">规格</view>
-        <view class="dd-value">{{drug.specification}}</view>
-      </view>
-      <view class="dd-row" wx:if="{{drug.licenseHolder}}">
-        <view class="dd-label t2">上市许可持有人</view>
-        <view class="dd-value">{{drug.licenseHolder}}</view>
-      </view>
-      <view class="dd-row" wx:if="{{drug.manufacturer}}">
-        <view class="dd-label t2">生产企业</view>
-        <view class="dd-value">{{drug.manufacturer}}</view>
-      </view>
-    </view>
-
-    <view class="card gap-top" wx:if="{{drug.sourceName || drug.sourceCheckedAt || drug.sourceUrl}}">
-      <view class="section-title">资料来源</view>
-      <view class="dd-row" wx:if="{{drug.sourceName}}">
-        <view class="dd-label t2">来源</view>
-        <view class="dd-value">{{drug.sourceName}}</view>
-      </view>
-      <view class="dd-row" wx:if="{{drug.sourceCheckedAt}}">
-        <view class="dd-label t2">查询日期</view>
-        <view class="dd-value">{{drug.sourceCheckedAt}}</view>
-      </view>
-      <view class="source-copy" wx:if="{{drug.sourceUrl}}" bindtap="copySourceUrl">复制原始来源链接</view>
-      <view class="source-note" wx:if="{{drug.publicationClass === 'published'}}">公开查询记录只说明采集时所见信息，实际登记状态请以来源网站的最新结果为准。</view>
-    </view>
-
-    <view class="medical-section-label" wx:if="{{drug.hasMedicalContent}}">科普与用药资料</view>
-
-    <view class="card gap-top" wx:if="{{drug.indication}}">
-      <view class="section-title">适应症</view>
-      <view class="article dd-text">{{drug.indication}}</view>
-    </view>
-
-    <view class="card gap-top" wx:if="{{drug.usageNote}}">
-      <view class="section-title">用法用量</view>
-      <view class="article dd-text">{{drug.usageNote}}</view>
-    </view>
-
-    <view class="card gap-top" wx:if="{{drug.contraindication}}">
-      <view class="section-title">注意事项</view>
-      <view class="article dd-text">{{drug.contraindication}}</view>
-    </view>
-
-    <view class="card gap-top" wx:if="{{drug.science}}">
-      <view class="section-title">科普园地</view>
-      <view class="article dd-text">{{drug.science}}</view>
-    </view>
-
-    <!-- 无可用视频 URL 时不显示视频承诺或占位 -->
-    <view class="card gap-top" wx:if="{{drug.videoUrl}}">
-      <view class="section-title">科普视频</view>
-      <video class="dd-video" src="{{drug.videoUrl}}" controls object-fit="cover" />
-    </view>
-
-    <!-- 留言功能：仅开发/测试环境保留演示数据，公开环境由后端关闭 -->
-    <view class="card gap-top">
-      <view class="row-between">
-        <view class="section-title">留言服务</view>
-        <view class="section-sub">{{drug.feedbackMode === 'demo' ? '演示模式' : '暂未开放'}}</view>
-      </view>
-      <view wx:if="{{drug.feedbackMode === 'demo'}}">
-        <view class="dd-board-notice">仅供本地演示：留言来自普通测试用户，未核验医师身份，也未经内容审核。请勿填写真实病情或用药信息。</view>
-        <view class="field">
-          <textarea
-            class="textarea"
-            placeholder="输入演示留言（20-500 字）"
-            value="{{boardInput}}"
-            bindinput="onBoardInput"
-            maxlength="500"
-          />
-        </view>
-        <view class="row dd-board-actions">
-          <view class="f-note t3">演示留言会直接显示，仅供功能测试</view>
-          <view class="btn-mini {{boardSubmitting ? 'disabled' : ''}}" bindtap="submitBoard">
-            {{boardSubmitting ? '提交中…' : '提交演示留言'}}
-          </view>
-        </view>
-        <block wx:if="{{drug.board.length}}">
-          <view class="board-item" wx:for="{{drug.board}}" wx:key="id">
-            <view class="row-between">
-              <view class="board-user">测试用户：{{item.userName}}</view>
-              <view class="board-time t3 f-note">{{item.time}}</view>
-            </view>
-            <view class="board-content t2">{{item.content}}</view>
-          </view>
-        </block>
-        <view class="t3 f-small dd-text" wx:else>暂无演示留言</view>
-      </view>
-      <view class="dd-board-notice" wx:else>医师资质核验与留言审核流程尚未接入。当前不接收新留言，既有未审核留言也不对外展示。</view>
-    </view>
-
-    <!-- 免责声明 -->
-    <view class="footer-note">{{drugNote}}</view>
-  </block>
-</view>
+</block>

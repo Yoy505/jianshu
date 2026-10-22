@@ -1,54 +1,65 @@
-/* 首页 */
-.hero {
-  background: linear-gradient(135deg, #0B5A54 0%, #0F766E 55%, #14B8A6 100%);
-  padding: 56rpx 32rpx 48rpx;
-  color: #FFFFFF;
-  border-radius: 0 0 32rpx 32rpx;
-}
-.hero-name { font-size: 56rpx; font-weight: 700; letter-spacing: 4rpx; }
-.hero-sub { margin-top: 8rpx; font-size: 30rpx; font-weight: 600; opacity: 0.95; }
-.hero-slogan { margin-top: 16rpx; font-size: 24rpx; opacity: 0.85; letter-spacing: 2rpx; }
-.hero-stats {
-  margin-top: 40rpx;
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 16rpx;
-  display: flex;
-  align-items: center;
-  padding: 24rpx 0;
-}
-.hs-item { flex: 1; text-align: center; }
-.hs-num { font-size: 40rpx; font-weight: 700; }
-.hs-label { margin-top: 4rpx; font-size: 22rpx; opacity: 0.85; }
-.hs-divider { width: 1rpx; height: 48rpx; background: rgba(255, 255, 255, 0.25); }
+/* 390px 设计基准转换至100.0vw；系统状态栏、微信胶囊使用运行时尺寸。 */
+page{background:#f5f9f8;color:#123b43;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;font-size:4.102564103vw;line-height:normal;}
+.home-page{width:100%;padding-bottom:0.533333334vw;}
+.home-page view,.home-page button,.home-page image{box-sizing:border-box;}
+.home-page button{margin:0;padding:0;background:transparent;border:0;border-radius:0;text-align:left;color:inherit;font-size:inherit;font-weight:normal;line-height:inherit;}
+.home-page button::after{border:0;}
+.home-chrome{position:fixed;left:0;top:0;right:0;z-index:100;pointer-events:none;}
+.home-chrome-scrolled{background:#f5f9f8;border-bottom:1px solid #e7eeee;}
+.home-status-fill{position:absolute;left:0;right:0;top:0;background:#f0f6f4;}
+.home-hero{position:relative;overflow:hidden;background:#f0f6f4;}
+.home-hero-photo{position:absolute;left:0;bottom:0;width:100%;height:64.615384616vw;}
+.home-brandbar{position:absolute;left:5.128205129vw;display:flex;align-items:center;white-space:nowrap;}
+.home-brandmark{width:8.461538462vw;height:8.461538462vw;border-radius:50%;flex-shrink:0;}
+.home-brandname{margin-left:1.794871795vw;font-size:4.871794872vw;font-weight:700;letter-spacing:-0.153846153vw;color:#064e50;}
+.home-brand-sub{margin-left:1.794871795vw;font-size:2.820512821vw;color:#657c7e;}
+.home-hero-copy{position:absolute;left:5.641025642vw;}
+.home-hero-title{font-family:"Songti SC","STSong",serif;font-size:7.17948718vw;font-weight:800;line-height:1.2;letter-spacing:0.025641026vw;color:#065456;white-space:nowrap;}
+.home-project-name{font-size:3.333333334vw;font-weight:600;color:#07575a;margin-top:1.282051283vw;line-height:5.128205129vw;}
+.home-status-tag{display:inline-flex;align-items:center;justify-content:center;border:1px solid #c47718;background:#fffaf0;color:#b87013;font-size:2.564102565vw;line-height:4.102564103vw;padding:0 2.051282052vw;border-radius:5.128205129vw;white-space:nowrap;}
+.home-project-tag{margin-top:0.512820513vw;}
+.home-hero-summary{font-size:2.564102565vw;color:#6d8486;letter-spacing:0.17948718vw;margin-top:2.307692308vw;}
+.home-page .home-hero-action{display:flex;align-items:center;justify-content:center;background:#086f69;color:#fff;width:36.153846154vw;height:10.256410257vw;border-radius:6.153846154vw;margin-top:2.564102565vw;font-size:3.846153847vw;font-weight:600;}
+.home-hero-action image{margin-left:3.076923077vw;width:4.615384616vw;height:4.615384616vw;}
+.home-notices{margin:2.564102565vw 4.102564103vw 0;padding:1.6vw 2.133333334vw;display:flex;align-items:center;background:#fff;border-radius:2.133333334vw;}
+.home-notice-label{color:#b87013;font-size:2.933333334vw;flex-shrink:0;}
+.home-notice-swiper{margin-left:2.133333334vw;height:4.8vw;flex:1;min-width:0;}
+.home-notice-text{font-size:2.933333334vw;line-height:4.8vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#657c7e;}
+.home-scenes{padding:0 5.128205129vw 1.282051283vw;}
+.home-section-heading{height:11.538461539vw;display:flex;align-items:center;justify-content:space-between;}
+.home-section-title{font-size:4.871794872vw;letter-spacing:-0.128205128vw;font-weight:650;}
+.home-section-note{font-size:2.564102565vw;color:#778b8d;}
+.home-scene-grid{display:flex;flex-wrap:wrap;}
+.home-page .home-scene{width:33.333333%;height:24.102564103vw;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;min-width:0;}
+.home-scene-next{border-top:1px solid #e7eeee!important;}
+.home-scene-middle{border-left:1px solid #e7eeee!important;border-right:1px solid #e7eeee!important;}
+.home-scene-icon{display:block;width:11.282051283vw;height:11.282051283vw;border-radius:3.076923077vw;margin-bottom:1.282051283vw;flex-shrink:0;}
+.home-scene-name{font-size:3.333333334vw;line-height:5.128205129vw;font-weight:600;white-space:nowrap;}
+.home-scene-desc{font-size:2.564102565vw;line-height:4.358974359vw;color:#7b8b90;white-space:nowrap;}
+.home-fetch-error{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.333333334vw;padding:1.6vw 2.133333334vw;min-height:11.282051283vw;background:#fff4e4;border-radius:1.866666667vw;color:#8b5c20;font-size:2.933333334vw;}
+.home-fetch-error>text:first-child{flex:1;min-width:0;}
+.home-retry{margin-left:2.133333334vw;color:#0f766e;font-weight:600;flex-shrink:0;}
+.home-support{padding:0 4.102564103vw;}
+.home-page .home-drug-hall{position:relative;overflow:hidden;border-radius:3.58974359vw;width:100%;height:23.333333334vw;background:#e6f2f0;display:block;}
+.home-drug-art{position:absolute;width:42.820512821vw;height:28.461538462vw;right:2.051282052vw;top:-2.564102564vw;}
+.home-drug-copy{position:relative;padding:3.58974359vw 4.102564103vw;}
+.home-drug-title{font-size:5.128205129vw;font-weight:650;line-height:6.923076924vw;letter-spacing:-0.128205128vw;color:#065456;}
+.home-drug-sub{font-size:2.820512821vw;line-height:5.128205129vw;color:#24746d;}
+.home-drug-caption{display:flex;align-items:center;margin-top:0.512820513vw;font-size:2.307692308vw;color:#728f89;}
+.home-demo-tag{font-size:2.307692308vw;line-height:3.846153847vw;padding:0 1.538461539vw;margin-right:1.794871795vw;}
+.home-drug-arrow{position:absolute;right:2.564102565vw;top:8.717948718vw;width:6.153846154vw;height:6.153846154vw;border-radius:50%;background:rgba(255,255,255,.86);display:flex;align-items:center;justify-content:center;}
+.home-drug-arrow image{width:3.58974359vw;height:3.58974359vw;}
+.home-quick-links{display:flex;margin-top:2.564102565vw;}
+.home-page .home-quick{height:13.846153847vw;min-width:0;flex:1;border:1px solid #e7eeee;border-radius:3.333333334vw;display:flex;align-items:center;background:#fff;padding:0 2.564102565vw;}
+.home-page .home-quick+.home-quick{margin-left:3.076923077vw;}
+.home-quick-icon{width:7.435897436vw;height:7.435897436vw;display:flex;align-items:center;justify-content:center;background:#eaf6f2;border-radius:2.820512821vw;flex-shrink:0;}
+.home-quick-icon image{width:5.897435898vw;height:5.897435898vw;}
+.home-quick-copy{margin-left:1.794871795vw;}
+.home-quick-title{font-size:3.076923077vw;font-weight:700;white-space:nowrap;line-height:4.871794872vw;}
+.home-quick-desc{font-size:2.051282052vw;color:#879598;white-space:nowrap;line-height:3.58974359vw;}
+.home-quick-status{font-size:2.307692308vw;color:#89989b;white-space:nowrap;margin-left:auto;}
+.home-quick-arrow{width:2.820512821vw;height:2.820512821vw;flex-shrink:0;}
+.home-disclaimer{min-height:8.717948718vw;padding:2.051282052vw 1.066666667vw;display:flex;align-items:center;justify-content:center;text-align:center;font-size:2.564102565vw;line-height:4.0vw;color:#829497;letter-spacing:0.051282052vw;}
+.home-page .home-pressed{opacity:.78;}
 
-/* 公告 */
-.notice-card { display: flex; align-items: center; padding: 20rpx 24rpx; }
-.notice-tag { flex-shrink: 0; }
-.notice-swiper { flex: 1; height: 44rpx; margin-left: 16rpx; }
-.notice-text { font-size: 26rpx; color: #374151; line-height: 44rpx; }
-
-/* 快捷入口 */
-.quick-grid { display: flex; margin-top: 24rpx; }
-.quick-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
-.quick-icon {
-  width: 88rpx;
-  height: 88rpx;
-  border-radius: 24rpx;
-  background: linear-gradient(135deg, #0F766E, #14B8A6);
-  color: #FFFFFF;
-  font-size: 34rpx;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.quick-name { margin-top: 14rpx; font-size: 26rpx; font-weight: 600; color: #1F2937; }
-.quick-note { margin-top: 4rpx; font-size: 22rpx; color: #9CA3AF; }
-.quick-ai-note {
-  margin-top: 24rpx;
-  padding-top: 20rpx;
-  border-top: 1rpx solid #F0F1F2;
-  font-size: 22rpx;
-  color: #9CA3AF;
-  text-align: center;
-}
+.home-page .home-hero-action{height:9.230769231vw;margin-top:3.076923077vw}.home-hero-summary{line-height:normal}

@@ -1,117 +1,146 @@
-<view class="page page-pd has-action-bar">
-  <!-- 骨架 -->
-  <block wx:if="{{loading}}">
-    <view class="skeleton">
-      <view class="sk-line first sk-w40"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w60"></view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf {{(provider && !loading && !error) ? 'has-actions' : ''}}" style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
     </view>
-    <view class="skeleton gap-top">
-      <view class="sk-line first sk-w30"></view>
-      <view class="sk-line sk-w80"></view>
-    </view>
-  </block>
-
-  <!-- 错误 -->
-  <view class="card" wx:elif="{{error}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">{{error}}</view>
-      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
     </view>
   </view>
-
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+    </view>
+  </block>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
   <block wx:else>
-    <!-- 人员头 -->
-    <view class="card">
-      <view class="row">
-        <image wx:if="{{provider.avatar}}" class="pd-avatar-img" src="{{provider.avatar}}" mode="aspectFill" />
-        <view wx:else class="pd-avatar">{{provider.initial}}</view>
-        <view class="flex-1">
-          <view class="row">
-            <view class="pd-name">{{provider.name}}</view>
-          </view>
-          <view class="pd-title ellipsis t2">{{provider.title}}{{provider.dept ? ' · ' + provider.dept : ''}}</view>
-          <view class="pd-stats t3">人员身份和服务记录待核验</view>
+    <view class="hero " >
+      <text class="eyebrow">人员资料 · 资料展示</text>
+      <view class="t-h1" >{{provider.name || '人员资料'}}</view>
+      <view class="t-p " >{{provider.dept || '健康管理相关方向'}}</view>
+    </view>
+    <view class="pad" >
+      <view class="notice " >
+        <text class="ph ph-info">
+        </text>
+        <view class="t-p " >人员身份与资质待核验，不代表实际服务能力。</view>
+      </view>
+      <view class="card " >
+        <view class="t-h2" >人员资料</view>
+        <view class="kv" >
+          <text class="t-span">职称</text>
+          <text class="t-b">待核验</text>
+        </view>
+        <view class="kv" >
+          <text class="t-span">执业单位</text>
+          <text class="t-b">待核验</text>
+        </view>
+        <view class="kv" >
+          <text class="t-span">从业年限</text>
+          <text class="t-b">待核验</text>
         </view>
       </view>
-      <view class="row pd-skill-wrap" wx:if="{{provider.skills.length}}">
-        <view class="tag tag-brand" wx:for="{{provider.skills}}" wx:key="*this">{{item}}</view>
-      </view>
-    </view>
-
-    <!-- 资质卡 -->
-    <view class="card gap-top">
-      <view class="row-between">
-        <view class="section-title">人员资料</view>
-        <view class="t3 f-small">资质待核验</view>
-      </view>
-      <view class="t3 f-small pd-text">以下职称和单位资料尚未完成平台核验，不代表已开通执业服务。</view>
-      <view class="pd-qual-row">
-        <view class="pd-qual-label t2">职称</view>
-        <view class="pd-qual-value">{{provider.title || '--'}}</view>
-      </view>
-      <view class="pd-qual-row">
-        <view class="pd-qual-label t2">执业单位</view>
-        <view class="pd-qual-value ellipsis">{{provider.org || '--'}}</view>
-      </view>
-      <view class="pd-qual-row">
-        <view class="pd-qual-label t2">从业年限</view>
-        <view class="pd-qual-value">{{provider.years}} 年</view>
-      </view>
-    </view>
-
-    <!-- 简介 -->
-    <view class="card gap-top">
-      <view class="section-title">个人简介</view>
-      <view class="article pd-text">{{provider.intro}}</view>
-    </view>
-
-    <!-- 可约时段 -->
-    <view class="card gap-top">
-      <view class="row-between">
-        <view class="section-title">{{slots.length ? '演示时段' : '预约时段'}}</view>
-        <view class="section-sub">近 7 天</view>
-      </view>
-      <block wx:if="{{slots.length}}">
-        <view class="t3 f-small pd-text">以下为开发演示数据，不代表真实可预约时间。</view>
-        <view class="slot-row" wx:for="{{slots}}" wx:key="date">
-          <view class="slot-date">
-            <view class="slot-md">{{item.label}}</view>
-            <view class="slot-week t3">{{item.week}}</view>
-          </view>
-          <view class="flex-1 row slot-periods">
-            <view class="tag tag-brand" wx:for="{{item.periods}}" wx:for-item="p" wx:key="*this">{{p}}</view>
-          </view>
+      <view class="card " >
+        <view class="t-h2" >个人简介</view>
+        <view class="t-p " >{{provider.intro || '人员介绍正在完善。完成身份、资质与服务范围核验后，再展示可确认的信息。'}}</view>
+        <view class="tags" >
+          <text class="t-span" wx:for="{{provider.skills}}" wx:key="*this">{{item}}</text>
         </view>
-      </block>
-      <view class="t3 f-small pd-text" wx:else>真实排班尚未接入，预约暂未开放。</view>
-    </view>
-
-    <!-- 服务评价 -->
-    <view class="card gap-top">
-      <view class="section-title">{{reviews.length ? '演示评价' : '服务评价'}}</view>
-      <view class="t3 f-small pd-text" wx:if="{{reviews.length}}">评价资料仅供开发演示，尚未核实真实服务记录。</view>
-      <block wx:if="{{reviews.length}}">
-        <view class="review-item" wx:for="{{reviews}}" wx:key="id">
-          <view class="row-between">
-            <view class="review-user">{{item.userName}}</view>
-            <view class="stars">
-              <view class="star {{s ? 'on' : ''}}" wx:for="{{item.stars}}" wx:for-item="s" wx:key="*this"></view>
+      </view>
+      <view class="card " >
+        <view class="t-h2" >预约时段</view>
+        <block wx:if="{{slots.length}}">
+          <view class="t-p small" >仅用于流程设计，不代表真实排班。</view>
+          <view class="quiet" wx:for="{{slots}}" wx:key="date">
+            <text class="ph ph-calendar-blank">
+            </text>
+            <view class="" >
+              <view class="t-h3" >{{item.label}} · {{item.week}}</view>
+              <view class="t-p " >{{item.periods}}</view>
             </view>
           </view>
-          <view class="review-content t2" wx:if="{{item.content}}">{{item.content}}</view>
-          <view class="review-time t3">{{item.time}}</view>
+        </block>
+        <block wx:else>
+          <view class="quiet" >
+            <text class="ph ph-calendar-blank">
+            </text>
+            <view class="t-p " >真实排班尚未接入
+              预约暂未开放</view>
+            </view>
+          </block>
         </view>
-      </block>
-      <view class="t3 f-small pd-text" wx:else>暂无评价，服务完成后可评价。</view>
+        <view class="card " >
+          <view class="t-h2" >服务评价</view>
+          <view class="t-p" wx:if="{{!reviews.length}}">暂无可核实的服务评价。</view>
+          <view class="receipt" wx:for="{{reviews}}" wx:key="id">
+            <view class="t-h3">{{item.userName}} · 历史评价</view>
+            <view class="t-p">{{item.content}}</view>
+            <text class="t-small">{{item.time}}</text>
+          </view>
+        </view>
+        <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+      </view>
+    </block>
+    <view class="actions" wx:if="{{provider && !loading && !error}}">
+      <button class="secondary" bindtap="goChat" disabled="{{!slots.length}}">{{slots.length ? '体验演示留言' : '留言暂未开放'}}</button>
+      <button class="primary" bindtap="goBook" disabled="{{!slots.length}}">{{slots.length ? '查看演示预约' : '预约暂未开放'}}</button>
     </view>
-  </block>
-
-  <!-- 底部双按钮 -->
-  <view class="action-bar" wx:if="{{provider}}">
-    <view class="btn-ghost" wx:if="{{slots.length}}" bindtap="goChat">体验留言</view>
-    <view class="btn-ghost disabled" wx:else>留言暂未开放</view>
-    <view class="btn-primary {{slots.length ? '' : 'disabled'}}" bindtap="goBook">{{slots.length ? '演示预约' : '预约暂未开放'}}</view>
   </view>
-</view>
+
+</block>

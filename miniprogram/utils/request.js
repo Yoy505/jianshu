@@ -29,7 +29,13 @@ function rawRequest(options) {
 function onAuthExpired(options) {
   const app = getApp();
   if (app && app.clearAuth) app.clearAuth();
-  if (!options.silent) showError('登录已过期，请重新登录');
+  const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : [];
+  const page = pages[pages.length - 1];
+  const access = require('./access');
+  const route = page && '/' + page.route;
+  if (app && app.ensureLogin && route && access.validUrl(route)) {
+    app.ensureLogin(page._accessUrl || route, !access.PUBLIC.includes(page.route.split('/')[1]));
+  } else if (!options.silent) showError('登录已过期，请重新登录');
 }
 
 // POST /auth/refresh {refresh_token} → 新 token 对

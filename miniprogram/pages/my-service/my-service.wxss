@@ -1,0 +1,21 @@
+@import "../../styles/hifi.wxss";
+
+.status-card .grow{flex:1;min-width:0}
+.progress{height:2.051282051vw;background:#e6ede9;border-radius:1.025641026vw;overflow:hidden;margin:2.564102565vw 0}
+.progress-bar{height:100%;background:#0f766e;border-radius:1.025641026vw;transition:width .3s}
+.paused-tip{margin-top:2.564102565vw}
+.check-line{display:flex;gap:2.564102565vw;padding:2.564102565vw 0;border-bottom:0.256410257vw solid #eef2ef}
+.check-line>.ph{font-size:4.871794872vw;color:#589079;flex:none;line-height:5.641025641vw}
+.check-line .grow{flex:1;min-width:0}
+.check-line:last-of-type{border-bottom:0}
+.act-btn{margin-top:3.076923077vw;width:100%}
+.quiet-note{margin-top:2.051282051vw}
+.cal-head{margin-bottom:2.564102565vw}
+.cal-grid{display:flex;flex-wrap:wrap}
+.cal-cell{width:14.2857%;height:10.25641026vw;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border-radius:1.025641026vw}
+.cal-cell.today{border:0.256410257vw solid #0f766e}
+.cal-cell.selected{background:#0f766e;color:#fff}
+.cal-cell .dot{position:absolute;bottom:1.025641026vw;width:1.025641026vw;height:1.025641026vw;border-radius:50%;background:#9cbfae}
+.cal-cell .dot.pending{background:#d97706}
+.cal-week{margin-bottom:1.282051282vw}
+.mini{flex:none}

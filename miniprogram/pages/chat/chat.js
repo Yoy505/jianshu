@@ -10,7 +10,7 @@ const wsLib = require('../../utils/ws');
 const POLL_INTERVAL = 3000;
 const TYPING_MAX_WAIT = 5000;
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     loading: true,
     error: '',
@@ -26,6 +26,7 @@ Page({
 
   onLoad(options) {
     this.consultId = options.id;
+    this.setData({hfServiceName: options.service_name ? decodeURIComponent(options.service_name) : '', hfProviderName: options.provider_name ? decodeURIComponent(options.provider_name) : ''});
     this.lastId = 0;
     this.loaded = false;
     this.hidden = false;
@@ -142,7 +143,7 @@ Page({
         messages,
         empty: false,
         scrollAnchor: 'anchor-bottom'
-      });
+      }, () => { if (!this.hidden) wx.pageScrollTo({ selector: '#anchor-bottom', duration: 150 }); });
     }
   },
 
@@ -218,4 +219,4 @@ Page({
         this.setData({ sending: false });
       });
   }
-});
+}, 'chat'));

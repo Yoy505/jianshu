@@ -1,16 +1,58 @@
-<view class="page page-certify">
-  <view class="card ct-status-card">
-    <view class="section-title">专业人员入驻</view>
-    <view class="ct-status-title">线上申请暂未开放</view>
-    <view class="t2 ct-status-desc">入驻申请和执业资质核验流程正在建设中。目前本页面不会接收或保存你的姓名、单位、电话等资料。</view>
+<view class="hf {{(true) ? 'has-actions' : ''}}" style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
+    </view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
   </view>
-
-  <view class="card gap-top">
-    <view class="section-title">后续申请流程</view>
-    <view class="ct-line"><view class="ct-dot"></view><view class="flex-1">阅读资料用途及隐私告知，提交入驻申请</view></view>
-    <view class="ct-line"><view class="ct-dot"></view><view class="flex-1">平台核验身份、执业资格和执业单位</view></view>
-    <view class="ct-line"><view class="ct-dot"></view><view class="flex-1">审核通过并签约培训后，才开放相应服务</view></view>
+  <view class="hero with-icon" >
+    <text class="eyebrow">专业力量 · 共同守护</text>
+    <view class="t-h1" >专业人员入驻</view>
+    <view class="t-p " >让专业服务更清楚、更可追溯</view>
+    <view class="hero-icon" >
+      <text class="ph ph-user-circle-plus">
+      </text>
+    </view>
   </view>
-
-  <view class="btn-primary ct-back" bindtap="backHome">返回首页</view>
+  <view class="pad" >
+    <view class="notice " >
+      <text class="ph ph-info">
+      </text>
+      <view class="t-p " >线上申请暂未开放，目前不接收个人资料。</view>
+    </view>
+    <view class="card " >
+      <view class="t-h2" >入驻申请筹备中</view>
+      <view class="t-p " >入驻申请和执业资质核验流程正在建设中。目前本页面不会接收或保存姓名、单位、电话等资料。</view>
+    </view>
+    <view class="card " >
+      <view class="t-h2" >后续申请流程</view>
+      <view class="step" >
+        <text class="t-span">01</text>
+        <view class="" >
+          <view class="t-h3" >了解资料用途</view>
+          <view class="t-p " >阅读隐私告知，确认后提交入驻申请</view>
+        </view>
+      </view>
+      <view class="step" >
+        <text class="t-span">02</text>
+        <view class="" >
+          <view class="t-h3" >核验身份与资质</view>
+          <view class="t-p " >平台核验身份、执业资格和执业单位</view>
+        </view>
+      </view>
+      <view class="step" >
+        <text class="t-span">03</text>
+        <view class="" >
+          <view class="t-h3" >完成签约与培训</view>
+          <view class="t-p " >审核通过后，再开放相应服务</view>
+        </view>
+      </view>
+    </view>
+    <view class="footer-note" >开放安排以平台正式公告为准</view>
+  </view>
+  <view class="actions" wx:if="{{true}}">
+    <button class="primary" bindtap="hfGo" data-url="/pages/index/index">返回首页</button>
+  </view>
 </view>

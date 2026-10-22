@@ -18,6 +18,8 @@ const OTHER_TOPIC = '__other__';
 const PHONE_RE = /^(?:1[3-9]\d{9}|0\d{2,3}-[1-9]\d{6,7}(?:[-#转]\d{1,6})?)$/;
 const SUBMISSION_ID_KEY = 'occupational-client-submission-id';
 const LAST_RECEIPT_KEY = 'occupational-last-receipt';
+type FieldName = 'title' | 'topic' | 'otherTopic' | 'summary' | 'authorName' | 'organization' | 'phone' | 'file' | 'consent';
+type FieldErrors = Partial<Record<FieldName, string>>;
 
 /** 终态：轮询停止条件 */
 const FINAL_STATUSES: OccupationalReceiptStatus['status'][] = ['accepted', 'rejected'];
@@ -32,13 +34,14 @@ const PROGRESS_COPY: Record<OccupationalReceiptStatus['status'], string> = {
 
 const PROGRESS_STEPS: Array<{ label: string; reached: (s: OccupationalReceiptStatus['status']) => boolean }> = [
   { label: '提交', reached: () => true },
-  { label: '形式初审', reached: (s) => s === 'pending_final' || s === 'accepted' || s === 'rejected' },
+  { label: '形式初审', reached: (s) => s === 'pending_final' || s === 'accepted' },
   { label: '内容终审', reached: (s) => s === 'accepted' },
 ];
 
 function readStoredReceipt(): string | null {
   try {
-    return window.localStorage.getItem(LAST_RECEIPT_KEY);
+    const stored = window.localStorage.getItem(LAST_RECEIPT_KEY)?.trim().toUpperCase() ?? '';
+    return /^OCC-[0-9A-F]{16}$/.test(stored) ? stored : null;
   } catch {
     return null;
   }
@@ -70,7 +73,9 @@ function isSameAttachment(previous: File | null, next: File | null): boolean {
 }
 
 function fileSizeLabel(bytes: number): string {
-  return `${Math.round(bytes / 1024 / 1024)} MiB`;
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.ceil(bytes / 1024))} KiB`;
+  return `${Number((bytes / 1024 / 1024).toFixed(1))} MiB`;
 }
 
 export default function OccupationalSubmitPage() {
@@ -93,6 +98,9 @@ export default function OccupationalSubmitPage() {
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const [receipt, setReceipt] = useState<OccupationalReceipt | null>(null);
   const [trackedReceiptNo, setTrackedReceiptNo] = useState<string | null>(readStoredReceipt);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +112,7 @@ export default function OccupationalSubmitPage() {
     queryFn: () => queryOccupationalReceipt(trackedReceiptNo as string),
     enabled: trackedReceiptNo !== null,
     refetchInterval: (query) => {
+      if (axios.isAxiosError(query.state.error) && query.state.error.response?.status === 404) return false;
       const status = query.state.data?.status;
       return status && FINAL_STATUSES.includes(status) ? false : 15_000;
     },
@@ -122,6 +131,23 @@ export default function OccupationalSubmitPage() {
     };
   }, [clientSubmissionId]);
 
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+
+  const clearFieldError = (field: FieldName) => {
+    setFieldErrors((previous) => ({ ...previous, [field]: undefined }));
+  };
+  const fieldProps = (field: FieldName) => ({
+    id: `oh-${field}`,
+    'aria-labelledby': field !== 'file' && field !== 'consent' ? `oh-${field}-label` : undefined,
+    'aria-invalid': Boolean(fieldErrors[field]),
+    'aria-describedby': fieldErrors[field] ? `oh-${field}-error` : undefined,
+  });
+  const fieldError = (field: FieldName) => fieldErrors[field]
+    ? <span className="oh-field-error" id={`oh-${field}-error`}>{fieldErrors[field]}</span>
+    : null;
+
   const topics = meta?.topics?.length ? meta.topics : [...OCCUPATIONAL_TOPICS];
   const isOpen = meta?.enabled === true;
   const maxFileBytes = workType === 'article'
@@ -139,6 +165,7 @@ export default function OccupationalSubmitPage() {
     rotateClientSubmissionId();
     setWorkType(next);
     setFile(null);
+    clearFieldError('file');
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -157,31 +184,26 @@ export default function OccupationalSubmitPage() {
       return;
     }
     const finalTopic = topic === OTHER_TOPIC ? otherTopic.trim() : topic.trim();
-    if (!title.trim() || !finalTopic || !authorName.trim() || !organization.trim() || !summary.trim()) {
-      setError('请填写标题、征集方向、作者姓名、单位和作品简介。');
-      return;
+    const errors: FieldErrors = {};
+    if (!title.trim()) errors.title = '请填写作品标题。';
+    if (!topic) errors.topic = '请选择征集方向。';
+    if (topic === OTHER_TOPIC && !otherTopic.trim()) errors.otherTopic = '请填写其他方向名称。';
+    if (!summary.trim()) errors.summary = '请简要介绍作品关注的问题与核心内容。';
+    if (!authorName.trim()) errors.authorName = '请填写作者姓名。';
+    if (!organization.trim()) errors.organization = '请填写工作单位。';
+    if (!PHONE_RE.test(phone)) errors.phone = '请填写大陆手机号，或带区号的座机号码（可加分机）。';
+    if (!file) errors.file = '请选择作品文件。';
+    else if (!(workType === 'article' ? /\.docx$/i : /\.mp4$/i).test(file.name)) {
+      errors.file = workType === 'article' ? '请上传 .docx 文件；.doc 请在 Word 中另存为 .docx。' : '请上传 .mp4 文件。';
+    } else if (file.size === 0 || file.size > maxFileBytes) {
+      errors.file = `文件不能为空，且不能超过 ${fileSizeLabel(maxFileBytes)}。`;
     }
-    if (!PHONE_RE.test(phone)) {
-      setError('请填写大陆手机号，或带区号的座机号码（可加分机）。');
-      return;
-    }
-    if (!file) {
-      setError('请选择作品文件后再提交。');
-      return;
-    }
-    const correctExtension = workType === 'article' ? /\.docx$/i.test(file.name) : /\.mp4$/i.test(file.name);
-    if (!correctExtension) {
-      setError(workType === 'article'
-        ? '图文作品只接收 .docx。请将 .doc 文件在 Word 中另存为 .docx。'
-        : '视频作品只接收 .mp4 文件。');
-      return;
-    }
-    if (file.size === 0 || file.size > maxFileBytes) {
-      setError(`文件不能为空，且不能超过平台单文件上传限制 ${fileSizeLabel(maxFileBytes)}。`);
-      return;
-    }
-    if (!meta.consent_text || !consent) {
-      setError('请先确认仅用于本次评审与联系的数据处理说明。');
+    if (!meta.consent_text || !consent) errors.consent = '请阅读并确认本次评审与联系的数据处理说明。';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length || !file) {
+      window.requestAnimationFrame(() => {
+        formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      });
       return;
     }
 
@@ -225,6 +247,18 @@ export default function OccupationalSubmitPage() {
   const shownReceiptNo = trackedReceiptNo ?? receipt?.receipt_no ?? null;
 
   const startNewSubmission = () => {
+    rotateClientSubmissionId();
+    setTitle('');
+    setTopic('');
+    setOtherTopic('');
+    setSummary('');
+    setAuthorName('');
+    setOrganization('');
+    setPhone('');
+    setFile(null);
+    setConsent(false);
+    setProgress(0);
+    setFieldErrors({});
     setReceipt(null);
     setTrackedReceiptNo(null);
     storeReceipt(null);
@@ -235,37 +269,39 @@ export default function OccupationalSubmitPage() {
   return (
     <div className="oh-page oh-submit-page">
       <OccupationalHeader />
-      <main className="oh-submit-main">
+      <main id="main-content" tabIndex={-1} className="oh-submit-main">
         <div className="oh-container">
           <div className="oh-submit-heading">
             <p className="oh-kicker">SUBMISSION / 在线投稿</p>
-            <h1>{showProgressCard ? '作品已提交' : <>提交职业健康<br className="oh-mobile-title-break" />科普作品</>}</h1>
+            <h1>{showProgressCard ? (receipt || progressStatus ? '作品已提交' : '核对投稿记录') : <>提交职业健康<br className="oh-mobile-title-break" />科普作品</>}</h1>
             <p>{showProgressCard
-              ? '下方实时显示评审进度，无需手动查询；页面保持打开会自动刷新。'
+              ? (receipt || progressStatus ? '保存好回执号，可随时查询作品的评审进度。' : '发现本设备保存的回执号，正在向服务器核对实际状态。')
               : '填写作品信息并准备文件；能否提交以此页实时通道状态为准。'}</p>
           </div>
 
           {showProgressCard && shownReceiptNo ? (
             <section className="oh-receipt oh-receipt-result" aria-live="polite">
-              <div className="oh-receipt-mark" aria-hidden="true">✓</div>
+              {(receipt || progressStatus) && <p className="oh-receipt-confirmed">服务器已确认收稿</p>}
               <p className="oh-receipt-label">投稿回执号</p>
               <strong className="oh-receipt-number">{shownReceiptNo}</strong>
               {progressStatus ? (
                 <>
                   <p className={`oh-receipt-status is-${progressStatus.status}`}>{PROGRESS_COPY[progressStatus.status]}</p>
-                  <ol className="oh-receipt-steps">
+                  {progressStatus.status !== 'rejected' && <ol className="oh-receipt-steps">
                     {PROGRESS_STEPS.map((step) => (
                       <li key={step.label} data-reached={step.reached(progressStatus.status)}>
                         <span aria-hidden="true" />
                         {step.label}
                       </li>
                     ))}
-                  </ol>
+                  </ol>}
                   {progressStatus.status === 'rejected' && progressStatus.comment && (
                     <p className="oh-receipt-comment"><strong>未通过理由：</strong>{progressStatus.comment}</p>
                   )}
                   <p className="oh-receipt-hint">
-                    {progressFinal
+                    {progressQuery.isError
+                      ? '暂时无法刷新进度，以上为上次查询结果。请稍后重试。'
+                      : progressFinal
                       ? '评审已结束。后续安排以活动组织方通知为准。'
                       : '评审进度每 15 秒自动刷新一次，无需手动查询；也可以稍后再回来，此页会继续显示最新进度。'}
                   </p>
@@ -273,13 +309,15 @@ export default function OccupationalSubmitPage() {
               ) : (
                 <p className="oh-receipt-hint">
                   {progressQuery.isError
-                    ? '暂时无法获取评审进度，稍后会自动重试。'
+                    ? (axios.isAxiosError(progressQuery.error) && progressQuery.error.response?.status === 404
+                      ? '未查到本设备保存的回执号，请核对编号，或返回投稿表单。'
+                      : '暂时无法获取评审进度，稍后会自动重试。')
                     : '正在获取最新评审进度…'}
                 </p>
               )}
               <div className="oh-receipt-actions">
                 <button type="button" className="oh-button oh-button-secondary" onClick={startNewSubmission}>
-                  再投一篇
+                  {receipt || progressStatus ? '提交新作品' : '返回投稿表单'}
                 </button>
                 <Link className="oh-receipt-detail-link" to={`/receipt?no=${encodeURIComponent(shownReceiptNo)}`}>
                   查看详情
@@ -288,7 +326,7 @@ export default function OccupationalSubmitPage() {
             </section>
           ) : (
             <div className="oh-submit-grid">
-              <form className="oh-submit-form" onSubmit={(event) => void handleSubmit(event)} noValidate aria-busy={submitting}>
+              <form ref={formRef} className="oh-submit-form" onSubmit={(event) => void handleSubmit(event)} noValidate aria-busy={submitting}>
                 {metaQuery.isPending ? (
                   <div className="oh-status oh-status-info" role="status">正在确认投稿通道状态…</div>
                 ) : metaQuery.isError ? (
@@ -302,6 +340,7 @@ export default function OccupationalSubmitPage() {
                   <div className="oh-status oh-status-ready" role="status">投稿通道已开放</div>
                 )}
 
+                <p className="oh-required-note">标有 <span>*</span> 的项目均为必填。</p>
                 <fieldset className="oh-form-section" disabled={submitting}>
                   <legend><span>01</span> 作品信息</legend>
                   <div className="oh-field">
@@ -319,28 +358,32 @@ export default function OccupationalSubmitPage() {
                   </div>
 
                   <label className="oh-field">
-                    <span className="oh-label">作品标题 <em>*</em></span>
-                    <input className="oh-input" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="请填写作品标题" required />
+                    <span id="oh-title-label" className="oh-label">作品标题 <em>*</em></span>
+                    <input className="oh-input" type="text" {...fieldProps('title')} value={title} onChange={(e) => { setTitle(e.target.value); clearFieldError('title'); }} placeholder="请填写作品标题" required />
+                    {fieldError('title')}
                   </label>
 
                   <label className="oh-field">
-                    <span className="oh-label">征集方向 <em>*</em></span>
-                    <select className="oh-input" value={topic} onChange={(e) => setTopic(e.target.value)} required>
+                    <span id="oh-topic-label" className="oh-label">征集方向 <em>*</em></span>
+                    <select className="oh-input" {...fieldProps('topic')} value={topic} onChange={(e) => { setTopic(e.target.value); clearFieldError('topic'); }} required>
                       <option value="">请选择作品方向</option>
                       {topics.map((item) => <option value={item} key={item}>{item}</option>)}
                       {(meta?.accepts_other_topic ?? true) && <option value={OTHER_TOPIC}>其他职业健康主题</option>}
                     </select>
+                    {fieldError('topic')}
                   </label>
                   {topic === OTHER_TOPIC && (
                     <label className="oh-field">
-                      <span className="oh-label">其他方向名称 <em>*</em></span>
-                      <input className="oh-input" type="text" value={otherTopic} onChange={(e) => setOtherTopic(e.target.value)} placeholder="请简要写明职业健康主题" required />
-                    </label>
+                      <span id="oh-otherTopic-label" className="oh-label">其他方向名称 <em>*</em></span>
+                      <input className="oh-input" type="text" {...fieldProps('otherTopic')} value={otherTopic} onChange={(e) => { setOtherTopic(e.target.value); clearFieldError('otherTopic'); }} placeholder="请简要写明职业健康主题" required />
+                    {fieldError('otherTopic')}
+                  </label>
                   )}
 
                   <label className="oh-field">
-                    <span className="oh-label">作品简介 <em>*</em></span>
-                    <textarea className="oh-input oh-textarea" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="简要介绍作品关注的问题与核心内容" rows={4} required />
+                    <span id="oh-summary-label" className="oh-label">作品简介 <em>*</em></span>
+                    <textarea className="oh-input oh-textarea" {...fieldProps('summary')} value={summary} onChange={(e) => { setSummary(e.target.value); clearFieldError('summary'); }} placeholder="简要介绍作品关注的问题与核心内容" rows={4} required />
+                    {fieldError('summary')}
                   </label>
                 </fieldset>
 
@@ -348,23 +391,26 @@ export default function OccupationalSubmitPage() {
                   <legend><span>02</span> 作者与联系信息</legend>
                   <div className="oh-field-pair">
                     <label className="oh-field">
-                      <span className="oh-label">作者姓名 <em>*</em></span>
-                      <input className="oh-input" type="text" autoComplete="name" value={authorName} onChange={(e) => setAuthorName(e.target.value)} placeholder="请填写真实姓名" required />
-                    </label>
+                      <span id="oh-authorName-label" className="oh-label">作者姓名 <em>*</em></span>
+                      <input className="oh-input" type="text" autoComplete="name" {...fieldProps('authorName')} value={authorName} onChange={(e) => { setAuthorName(e.target.value); clearFieldError('authorName'); }} placeholder="请填写真实姓名" required />
+                    {fieldError('authorName')}
+                  </label>
                     <label className="oh-field">
-                      <span className="oh-label">工作单位 <em>*</em></span>
-                      <input className="oh-input" type="text" autoComplete="organization" value={organization} onChange={(e) => setOrganization(e.target.value)} placeholder="请填写单位名称" required />
-                    </label>
+                      <span id="oh-organization-label" className="oh-label">工作单位 <em>*</em></span>
+                      <input className="oh-input" type="text" autoComplete="organization" {...fieldProps('organization')} value={organization} onChange={(e) => { setOrganization(e.target.value); clearFieldError('organization'); }} placeholder="请填写单位名称" required />
+                    {fieldError('organization')}
+                  </label>
                   </div>
                   <label className="oh-field">
-                    <span className="oh-label">联系电话 <em>*</em></span>
-                    <input className="oh-input" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d#转-]/g, '').slice(0, 20))} placeholder="如 13800000000 或 022-12345678" required />
+                    <span id="oh-phone-label" className="oh-label">联系电话 <em>*</em></span>
+                    <input className="oh-input" type="tel" inputMode="tel" autoComplete="tel" {...fieldProps('phone')} value={phone} onChange={(e) => { setPhone(e.target.value.replace(/[^\d#转-]/g, '').slice(0, 20)); clearFieldError('phone'); }} placeholder="如 13800000000 或 022-12345678" required />
+                    {fieldError('phone')}
                   </label>
                 </fieldset>
 
                 <fieldset className="oh-form-section" disabled={submitting}>
                   <legend><span>03</span> 上传作品</legend>
-                  <label className="oh-upload" htmlFor="oh-work-file">
+                  <label className="oh-upload" htmlFor="oh-file">
                     <span className="oh-upload-icon" aria-hidden="true">↑</span>
                     <strong>{file ? file.name : '选择作品文件'}</strong>
                     <span>{file ? `${fileSizeLabel(file.size)} · 点击更换` : workType === 'article'
@@ -372,20 +418,22 @@ export default function OccupationalSubmitPage() {
                       : `.mp4 · 平台上传限制 ${fileSizeLabel(maxFileBytes)}`}</span>
                   </label>
                   <input
-                    id="oh-work-file"
+                    {...fieldProps('file')}
                     ref={fileInputRef}
                     className="oh-file-input"
                     type="file"
-                    aria-describedby="oh-file-help"
+                    aria-describedby={fieldErrors.file ? "oh-file-help oh-file-error" : "oh-file-help"}
                     accept={workType === 'article' ? '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document' : '.mp4,video/mp4'}
                     onChange={(e) => {
                       const nextFile = e.target.files?.[0] ?? null;
                       if (!isSameAttachment(file, nextFile)) rotateClientSubmissionId();
                       setFile(nextFile);
+                      clearFieldError('file');
                       setError(null);
                     }}
                     required
                   />
+                  {fieldError('file')}
                   <p className="oh-help" id="oh-file-help">{workType === 'article'
                     ? '.doc 文件请在 Word 中另存为 .docx 后上传；服务器将在提交后解析校验文件。'
                     : '画面不低于 1080P（横屏或竖屏均可）；服务器将在提交后校验文件。'}</p>
@@ -393,12 +441,13 @@ export default function OccupationalSubmitPage() {
 
                 <div className="oh-consent-box">
                   <label className="oh-consent-label">
-                    <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} disabled={submitting || !meta?.consent_text} />
-                    <span>{meta?.consent_text || '正在加载本次投稿的数据处理说明…'}<strong>此项确认不构成作品公开展示或传播授权。</strong></span>
+                    <input {...fieldProps('consent')} type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); clearFieldError('consent'); }} disabled={submitting || !meta?.consent_text} />
+                    <span>{meta?.consent_text || (metaQuery.isError ? '数据处理说明暂时无法加载，请在页面上方重新检查网络。' : '正在加载本次投稿的数据处理说明…')}<strong>此项确认不构成作品公开展示或传播授权。</strong></span>
                   </label>
                 </div>
 
-                {error && <p className="oh-form-error" role="alert">{error}</p>}
+                {fieldError('consent')}
+                {error && <p ref={errorRef} tabIndex={-1} className="oh-form-error" role="alert">{error}</p>}
                 {submitting && (
                   <div className="oh-progress" role="status" aria-live="polite">
                     <span>{progress < 100 ? `正在上传 · ${progress}%` : '文件已上传，正在校验并生成回执…'}</span>

@@ -1,0 +1,11 @@
+@import "../../styles/hifi.wxss";
+
+.balance-card .grow{flex:1;min-width:0}
+.balance-num{font:700 8.205128206vw Georgia,serif;color:#0f766e}
+.ent-card .grow{flex:1;min-width:0}
+.benefit-line{display:flex;gap:2.564102565vw;padding:2.564102565vw 0;border-bottom:0.256410257vw solid #eef2ef}
+.benefit-line>.ph{font-size:4.871794872vw;color:#589079;flex:none;line-height:5.641025641vw}
+.benefit-line:last-of-type{border-bottom:0}
+.prepare{margin-top:3.076923077vw}
+.ent-actions{display:flex;gap:2.564102565vw;margin-top:3.076923077vw}
+.ent-actions button{flex:1;min-width:0}

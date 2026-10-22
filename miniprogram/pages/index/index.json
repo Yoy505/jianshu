@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "杏临汇",
+  "navigationStyle": "custom",
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark"
 }

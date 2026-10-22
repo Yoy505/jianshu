@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db
 from app.core.security import (
     SCOPE_ADMIN,
+    SCOPE_ORG,
     SCOPE_USER,
     TOKEN_TYPE_REFRESH,
     create_token,
     decode_token,
 )
-from app.models import AdminUser, User, UserStatus
+from app.models import AdminUser, MpOrg, MpOrgAccount, User, UserStatus
 from app.schemas.auth import RefreshAdminResponse, RefreshRequest, RefreshUserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -45,5 +46,16 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
         return RefreshUserResponse(
             token=create_token(user.id, SCOPE_USER, "access"),
             refresh_token=create_token(user.id, SCOPE_USER, "refresh"),
+        )
+    if scope == SCOPE_ORG:
+        account = await db.get(MpOrgAccount, subject_id)
+        if account is None or account.status != "active":
+            raise HTTPException(status_code=401, detail="账号不存在或已停用")
+        org = await db.get(MpOrg, account.org_id)
+        if org is None or org.status != "active":
+            raise HTTPException(status_code=401, detail="单位已停用")
+        return RefreshAdminResponse(
+            access_token=create_token(account.id, SCOPE_ORG, "access"),
+            refresh_token=create_token(account.id, SCOPE_ORG, "refresh"),
         )
     raise HTTPException(status_code=401, detail="无效的刷新令牌")

@@ -9,7 +9,7 @@ function starsOf(n) {
   return arr;
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     loading: true,
     error: '',
@@ -108,7 +108,7 @@ Page({
       .then((res) => {
         wx.hideLoading();
         this.creating = false;
-        wx.redirectTo({ url: '/pages/chat/chat?id=' + res.id });
+        wx.redirectTo({ url: '/pages/chat/chat?id=' + res.id + '&service_name=' + encodeURIComponent(this.serviceName || '') + '&provider_name=' + encodeURIComponent((this.data.provider || {}).name || '') });
       })
       .catch(() => {
         wx.hideLoading();
@@ -127,8 +127,8 @@ Page({
       wx.showToast({ title: '请从服务详情进入后再预约', icon: 'none' });
       return;
     }
-    wx.navigateTo({
+    require('../../utils/access').navigate({
       url: '/pages/book/book?service_id=' + this.serviceId + '&provider_id=' + this.id
     });
   }
-});
+}, 'provider-detail'));

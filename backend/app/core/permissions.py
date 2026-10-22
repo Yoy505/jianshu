@@ -23,6 +23,17 @@ OCCUPATIONAL_READ = "occupational.read"
 # 两级评审（2026-10-08 方案 B）：初审编辑可参与，终审仅管理员且不得与初审同一账号
 OCCUPATIONAL_INITIAL_REVIEW = "occupational.initial_review"
 OCCUPATIONAL_FINAL_REVIEW = "occupational.final_review"
+VOLUNTEER_READ = "volunteer.read"
+# 服务包交易（工作一，2026-10-21）：商品维护与查询对编辑开放；动钱、发权益、调积分仅管理员
+COMMERCE_PRODUCT_MANAGE = "commerce.product.manage"
+COMMERCE_ORDER_READ = "commerce.order.read"
+COMMERCE_ORDER_REFUND = "commerce.order.refund"
+COMMERCE_POINTS_ADJUST = "commerce.points.adjust"
+COMMERCE_BATCH_MANAGE = "commerce.batch.manage"
+COMMERCE_BATCH_CONFIRM = "commerce.batch.confirm"
+# 服务履约（工作二，2026-10-22）：查询对编辑开放；门禁录入 / 指派 / 暂停 / 结案等仅管理员
+STEWARD_READ = "steward.read"
+STEWARD_MANAGE = "steward.manage"
 
 _ALL = {
     ESSAY_REVIEW,
@@ -37,12 +48,21 @@ _ALL = {
     OCCUPATIONAL_READ,
     OCCUPATIONAL_INITIAL_REVIEW,
     OCCUPATIONAL_FINAL_REVIEW,
+    VOLUNTEER_READ,
+    COMMERCE_PRODUCT_MANAGE,
+    COMMERCE_ORDER_READ,
+    COMMERCE_ORDER_REFUND,
+    COMMERCE_POINTS_ADJUST,
+    COMMERCE_BATCH_MANAGE,
+    COMMERCE_BATCH_CONFIRM,
+    STEWARD_READ,
+    STEWARD_MANAGE,
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "admin": set(_ALL),
-    # 编辑：内容运营（征文审核 + 健康域运营 + 职业健康形式初审），
-    # 不碰账号封禁、删活动、审计、职业健康终审
+    # 编辑：内容运营（征文审核 + 健康域运营 + 职业健康形式初审 + 服务包商品维护/查询/名单预览），
+    # 不碰账号封禁、删活动、审计、职业健康终审、退款、积分调整、批次确认发放
     "editor": {
         ESSAY_REVIEW,
         ESSAY_FEATURE,
@@ -52,6 +72,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         MP_MANAGE,
         OCCUPATIONAL_READ,
         OCCUPATIONAL_INITIAL_REVIEW,
+        COMMERCE_PRODUCT_MANAGE,
+        COMMERCE_ORDER_READ,
+        COMMERCE_BATCH_MANAGE,
+        STEWARD_READ,
     },
 }
 

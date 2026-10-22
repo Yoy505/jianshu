@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "药品收藏",
   "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
+  "backgroundTextStyle": "dark",
+  "navigationStyle": "custom"
 }

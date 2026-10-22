@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { OccupationalFooter, OccupationalHeader } from '../components/OccupationalShell';
 import { OCCUPATIONAL_TOPICS } from '../lib/occupational';
 
@@ -40,13 +41,13 @@ export function DirectionsPage() {
   return (
     <div className="oh-page oh-home oh-content-page">
       <OccupationalHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="oh-section oh-directions">
           <div className="oh-container">
             <div className="oh-section-heading">
               <div>
                 <p className="oh-kicker">01 / TOPICS</p>
-                <h2>征集方向</h2>
+                <h1>征集方向</h1>
                 <p className="oh-section-subtitle">从岗位风险，到日常关怀</p>
               </div>
               <p>征集方向包含但不限于以下七类。欢迎从真实工作场景出发，用易懂的方式讲清职业健康知识。</p>
@@ -60,13 +61,17 @@ export function DirectionsPage() {
                   </div>
                   <div className="oh-topic-body">
                     <div className="oh-topic-top"><span className="oh-topic-number">{String(index + 1).padStart(2, '0')} / 07</span><span className="oh-topic-scene">{idea.scene}</span></div>
-                    <h3 className="oh-topic-name">{topic === '新就业形态劳动者健康保护' ? <>新就业形态<br />劳动者健康保护</> : topic}</h3>
+                    <h2 className="oh-topic-name">{topic === '新就业形态劳动者健康保护' ? <>新就业形态<br />劳动者健康保护</> : topic}</h2>
                     <p className="oh-topic-detail">{idea.detail}</p>
                     <div className="oh-topic-tags" aria-label="创作切入点">{idea.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
                   </div>
                 </li>;
               })}
             </ol>
+            <nav className="oh-next-step" aria-label="下一步">
+              <div><strong>选好创作方向，继续准备作品</strong><p>查看文件格式与提交要求，再进入投稿。</p></div>
+              <Link className="oh-button oh-button-primary" to="/requirements">查看作品要求</Link>
+            </nav>
           </div>
         </section>
       </main>
@@ -80,13 +85,13 @@ export function RequirementsPage() {
   return (
     <div className="oh-page oh-home oh-content-page">
       <OccupationalHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="oh-section oh-requirements">
           <div className="oh-container">
             <div className="oh-section-heading">
               <div>
                 <p className="oh-kicker">02 / FORMATS</p>
-                <h2>作品要求</h2>
+                <h1>作品要求</h1>
                 <p className="oh-section-subtitle">两种作品形式，讲好一个健康问题</p>
               </div>
               <p>内容应科学严谨、通俗易懂，适合面向广大职场劳动者传播。</p>
@@ -94,9 +99,9 @@ export function RequirementsPage() {
             <div className="oh-format-grid">
               <article className="oh-format-card">
                 <div className="oh-format-top"><span>01 / ARTICLE</span><span className="oh-format-symbol" aria-hidden="true">文</span></div>
-                <h3>图文作品</h3>
+                <h2>图文作品</h2>
                 <p>围绕具体职业健康问题写作，提交 Word 文档，并填写作者信息与作品简介。</p>
-                <div className="oh-format-feature"><strong>1000–3000</strong><span>字 · 正文字数</span></div>
+                <div className="oh-format-feature"><strong>字数不限</strong><span>讲清一个健康问题</span></div>
                 <dl>
                   <div><dt>提交格式</dt><dd>.docx 文档</dd></div>
                   <div><dt>平台上传限制（单文件）</dt><dd>10 MiB</dd></div>
@@ -105,9 +110,9 @@ export function RequirementsPage() {
               </article>
               <article className="oh-format-card oh-format-card-accent">
                 <div className="oh-format-top"><span>02 / VIDEO</span><span className="oh-format-symbol" aria-hidden="true">影</span></div>
-                <h3>科普视频</h3>
+                <h2>科普视频</h2>
                 <p>真人讲解、情景短剧、动画科普、公益短片等形式均可，内容须科学准确、积极正向。</p>
-                <div className="oh-format-feature"><strong>3–10</strong><span>分钟 · 视频时长</span></div>
+                <div className="oh-format-feature"><strong>时长不限</strong><span>内容完整，表达清晰</span></div>
                 <dl>
                   <div><dt>画质与格式</dt><dd>不低于 1080P · MP4</dd></div>
                   <div><dt>平台上传限制（单文件）</dt><dd>300 MiB</dd></div>
@@ -115,6 +120,10 @@ export function RequirementsPage() {
                 <p className="oh-format-note">支持横屏和竖屏；投稿时同步填写作者信息。</p>
               </article>
             </div>
+            <nav className="oh-next-step" aria-label="下一步">
+              <div><strong>作品准备好了？</strong><p>准备作品文件、作者信息和作品简介。</p></div>
+              <Link className="oh-button oh-button-primary" to="/submit">前往投稿</Link>
+            </nav>
           </div>
         </section>
       </main>
@@ -128,13 +137,13 @@ export function ProcessPage() {
   return (
     <div className="oh-page oh-home oh-content-page">
       <OccupationalHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="oh-section oh-process">
           <div className="oh-container">
             <div className="oh-section-heading">
               <div>
                 <p className="oh-kicker">03 / PROCESS</p>
-                <h2>评审安排</h2>
+                <h1>评审安排</h1>
                 <p className="oh-section-subtitle">三阶段活动流程</p>
               </div>
               <p>以下日期为评审与分享安排，并非投稿截止时间。投稿通道状态以投稿页实时提示为准。</p>
@@ -145,12 +154,16 @@ export function ProcessPage() {
                   <span className="oh-stage-number">{stage.number}</span>
                   <div className="oh-stage-content">
                     <p className="oh-stage-date">{stage.date}</p>
-                    <h3>{stage.title}</h3>
+                    <h2>{stage.title}</h2>
                     <p>{stage.body}</p>
                   </div>
                 </li>
               ))}
             </ol>
+            <nav className="oh-next-step" aria-label="下一步">
+              <div><strong>查看你的作品进度</strong><p>活动安排与个人稿件状态分开显示，查询以回执为准。</p></div>
+              <Link className="oh-button oh-button-primary" to="/receipt">查询投稿进度</Link>
+            </nav>
           </div>
         </section>
       </main>

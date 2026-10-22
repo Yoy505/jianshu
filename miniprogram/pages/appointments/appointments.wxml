@@ -1,74 +1,125 @@
-<view class="page page-appts">
-  <!-- 未登录 -->
-  <view class="card" wx:if="{{needLogin}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">登录后查看你的预约</view>
-      <view class="empty-btn btn-mini" bindtap="goLogin">去登录</view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf " style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
+    </view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
+  </view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+    </view>
+  </block>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="hero with-icon" >
+      <text class="eyebrow">我的服务 · 预约记录</text>
+      <view class="t-h1" >我的预约</view>
+      <view class="t-p " >服务意向与处理进展，集中查看</view>
+      <view class="hero-icon" >
+        <text class="ph ph-calendar-check">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="chips" >
+        <button class="{{active === item.v ? 'active' : ''}}" bindtap="onTab" wx:for="{{tabs}}" wx:key="v" data-v="{{item.v}}">{{item.n}}</button>
+      </view>
+      <block wx:if="{{list.length}}">
+        <view class="card " wx:for="{{list}}" wx:key="id">
+          <view class="row between" >
+            <view class="t-h3" >{{item.serviceName}}</view>
+            <text class="badge">{{item.statusLabel}}</text>
+          </view>
+          <view class="t-p " >服务人员：{{item.providerName}}</view>
+          <view class="t-p " >时间：{{item.date}} · {{item.period}}</view>
+          <view class="card-foot" >
+            <text class="t-span">费用与履约安排待确认</text>
+            <button class="text-action" bindtap="cancel" wx:if="{{item.canCancel}}" data-id="{{item.id}}">取消预约</button>
+            <button class="text-action" bindtap="review" wx:if="{{item.canReview}}" data-id="{{item.id}}">查看评价表单</button>
+          </view>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="empty-card" >
+          <text class="ph ph-calendar-blank">
+          </text>
+          <view class="t-h2" >暂无相关预约</view>
+          <view class="t-p hf-empty-text" >当前账户还没有可查看的预约记录。
+            可先了解健康服务的内容与开放状态。</view>
+            <button class="primary" bindtap="hfGo" data-url="/pages/steward/steward">浏览健康服务</button>
+          </view>
+        </block>
+        <view class="notice cool" >
+          <text class="ph ph-info">
+          </text>
+          <view class="t-p " >提交意向不等于预约成功，请以平台确认后的状态为准。</view>
+        </view>
+        <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+      </view>
+    </block>
+    <view class="hf-pagination" wx:if="{{list.length && (loading || error)}}">
+      <text wx:if="{{loading}}">正在加载更多…</text>
+      <button wx:else bindtap="hfRetry">{{error}} · 重新加载</button>
     </view>
   </view>
 
-  <block wx:else>
-    <!-- 状态 tabs -->
-    <scroll-view scroll-x class="stab-scroll" enhanced show-scrollbar="{{false}}">
-      <view class="stab-inner">
-        <view
-          class="stab {{active === item.v ? 'on' : ''}}"
-          wx:for="{{tabs}}"
-          wx:key="v"
-          data-v="{{item.v}}"
-          bindtap="onTab"
-        >{{item.n}}</view>
-      </view>
-    </scroll-view>
-
-    <!-- 骨架 -->
-    <block wx:if="{{loading && !list.length}}">
-      <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-        <view class="sk-line first sk-w60"></view>
-        <view class="sk-line sk-w80"></view>
-        <view class="sk-line sk-w40"></view>
-      </view>
-    </block>
-
-    <!-- 错误 -->
-    <view class="card" wx:elif="{{error && !list.length}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">{{error}}</view>
-        <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
-      </view>
-    </view>
-
-    <!-- 空态 -->
-    <view class="card" wx:elif="{{!list.length}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">暂无相关预约</view>
-        <view class="empty-desc">去管家选一个场景，开始健康守护</view>
-        <view class="empty-btn btn-mini" bindtap="goSteward">去逛管家</view>
-      </view>
-    </view>
-
-    <!-- 预约列表 -->
-    <block wx:else>
-      <view class="card appt-card fade-in" wx:for="{{list}}" wx:key="id">
-        <view class="row-between">
-          <view class="appt-name ellipsis">{{item.serviceName}}</view>
-          <view class="tag {{item.statusCls}}">{{item.statusLabel}}</view>
-        </view>
-        <view class="appt-line t2">服务人员：{{item.providerName}}</view>
-        <view class="appt-line t2">预约时间：{{item.date}} {{item.period}}</view>
-        <view class="appt-line t2 ellipsis" wx:if="{{item.address}}">服务地址：{{item.address}}</view>
-        <view class="appt-line t3 f-note">提交时间：{{item.time}}</view>
-        <view class="row appt-actions" wx:if="{{item.canCancel || item.canReview}}">
-          <view class="btn-mini btn-danger" wx:if="{{item.canCancel}}" data-id="{{item.id}}" catchtap="cancel">取消预约</view>
-          <view class="btn-mini" wx:if="{{item.canReview}}" data-id="{{item.id}}" catchtap="review">去评价</view>
-        </view>
-      </view>
-
-      <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
-      <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
-    </block>
-  </block>
-</view>
+</block>

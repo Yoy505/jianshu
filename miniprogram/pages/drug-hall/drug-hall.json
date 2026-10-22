@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "药品数字展厅",
   "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
+  "backgroundTextStyle": "dark",
+  "navigationStyle": "custom"
 }

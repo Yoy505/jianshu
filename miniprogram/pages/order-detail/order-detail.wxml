@@ -1,0 +1,72 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <block wx:if="{{loading}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+
+    <view wx:elif="{{error}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">订单加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+
+    <block wx:elif="{{order}}">
+      <view class="card">
+        <view class="row between">
+          <view class="t-h2 grow">{{order.packageName}}</view>
+          <text class="badge {{order.status === 'paid' ? 'teal' : ''}}">{{order.statusLabel}}</text>
+        </view>
+        <view class="kv"><text class="t-span">订单编号</text><text class="t-b">{{order.orderNo}}</text></view>
+        <view class="kv"><text class="t-span">版本</text><text class="t-b">v{{order.versionNo}}</text></view>
+        <view class="kv"><text class="t-span">支付方式</text><text class="t-b">{{order.payTypeLabel}}</text></view>
+        <view class="kv"><text class="t-span">金额</text><text class="t-b order-amount">{{order.amount}}</text></view>
+        <view class="kv"><text class="t-span">下单时间</text><text class="t-b">{{order.created}}</text></view>
+        <view class="kv" wx:if="{{order.paidAt}}"><text class="t-span">支付时间</text><text class="t-b">{{order.paidAt}}</text></view>
+        <view class="kv" wx:if="{{order.expiresAt && order.status === 'pending_payment'}}"><text class="t-span">支付截止</text><text class="t-b">{{order.expiresAt}}</text></view>
+      </view>
+
+      <view class="card" wx:if="{{order.refunds.length}}">
+        <view class="t-h3">退款进展</view>
+        <view class="refund-item" wx:for="{{order.refunds}}" wx:key="id">
+          <view class="row between">
+            <view class="t-h3 grow">{{item.channel}} · {{item.amount}} 元</view>
+            <text class="badge">{{item.status}}</text>
+          </view>
+          <view class="t-p">原因：{{item.reason}}</view>
+          <view class="t-p small">{{item.no}} · {{item.time}}</view>
+        </view>
+      </view>
+
+      <view class="quiet" wx:if="{{order.entitlementId}}" bindtap="goBenefits">
+        <text class="ph ph-seal-check"></text>
+        <view class="grow">
+          <view class="t-h3">查看对应权益</view>
+          <view class="t-p">本订单发放的服务包权益</view>
+        </view>
+      </view>
+
+      <view class="quiet" wx:if="{{order.status === 'refund_failed'}}">
+        <text class="ph ph-headset"></text>
+        <view class="grow">
+          <view class="t-h3">退款遇到问题</view>
+          <view class="t-p">处理进展以客服反馈与订单状态为准，无需重复提交。</view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="actions" wx:if="{{order && !loading}}">
+    <button wx:if="{{order.status === 'pending_payment' && order.payType === 'wxpay'}}" class="primary" bindtap="payAgain" loading="{{paying}}">继续支付</button>
+    <button wx:if="{{order.status === 'pending_payment'}}" class="secondary" bindtap="cancelOrder" loading="{{cancelling}}">取消订单</button>
+  </view>
+</view>
+</block>

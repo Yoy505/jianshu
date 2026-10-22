@@ -1,0 +1,12 @@
+@import "../../styles/hifi.wxss";
+
+.pkg-hero .pkg-name{margin-top:2.564102565vw}
+.price-row{margin-top:3.58974359vw}
+.price{display:flex;align-items:baseline;gap:1.025641026vw}
+.price-num{font:700 8.205128206vw Georgia,serif;color:#0f766e}
+.price-unit{font-size:2.820512821vw;color:#5c7b6c}
+.benefit-item{display:flex;gap:3.076923077vw;padding:3.076923077vw 0;border-bottom:0.256410257vw solid #eef2ef}
+.benefit-item:last-child{border-bottom:0;padding-bottom:0}
+.benefit-item>.ph{font-size:6.153846154vw;color:#589079;flex:none;line-height:6.410256411vw}
+.benefit-item .grow{flex:1;min-width:0}
+.pre-line{white-space:pre-line}

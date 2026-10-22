@@ -15,6 +15,8 @@ TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_REFRESH = "refresh"
 SCOPE_ADMIN = "admin"
 SCOPE_USER = "user"
+# 采购单位查看账号（工作一）：只读本单位批次汇总，与 admin/user 互不通用
+SCOPE_ORG = "org"
 
 
 def hash_password(raw: str) -> str:

@@ -7,9 +7,9 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import SCOPE_ADMIN, SCOPE_USER, TOKEN_TYPE_ACCESS, decode_token
+from app.core.security import SCOPE_ADMIN, SCOPE_ORG, SCOPE_USER, TOKEN_TYPE_ACCESS, decode_token
 from app.db.session import AsyncSessionLocal
-from app.models import AdminUser, User, UserStatus
+from app.models import AdminUser, MpOrg, MpOrgAccount, User, UserStatus
 
 _redis_client: Redis | None = None
 
@@ -91,6 +91,26 @@ async def get_current_user_optional(
     if authorization is None:
         return None
     return await get_current_user(authorization=authorization, db=db)
+
+
+async def get_current_org_account(
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[MpOrgAccount, MpOrg]:
+    """采购单位查看账号（scope=org）：账号与单位任一停用即 401。"""
+    payload = _parse_bearer(authorization)
+    _require_access_token(payload)
+    if payload.get("scope") != SCOPE_ORG:
+        raise HTTPException(status_code=401, detail="令牌类型或权限不正确")
+    account = await db.get(MpOrgAccount, _sub_id(payload))
+    if account is None:
+        raise HTTPException(status_code=401, detail="账号不存在")
+    if account.status != "active":
+        raise HTTPException(status_code=401, detail="账号已停用")
+    org = await db.get(MpOrg, account.org_id)
+    if org is None or org.status != "active":
+        raise HTTPException(status_code=401, detail="单位已停用")
+    return account, org
 
 
 async def get_current_principal(

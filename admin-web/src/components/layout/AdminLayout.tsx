@@ -1,12 +1,17 @@
 import {
+  Building2,
   CalendarCheck,
+  Coins,
+  HeartHandshake,
   ChevronLeft,
   FileText,
   LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
+  Package,
   Pill,
+  Receipt,
   ScrollText,
   Stethoscope,
   Store,
@@ -20,6 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { can } from '@/lib/permissions'
 import type { Permission } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
+import { IcpLink, hasIcpNumber } from '@/components/common/IcpLink'
 import { useAuthStore } from '@/stores/auth'
 
 type NavItem = { to: string; label: string; icon: LucideIcon; permission?: Permission }
@@ -31,6 +37,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/', label: '运营工作台', icon: LayoutDashboard },
       { to: '/occupational-submissions', label: '职业健康投稿', icon: FileText, permission: 'occupational.read' },
+      { to: '/volunteer-applications', label: '志愿者报名', icon: HeartHandshake, permission: 'volunteer.read' },
     ],
   },
   {
@@ -41,6 +48,15 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/mp/providers', label: '专业人员', icon: Stethoscope, permission: 'mp.manage' },
       { to: '/mp/drugs', label: '药品展厅', icon: Pill, permission: 'mp.manage' },
       { to: '/mp/services', label: '服务与商城', icon: Store, permission: 'mp.manage' },
+    ],
+  },
+  {
+    label: '服务包交易',
+    items: [
+      { to: '/mp/commerce/packages', label: '服务包商品', icon: Package, permission: 'commerce.product.manage' },
+      { to: '/mp/commerce/orders', label: '订单与退款', icon: Receipt, permission: 'commerce.order.read' },
+      { to: '/mp/commerce/batches', label: '单位采购与权益', icon: Building2, permission: 'commerce.batch.manage' },
+      { to: '/mp/commerce/points', label: '积分账本', icon: Coins, permission: 'commerce.points.adjust' },
     ],
   },
   {
@@ -124,7 +140,7 @@ export function AdminLayout() {
       >
         <div className={cn('flex h-[76px] items-center border-b border-border px-5', collapsed && 'justify-center px-2')}>
           <NavLink to="/" className="flex items-center gap-3" aria-label="杏临汇运营后台首页">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#244f42] text-lg font-semibold text-white">杏</span>
+            <img className="size-9 shrink-0 rounded-full object-cover" src="/brand/xinglinhui-mark.png" alt="" width="36" height="36" />
             {!collapsed && (
               <span className="min-w-0">
                 <span className="block whitespace-nowrap text-sm font-semibold tracking-[0.04em] text-[#263b30]">杏临汇</span>
@@ -182,12 +198,18 @@ export function AdminLayout() {
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7 sm:py-8">
           <Outlet />
         </main>
+        {hasIcpNumber && (
+          <footer className="flex shrink-0 flex-wrap items-center justify-center gap-x-4 border-t border-border bg-white px-4 py-2 text-center text-xs text-muted-foreground sm:px-7">
+            <span>健树征文服务平台</span>
+            <IcpLink className="underline underline-offset-2 hover:text-primary" />
+          </footer>
+        )}
       </div>
 
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
         <DialogContent className="w-[calc(100vw-32px)] max-w-sm p-0">
           <DialogHeader className="border-b border-border px-5 pb-4 pt-5">
-            <DialogTitle>杏临汇运营管理</DialogTitle>
+            <DialogTitle className="flex items-center gap-2.5"><img className="size-8 rounded-full object-cover" src="/brand/xinglinhui-mark.png" alt="" width="32" height="32" />杏临汇运营管理</DialogTitle>
             <DialogDescription>选择要进入的工作区</DialogDescription>
           </DialogHeader>
           <div className="max-h-[65vh] overflow-y-auto px-4 py-5">

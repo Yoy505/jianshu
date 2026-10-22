@@ -13,8 +13,8 @@ function clean(params) {
 
 module.exports = {
   // ---- 登录 ----
-  wxLogin(code) {
-    return request({ url: '/wx/login', method: 'POST', data: { code } });
+  wxLogin(code, phoneCode) {
+    return request({ url: '/wx/login', method: 'POST', data: { code, phone_code: phoneCode }, silent: true });
   },
   smsSend(phone) {
     return request({ url: '/h5/auth/sms/send', method: 'POST', data: { phone } });
@@ -110,5 +110,81 @@ module.exports = {
   // ---- 健康商城 ----
   listProducts(params) {
     return request({ url: '/mp/products', data: clean(params), silent: true });
+  },
+
+  // ---- 服务包交易（工作一）----
+  commerceCapabilities() {
+    return request({ url: '/mp/commerce/capabilities', silent: true });
+  },
+  listPackages(params) {
+    return request({ url: '/mp/packages', data: clean(params), silent: true });
+  },
+  getPackage(id) {
+    return request({ url: '/mp/packages/' + id, silent: true });
+  },
+  createOrder(data) {
+    return request({ url: '/mp/orders', method: 'POST', data });
+  },
+  listOrders(params) {
+    return request({ url: '/mp/orders', data: clean(params), silent: true });
+  },
+  getOrder(id) {
+    return request({ url: '/mp/orders/' + id, silent: true });
+  },
+  prepayOrder(id) {
+    return request({ url: '/mp/orders/' + id + '/prepay', method: 'POST' });
+  },
+  closeOrder(id) {
+    return request({ url: '/mp/orders/' + id + '/close', method: 'POST' });
+  },
+  getPoints() {
+    return request({ url: '/mp/points', silent: true });
+  },
+  listPointsEntries(params) {
+    return request({ url: '/mp/points/entries', data: clean(params), silent: true });
+  },
+  listEntitlements(params) {
+    return request({ url: '/mp/entitlements', data: clean(params), silent: true });
+  },
+  getEntitlement(id) {
+    return request({ url: '/mp/entitlements/' + id, silent: true });
+  },
+  claimEntitlement(id) {
+    return request({ url: '/mp/entitlements/' + id + '/claim', method: 'POST' });
+  },
+  rejectEntitlement(id) {
+    return request({ url: '/mp/entitlements/' + id + '/reject', method: 'POST' });
+  },
+  listConsents(params) {
+    return request({ url: '/mp/consents', data: clean(params), silent: true });
+  },
+  revokeConsent(id) {
+    return request({ url: '/mp/consents/' + id + '/revoke', method: 'POST' });
+  },
+
+  // ---- 服务履约（工作二）----
+  listStewardInstances() {
+    return request({ url: '/mp/steward/instances', silent: true });
+  },
+  getStewardInstance(id) {
+    return request({ url: '/mp/steward/instances/' + id, silent: true });
+  },
+  activateStewardInstance(id) {
+    return request({ url: '/mp/steward/instances/' + id + '/activate', method: 'POST' });
+  },
+  getStewardCalendar(id, month) {
+    return request({ url: '/mp/steward/instances/' + id + '/calendar', data: { month: month }, silent: true });
+  },
+  listStewardTasks(id, params) {
+    return request({ url: '/mp/steward/instances/' + id + '/tasks', data: clean(params), silent: true });
+  },
+  completeStewardTask(id, taskId, data) {
+    return request({ url: '/mp/steward/instances/' + id + '/tasks/' + taskId + '/complete', method: 'POST', data });
+  },
+  listStewardTimeline(id) {
+    return request({ url: '/mp/steward/instances/' + id + '/timeline', silent: true });
+  },
+  grantStewardConsent(data) {
+    return request({ url: '/mp/steward/consents', method: 'POST', data });
   }
 };

@@ -1,8 +1,1 @@
-/* 药品收藏 */
-.page-fav { padding-bottom: 40rpx; }
-.skeleton { margin-top: 20rpx; }
-.skeleton + .skeleton { margin-top: 20rpx; }
-.drug-card { margin-bottom: 20rpx; }
-.drug-name { font-size: 30rpx; font-weight: 600; flex: 1; }
-.drug-tags { margin-top: 12rpx; flex-wrap: wrap; }
-.drug-sub { margin-top: 12rpx; font-size: 24rpx; }
+@import "../../styles/hifi.wxss";

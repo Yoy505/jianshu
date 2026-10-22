@@ -14,14 +14,17 @@ API = "/api/v1/mp"
 PERIODS = {"上午", "下午", "晚间"}
 
 
-@pytest.fixture
-def auth_headers() -> dict:
+def _auth_headers() -> dict:
     token = create_token(1, SCOPE_USER, TOKEN_TYPE_ACCESS)
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture
+def auth_headers():
+    return _auth_headers()
+
 async def _first_service(client, keyword: str) -> dict:
-    resp = await client.get(f"{API}/services", params={"q": keyword})
+    resp = await client.get(f"{API}/services", params={"q": keyword}, headers=_auth_headers())
     assert resp.status_code == 200
     items = resp.json()["items"]
     assert items, f"未找到服务：{keyword}"
@@ -29,7 +32,7 @@ async def _first_service(client, keyword: str) -> dict:
 
 
 async def _first_provider(client, service_id: int) -> dict:
-    resp = await client.get(f"{API}/providers", params={"service_id": service_id})
+    resp = await client.get(f"{API}/providers", params={"service_id": service_id}, headers=_auth_headers())
     assert resp.status_code == 200
     items = resp.json()["items"]
     assert items, "该服务下无可匹配人员"
@@ -76,17 +79,17 @@ async def test_mp_services_filters(client):
     }
     assert first["scenario_name"] == "合理用药"
 
-    resp = await client.get(f"{API}/services", params={"service_type": "third"})
+    resp = await client.get(f"{API}/services", params={"service_type": "third"}, headers=_auth_headers())
     assert resp.status_code == 200
     third = resp.json()
     assert third["total"] == 2
     assert all(item["service_type"] == "third" for item in third["items"])
 
-    resp = await client.get(f"{API}/services", params={"q": "陪诊"})
+    resp = await client.get(f"{API}/services", params={"q": "陪诊"}, headers=_auth_headers())
     assert resp.status_code == 200
     assert resp.json()["total"] == 1
 
-    resp = await client.get(f"{API}/services", params={"service_type": "vip"})
+    resp = await client.get(f"{API}/services", params={"service_type": "vip"}, headers=_auth_headers())
     assert resp.status_code == 400
     assert resp.json()["detail"] == "服务类型仅支持 online、offline 或 third"
 
@@ -101,7 +104,7 @@ async def test_mp_drugs_filters(client):
     assert names == sorted(names)  # 按 common_name 排序
     assert all(item["favorited"] is False for item in body["items"])
 
-    resp = await client.get(f"{API}/drugs", params={"tag": "rx"})
+    resp = await client.get(f"{API}/drugs", params={"tag": "rx"}, headers=_auth_headers())
     assert resp.status_code == 200
     body = resp.json()
     assert body["total"] >= 1
@@ -109,28 +112,28 @@ async def test_mp_drugs_filters(client):
     aspirin = next(d for d in body["items"] if d["common_name"] == "阿司匹林肠溶片")
     assert aspirin["tags"] == ["rx", "essential", "insurance"]  # 计划书示例标签
 
-    resp = await client.get(f"{API}/drugs", params={"letter": "A"})
+    resp = await client.get(f"{API}/drugs", params={"letter": "A"}, headers=_auth_headers())
     assert resp.status_code == 200
     body = resp.json()
     # 阿司匹林 / 阿莫西林 / 氨氯地平 / 奥美拉唑 / 阿托伐他汀 共 5 个
     assert body["total"] == 5
     assert all(item["manufacturer"] for item in body["items"])
 
-    resp = await client.get(f"{API}/drugs", params={"q": "阿司匹林"})
+    resp = await client.get(f"{API}/drugs", params={"q": "阿司匹林"}, headers=_auth_headers())
     assert resp.status_code == 200
     body = resp.json()
     assert body["total"] == 1
     assert body["items"][0]["brand_name"] == "拜阿司匹灵"
     assert len(body["items"][0]["science"]) > 50  # 科普正文为成段文字
 
-    resp = await client.get(f"{API}/drugs", params={"tag": "unknown"})
+    resp = await client.get(f"{API}/drugs", params={"tag": "unknown"}, headers=_auth_headers())
     assert resp.status_code == 400
-    resp = await client.get(f"{API}/drugs", params={"letter": "a"})
+    resp = await client.get(f"{API}/drugs", params={"letter": "a"}, headers=_auth_headers())
     assert resp.status_code == 400
 
-    # 详情：留言板结构存在（未登录 favorited=false）
+    # 详情：登录后可查看，未收藏 favorited=false
     drug_id = aspirin["id"]
-    resp = await client.get(f"{API}/drugs/{drug_id}")
+    resp = await client.get(f"{API}/drugs/{drug_id}", headers=_auth_headers())
     assert resp.status_code == 200
     detail = resp.json()
     assert set(detail) - set(aspirin) == {"board", "feedback_mode"}
@@ -355,7 +358,7 @@ async def test_mp_consult_autoreply(client, auth_headers):
 
 @pytest.mark.asyncio
 async def test_mp_provider_detail_and_slots(client):
-    resp = await client.get(f"{API}/providers")
+    resp = await client.get(f"{API}/providers", headers=_auth_headers())
     assert resp.status_code == 200
     body = resp.json()
     assert body["total"] == 8
@@ -363,7 +366,7 @@ async def test_mp_provider_detail_and_slots(client):
     # online 优先、rating 倒序
     assert items[0]["online"] is True
 
-    resp = await client.get(f"{API}/providers/{items[0]['id']}")
+    resp = await client.get(f"{API}/providers/{items[0]['id']}", headers=_auth_headers())
     assert resp.status_code == 200
     detail = resp.json()
     assert set(detail) - set(items[0]) == {"slots", "reviews"}
@@ -374,14 +377,14 @@ async def test_mp_provider_detail_and_slots(client):
         assert slot["periods"]
         assert set(slot["periods"]) <= PERIODS
     # 时段稳定：两次请求结果一致（按 date+provider_id 哈希）
-    resp2 = await client.get(f"{API}/providers/{items[0]['id']}")
+    resp2 = await client.get(f"{API}/providers/{items[0]['id']}", headers=_auth_headers())
     assert resp2.json()["slots"] == slots
     # 最近 5 条评价（种子演示用户已留 1 条）
     assert len(detail["reviews"]) == 1
     assert detail["reviews"][0]["user_name"] == "测试用户"  # conftest 种子用户昵称
     assert detail["reviews"][0]["rating"] == 5
 
-    resp = await client.get(f"{API}/providers/99999")
+    resp = await client.get(f"{API}/providers/99999", headers=_auth_headers())
     assert resp.status_code == 404
 
 
@@ -428,9 +431,9 @@ async def test_mp_products_and_favorites(client, auth_headers):
     assert body["total"] == 8
     assert all(item["status"] == "coming" for item in body["items"])
 
-    resp = await client.get(f"{API}/products", params={"category": "fsmp"})
+    resp = await client.get(f"{API}/products", params={"category": "fsmp"}, headers=_auth_headers())
     assert resp.json()["total"] == 2
-    resp = await client.get(f"{API}/products", params={"category": "vip"})
+    resp = await client.get(f"{API}/products", params={"category": "vip"}, headers=_auth_headers())
     assert resp.status_code == 400
 
     # 药品收藏切换与收藏列表
@@ -455,6 +458,6 @@ async def test_mp_products_and_favorites(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 201
-    resp = await client.get(f"{API}/drugs/{drug_id}")
+    resp = await client.get(f"{API}/drugs/{drug_id}", headers=_auth_headers())
     assert len(resp.json()["board"]) == 1
     assert resp.json()["board"][0]["user_name"] == "测试用户"

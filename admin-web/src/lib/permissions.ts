@@ -2,6 +2,8 @@
  * 当前后台页面使用的权限点子集。
  * 前端仅用于 UI 显隐；真正的拦截在后端（403）。
  * 两级评审（方案 B，2026-10-08）：editor 参与形式初审，终审仅 admin。
+ * 服务包交易（工作一，2026-10-21）：editor 可维护商品/查询订单/预览名单；
+ * 退款、积分调整、批次确认发放仅 admin。
  */
 
 export type Permission =
@@ -10,11 +12,21 @@ export type Permission =
   | 'occupational.read'
   | 'occupational.initial_review'
   | 'occupational.final_review'
+  | 'volunteer.read'
+  | 'commerce.product.manage'
+  | 'commerce.order.read'
+  | 'commerce.order.refund'
+  | 'commerce.points.adjust'
+  | 'commerce.batch.manage'
+  | 'commerce.batch.confirm'
 
 const EDITOR_PERMISSIONS: Permission[] = [
   'mp.manage',
   'occupational.read',
   'occupational.initial_review',
+  'commerce.product.manage',
+  'commerce.order.read',
+  'commerce.batch.manage',
 ]
 
 const ADMIN_PERMISSIONS: Permission[] = [
@@ -23,6 +35,13 @@ const ADMIN_PERMISSIONS: Permission[] = [
   'occupational.read',
   'occupational.initial_review',
   'occupational.final_review',
+  'volunteer.read',
+  'commerce.product.manage',
+  'commerce.order.read',
+  'commerce.order.refund',
+  'commerce.points.adjust',
+  'commerce.batch.manage',
+  'commerce.batch.confirm',
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {

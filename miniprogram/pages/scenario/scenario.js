@@ -19,7 +19,7 @@ function toVM(s) {
   };
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     title: '场景服务',
     tagline: '',
@@ -95,13 +95,14 @@ Page({
 
   onReachBottom() {
     if (this.data.finished || this.data.loading || !this.data.list.length) return;
+    if (!getApp().ensureLogin(require('../../utils/access').pageUrl('scenario', {key:this.scenarioKey, name:this.data.title}))) return;
     this.setData({ page: this.data.page + 1 });
     this.fetch();
   },
 
   goDetail(e) {
-    wx.navigateTo({
+    require('../../utils/access').navigate({
       url: '/pages/service-detail/service-detail?id=' + e.currentTarget.dataset.id
     });
   }
-});
+}, 'scenario'));

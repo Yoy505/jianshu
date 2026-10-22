@@ -2,7 +2,7 @@
 const api = require('../../utils/api');
 const format = require('../../utils/format');
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     loading: true,
     error: '',
@@ -151,4 +151,4 @@ Page({
         this.setData({ submitting: false });
       });
   }
-});
+}, 'book'));

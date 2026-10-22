@@ -1,7 +1,7 @@
 // 评价页：星级 1-5 + 文字
 const api = require('../../utils/api');
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     stars: [false, false, false, false, false],
     rating: 0,
@@ -56,4 +56,4 @@ Page({
         this.setData({ submitting: false });
       });
   }
-});
+}, 'review'));

@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "管家",
   "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
+  "backgroundTextStyle": "dark",
+  "navigationStyle": "custom"
 }

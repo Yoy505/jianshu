@@ -1,0 +1,6 @@
+@import "../../styles/hifi.wxss";
+
+.order-amount{font-weight:700;color:#0f766e}
+.refund-item{padding:3.076923077vw 0;border-bottom:0.256410257vw solid #eef2ef}
+.refund-item:last-child{border-bottom:0}
+.refund-item .grow{flex:1;min-width:0}

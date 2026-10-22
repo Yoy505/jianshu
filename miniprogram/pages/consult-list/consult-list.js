@@ -23,7 +23,7 @@ function toVM(c) {
   };
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     needLogin: false,
     list: [],
@@ -99,6 +99,7 @@ Page({
   },
 
   goChat(e) {
-    wx.navigateTo({ url: '/pages/chat/chat?id=' + e.currentTarget.dataset.id });
+    const item = this.data.list.find(x => String(x.id) === String(e.currentTarget.dataset.id)) || {};
+    require('../../utils/access').navigate({ url: '/pages/chat/chat?id=' + e.currentTarget.dataset.id + '&service_name=' + encodeURIComponent(item.serviceName || '') + '&provider_name=' + encodeURIComponent(item.providerName || '') });
   }
-});
+}, 'consult-list'));

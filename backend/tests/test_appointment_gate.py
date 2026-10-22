@@ -12,11 +12,11 @@ from app.core.security import SCOPE_USER, TOKEN_TYPE_ACCESS, create_token
 async def test_staging_hides_demo_slots_and_rejects_booking(client, monkeypatch):
     token = create_token(1, SCOPE_USER, TOKEN_TYPE_ACCESS)
     headers = {"Authorization": f"Bearer {token}"}
-    providers = (await client.get("/api/v1/mp/providers")).json()["items"]
+    providers = (await client.get("/api/v1/mp/providers", headers=headers)).json()["items"]
     assert providers
 
     monkeypatch.setattr(settings, "APP_ENV", "staging")
-    detail = await client.get(f"/api/v1/mp/providers/{providers[0]['id']}")
+    detail = await client.get(f"/api/v1/mp/providers/{providers[0]['id']}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["slots"] == []
 

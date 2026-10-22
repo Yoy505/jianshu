@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { OccupationalHeader } from '../components/OccupationalShell';
+import { Link } from 'react-router-dom';
+import { OccupationalFooter, OccupationalHeader } from '../components/OccupationalShell';
 
 export default function OccupationalHomePage() {
   useEffect(() => {
@@ -9,7 +10,7 @@ export default function OccupationalHomePage() {
   return (
     <div className="oh-page oh-home oh-landing-page">
       <OccupationalHeader />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="oh-hero">
           <div className="oh-container oh-landing-grid">
             <div className="oh-hero-content">
@@ -20,6 +21,11 @@ export default function OccupationalHomePage() {
               <div className="oh-landing-facts" aria-label="征集信息">
                 <span>图文作品</span><span>科普视频</span><span>七大征集方向</span>
               </div>
+              <div className="oh-hero-actions">
+                <Link className="oh-button oh-button-primary" to="/submit">提交作品</Link>
+                <Link className="oh-button oh-button-secondary" to="/requirements">查看作品要求</Link>
+              </div>
+              <p className="oh-hero-returning">已经投稿？<Link to="/receipt">查询评审进度</Link></p>
             </div>
             <div className="oh-landing-visual" role="img" aria-label="生产车间、办公工位和城市配送等工作场景">
               <img src="/occupational-images/workshop.jpg" alt="" />
@@ -30,6 +36,7 @@ export default function OccupationalHomePage() {
           </div>
         </section>
       </main>
+      <OccupationalFooter />
     </div>
   );
 }

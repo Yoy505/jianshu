@@ -3,8 +3,8 @@
 // 并在小程序管理后台「开发设置-服务器域名」配置：
 //   request 合法域名：https://mp.singlin.cn
 //   socket 合法域名：wss://mp.singlin.cn（咚咚 WebSocket）
-const BASE_URL = 'http://127.0.0.1:8000/api/v1';
-// const BASE_URL = 'https://mp.singlin.cn/api/v1'; // 生产
+// const BASE_URL = 'http://127.0.0.1:8000/api/v1'; // 本地开发
+const BASE_URL = 'https://mp.singlin.cn/api/v1'; // 生产（已备案+已上线）
 
 // 九大场景（key 与后端 Scenario.key 枚举一致；char 为九宫格文字图标）
 const SCENARIOS = [

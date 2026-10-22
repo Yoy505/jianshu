@@ -1,0 +1,71 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf has-actions" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <block wx:if="{{loading}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+
+    <view wx:elif="{{error}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">订单信息加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+
+    <block wx:elif="{{pkg}}">
+      <view class="card">
+        <view class="t-h2">{{pkg.name}}</view>
+        <view class="kv"><text class="t-span">服务期</text><text class="t-b">{{pkg.validityDays}} 天</text></view>
+        <view class="kv"><text class="t-span">售后规则</text><text class="t-b">{{pkg.termsVersion}}</text></view>
+        <view class="kv" wx:if="{{payType === 'wxpay'}}"><text class="t-span">应付金额</text><text class="t-b amount">{{pkg.price}} 元</text></view>
+        <view class="kv" wx:if="{{payType === 'points'}}"><text class="t-span">消耗积分</text><text class="t-b amount">{{pkg.pointsCost}}</text></view>
+      </view>
+
+      <view class="card">
+        <view class="t-h3">支付方式</view>
+        <button class="pay-option {{payType === 'wxpay' ? 'on' : ''}}" wx:if="{{pkg.canWxpay}}" bindtap="choosePay" data-v="wxpay">
+          <text class="ph ph-wechat-logo pay-icon"></text>
+          <view class="grow"><view class="t-h3">微信支付</view><view class="t-p">{{pkg.price}} 元</view></view>
+          <text class="ph {{payType === 'wxpay' ? 'ph-radio-button' : 'ph-circle'}} radio"></text>
+        </button>
+        <button class="pay-option {{payType === 'points' ? 'on' : ''}} {{pkg.canPoints && !pointsEnough ? 'off' : ''}}"
+          wx:if="{{pkg.canPoints}}" bindtap="choosePay" data-v="points" disabled="{{!pointsEnough}}">
+          <text class="ph ph-coin-vertical pay-icon"></text>
+          <view class="grow">
+            <view class="t-h3">积分兑换</view>
+            <view class="t-p">{{pkg.pointsCost}} 积分（可用 {{balance}}）{{pkg.canPoints && !pointsEnough ? ' · 余额不足' : ''}}</view>
+          </view>
+          <text class="ph {{payType === 'points' ? 'ph-radio-button' : 'ph-circle'}} radio"></text>
+        </button>
+        <view class="t-p small" wx:if="{{!pkg.canWxpay && !pointsEnough}}">当前暂无可用的支付方式，可联系客服了解服务开通进度。</view>
+      </view>
+
+      <view class="card">
+        <view class="agree-row" bindtap="openTerms">
+          <checkbox-group bindchange="toggleAgree">
+            <label class="agree-label" catchtap="hfNoop">
+              <checkbox value="yes" checked="{{agreed}}" color="#0f766e" class="hf-checkbox" />
+              <text>我已阅读并同意《用户协议》及本服务包售后规则（{{pkg.termsVersion}}）</text>
+            </label>
+          </checkbox-group>
+        </view>
+        <view class="t-p small">支付成功且入账后发放权益；积分兑换即时发放。</view>
+      </view>
+    </block>
+  </view>
+
+  <view class="actions" wx:if="{{pkg && !loading && !error}}">
+    <button class="primary full {{(!payType || !agreed || submitting) ? 'disabled' : ''}}" bindtap="submit"
+      disabled="{{!payType || !agreed || submitting}}" loading="{{submitting}}">
+      {{payType === 'points' ? '确认兑换' : (payType === 'wxpay' ? '微信支付 ' + pkg.price + ' 元' : '请选择支付方式')}}
+    </button>
+  </view>
+</view>
+</block>

@@ -1,7 +1,1 @@
-/* 评价页 */
-.rv-title { text-align: center; font-size: 32rpx; font-weight: 600; margin-top: 16rpx; }
-.rv-stars { display: flex; justify-content: center; margin-top: 40rpx; }
-.rv-star-tap { padding: 12rpx; }
-.rv-rating-text { margin-top: 24rpx; text-align: center; font-size: 26rpx; color: #D97706; font-weight: 600; }
-.rv-rating-text.t3 { color: #9CA3AF; font-weight: 400; }
-.rv-submit { margin-top: 40rpx; }
+@import "../../styles/hifi.wxss";

@@ -1,57 +1,130 @@
-<view class="page page-cl">
-  <!-- 未登录 -->
-  <view class="card" wx:if="{{needLogin}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">登录后查看你的咨询会话</view>
-      <view class="empty-btn btn-mini" bindtap="goLogin">去登录</view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf " style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
+    </view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
+  </view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+    </view>
+  </block>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="hero with-icon" >
+      <text class="eyebrow">我的服务 · 会话记录</text>
+      <view class="t-h1" >我的咨询</view>
+      <view class="t-p " >查看历史消息与系统自动回执</view>
+      <view class="hero-icon" >
+        <text class="ph ph-chat-centered-text">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="notice " >
+        <text class="ph ph-info">
+        </text>
+        <view class="t-p " >目前仅提供系统自动回执，尚未接入真人医师实时接诊。</view>
+      </view>
+      <block wx:if="{{list.length}}">
+        <view class="card " wx:for="{{list}}" wx:key="id">
+          <view class="row" >
+            <view class="avatar" >
+              <text class="ph ph-chat-centered-text">
+              </text>
+            </view>
+            <view class="grow" >
+              <view class="t-h3" >{{item.serviceName || '咨询会话'}}</view>
+              <view class="t-p " >系统自动回执 · {{item.statusLabel}}</view>
+            </view>
+          </view>
+          <view class="t-p " >{{item.lastMsg}}</view>
+          <view class="card-foot" >
+            <text class="t-span">{{item.time}}</text>
+            <button class="text-action" bindtap="goChat" data-id="{{item.id}}">查看会话</button>
+          </view>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="empty-card" >
+          <text class="ph ph-chat-centered-text">
+          </text>
+          <view class="t-h2" >暂无咨询会话</view>
+          <view class="t-p hf-empty-text" >当前还没有可查看的会话记录，
+            可先了解服务与人员资料。</view>
+            <button class="primary" bindtap="hfGo" data-url="/pages/providers/providers">了解人员资料</button>
+          </view>
+        </block>
+        <view class="card " >
+          <view class="t-h2" >关于会话内容</view>
+          <view class="t-p " >系统自动回执会明确标注来源；历史来源不明的消息不会被当作真人医师回复。</view>
+        </view>
+        <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+      </view>
+    </block>
+    <view class="hf-pagination" wx:if="{{list.length && (loading || error)}}">
+      <text wx:if="{{loading}}">正在加载更多…</text>
+      <button wx:else bindtap="hfRetry">{{error}} · 重新加载</button>
     </view>
   </view>
 
-  <block wx:else>
-    <!-- 骨架 -->
-    <block wx:if="{{loading && !list.length}}">
-      <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-        <view class="sk-line first sk-w40"></view>
-        <view class="sk-line sk-w80"></view>
-      </view>
-    </block>
-
-    <!-- 错误 -->
-    <view class="card" wx:elif="{{error && !list.length}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">{{error}}</view>
-        <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
-      </view>
-    </view>
-
-    <!-- 空态 -->
-    <view class="card" wx:elif="{{!list.length}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">暂无咨询会话</view>
-        <view class="empty-desc">目前仅可体验系统自动回执，真人咨询尚未接入</view>
-        <view class="empty-btn btn-mini" bindtap="goSteward">去找专业人员</view>
-      </view>
-    </view>
-
-    <!-- 会话列表 -->
-    <block wx:else>
-      <view class="card cl-card fade-in" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="goChat">
-        <view class="cl-avatar">{{item.providerName[0]}}</view>
-        <view class="flex-1 cl-bd">
-          <view class="row">
-            <view class="cl-name ellipsis">{{item.providerName}}</view>
-            <view class="tag {{item.statusCls}} cl-status">{{item.statusLabel}}</view>
-          </view>
-          <view class="cl-last ellipsis t2">{{item.lastMsg}}</view>
-        </view>
-        <view class="cl-time t3">{{item.time}}</view>
-      </view>
-
-      <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
-      <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
-    </block>
-  </block>
-</view>
+</block>

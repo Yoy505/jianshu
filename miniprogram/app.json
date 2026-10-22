@@ -18,7 +18,14 @@
     "pages/favorites/favorites",
     "pages/profile-edit/profile-edit",
     "pages/certify/certify",
-    "pages/legal/legal"
+    "pages/legal/legal",
+    "pages/package-detail/package-detail",
+    "pages/order-confirm/order-confirm",
+    "pages/order-result/order-result",
+    "pages/orders/orders",
+    "pages/order-detail/order-detail",
+    "pages/benefits/benefits",
+    "pages/my-service/my-service"
   ],
   "window": {
     "navigationBarBackgroundColor": "#FFFFFF",
@@ -28,26 +35,34 @@
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
-    "color": "#6B7280",
+    "color": "#8A9999",
     "selectedColor": "#0F766E",
     "backgroundColor": "#FFFFFF",
     "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "assets/home-v1/house-muted.png",
+        "selectedIconPath": "assets/home-v1/house-teal.png"
       },
       {
         "pagePath": "pages/steward/steward",
-        "text": "管家"
+        "text": "管家",
+        "iconPath": "assets/home-v1/heart-muted.png",
+        "selectedIconPath": "assets/home-v1/heart-teal.png"
       },
       {
         "pagePath": "pages/mall/mall",
-        "text": "商城"
+        "text": "商城",
+        "iconPath": "assets/home-v1/storefront-muted.png",
+        "selectedIconPath": "assets/home-v1/storefront-teal.png"
       },
       {
         "pagePath": "pages/my/my",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "assets/home-v1/user-circle-muted.png",
+        "selectedIconPath": "assets/home-v1/user-circle-teal.png"
       }
     ]
   },

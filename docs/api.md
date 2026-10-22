@@ -29,6 +29,15 @@ Base URL：`http://<host>:8000/api/v1`
 | `occupational.read`（职业健康投稿列表、联系方式、附件下载） | ✓ | ✓ |
 | `occupational.initial_review`（职业健康投稿形式初审：领取/释放/通过/驳回） | ✓ | ✓ |
 | `occupational.final_review`（职业健康投稿终审；与初审不得同一账号） | ✓ | ✗ |
+| `volunteer.read`（杏临千行志愿者报名查看与状态管理） | ✓ | ✗ |
+| `commerce.product.manage`（服务包与版本维护、上下架，2026-10-21 起） | ✓ | ✓ |
+| `commerce.order.read`（订单、支付事件、退款队列查询） | ✓ | ✓ |
+| `commerce.order.refund`（发起退款、登记退款结论、主动对账） | ✓ | ✗ |
+| `commerce.points.adjust`（积分人工调整） | ✓ | ✗ |
+| `commerce.batch.manage`（采购单位维护、单位查看账号、名单预览） | ✓ | ✓ |
+| `commerce.batch.confirm`（批次确认发放 / 取消、权益作废 / 改号） | ✓ | ✗ |
+| `steward.read`（服务履约实例、日历、时间线、人员名单查询，2026-10-22 起） | ✓ | ✓ |
+| `steward.manage`（门禁录入、指派、暂停/恢复/结案、任务登记、人员管理） | ✓ | ✗ |
 
 ### 限流与防重复提交（2026-09-22 起）
 
@@ -175,7 +184,7 @@ action 取值：`admin.login` · `contest.create/update/status/delete` · `essay
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/wx/login` | 小程序：`{code}` → `{token, refresh_token, user, is_new}`；后端调 code2session，openid 自动注册 |
+| POST | `/wx/login` | 小程序：`{code, phone_code}` → `{token, refresh_token, user, is_new}`；两个 code 分别来自 wx.login 与 getPhoneNumber，后端验证微信身份和手机号后登录；真实登录缺少 phone_code 返回 400 |
 | POST | `/h5/auth/sms/send` | `{phone}` → `202`；60s 内重发 429；每日 >5 条 429 |
 | POST | `/h5/auth/sms/login` | `{phone, code}` → `{token, refresh_token, user, is_new}`；码错 400，5 次作废 |
 
@@ -214,6 +223,22 @@ action 取值：`admin.login` · `contest.create/update/status/delete` · `essay
 
 权限与隐私（B 计划变化）：`editor` 自 2026-10-08 起参与形式初审，获得 `occupational.read`（含联系方式与附件下载）与 `occupational.initial_review`；`occupational.final_review` 仅 `admin`。旧权限点 `occupational.review` 移除。作者侧通过回执查询页获知分阶段进度与驳回理由，除此之外没有任何公开作品列表、奖项评定或三轮评审状态。后台详情读取、下载、初审、终审均记审计（`occupational.detail_read` / `occupational.file_download` / `occupational.initial_review` / `occupational.final_review`，审计不含作者电话或原始文件内容）。
 
+## 七之三、杏临千行志愿者报名（公开填报域）
+
+“杏临千行”守护职业健康公益行动的志愿者在线报名入口，独立于投稿域。`VOLUNTEER_APPLICATIONS_ENABLED=false` 为默认；开放前须完成隐私告知确认，未开启时 `meta.enabled=false`、提交返回 `503`。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/h5/volunteer-applications/meta` | 公开；`{enabled, tracks:[{key,label}], consent_text}` |
+| POST | `/h5/volunteer-applications` | 公开 JSON：`{name, phone, city, birth_year?, occupation?, organization?, track, track_note?, offline_per_year, can_station, intro?, consent:true}` → `201 {id, receipt_no:"VOL-XXXX…", submitted_at}`；`consent≠true` 返回 422 |
+| GET | `/admin/volunteer-applications?status=&q=&page=&page_size=` | 需 `volunteer.read`；分页项仅返回 `id/receipt_no/name/phone_masked/city/track/can_station/offline_per_year/status/submitted_at`，不返回明文电话、单位、简介、补充说明及同意文本；`q` 匹配姓名/电话后四位/城市/单位/回执号 |
+| GET | `/admin/volunteer-applications/{id}` | 需 `volunteer.read`；完整详情（含明文电话），写审计 `volunteer.detail_read` |
+| POST | `/admin/volunteer-applications/{id}/status` | 需 `volunteer.read`；`{status:"pending"\|"contacted"\|"enrolled"}` 三态自由切换，写审计 `volunteer.status` |
+
+字段约束：`name` 1–50 字；`phone` 大陆手机号；`city` 1–50 字；`birth_year` 1900–2010（可空）；`occupation` ≤50、`organization` ≤100、`intro` ≤500（可空）；`track` ∈ `practice`(公益实践)/`publicity`(科普宣传)/`assist`(活动协助)/`promotion`(宣传支持)/`other`(其他，2026-10-16 增)；选 `other` 时 `track_note` 必填 1–50 字（自由填写的服务方向），其余取值忽略该字段；`offline_per_year` 1–99（次）；`can_station` 布尔（能否承担 3-5 天驻点）。性别字段已于 2026-10-16 从表单移除（数据库列保留兼容，不再采集）。同意文案快照随记录保存，仅用于报名与活动联系。
+
+公开限流：同 IP 每小时 10 次、同手机号（HMAC 摘要键）每天 3 次；超限 429，Redis 不可用 503 拒绝。回执号仅作报名凭据，工作人员通过填报电话联系，不构成身份核验。后台仅 `admin` 角色具备 `volunteer.read`（editor 无权查看志愿者个人信息）。
+
 ## 八、上传 `/uploads`
 
 | 方法 | 路径 | 说明 |
@@ -233,6 +258,8 @@ action 取值：`admin.login` · `contest.create/update/status/delete` · `essay
 | `occupational:submit:{work_type}:ip:{ip}` | 3600s | 公开职业健康投稿按文件类型的 IP 限流；Redis 不可用时拒绝 |
 | `occupational:submit:{work_type}:phone:{HMAC摘要}` | 86400s | 同手机号按类型限流；键不含明文手机号 |
 | `occupational:receipt:ip:{ip}` | 3600s | 公开回执查询 IP 限流（600 次/时，2026-10-08 起：投稿成功页自动轮询进度约 15 秒一次，终态即停）；Redis 不可用时 503 |
+| `volunteer:apply:ip:{ip}` | 3600s | 志愿者报名 IP 限流（10 次/时）；Redis 不可用时拒绝 |
+| `volunteer:apply:phone:{HMAC摘要}` | 86400s | 志愿者报名同手机号限流（3 次/日）；键不含明文手机号 |
 
 ---
 
@@ -264,6 +291,14 @@ action 取值：`admin.login` · `contest.create/update/status/delete` · `essay
 （science 为科普正文；favorited 按当前登录用户。`brand_name` 因缺少品牌/广告审核状态，仅开发/测试环境返回，预发布/生产为 `null`）
 
 **Product（商城商品）** `{id, category, name, desc, price, status}`，category：`food`(药食同源) `fsmp`(特医食品) `package`(健康服务包) `device`(器械耗材)；status 统一 `coming`(即将开放)
+
+### 游客访问规则（2026-10-19）
+
+无需登录可查看四个 Tab 首页、九大场景介绍、药品展厅首页、入驻介绍和协议。首页目录接口为 `/mp/home`、`/mp/scenarios`、`/mp/services`、`/mp/drugs`、`/mp/products`，只开放无检索条件的第一页；场景介绍可带 `scenario`。搜索、标签、分类、更多分页、服务/人员/药品详情和所有个人业务接口均要求 user access token；匿名访问返回 401。WebSocket 继续使用自身握手鉴权。
+
+`POST /wx/login` 中 `phone_code` 必须为用户点击微信手机号授权按钮得到的一次性授权码，不接受客户端提交的原始手机号。后端通过 stable_token（Redis 缓存）与 getuserphonenumber 获取号码，校验 appid 水印。已有同手机号且未关联微信的账号可绑定；两个既有账号冲突、手机号变化、手机号已绑定其他微信返回 409，不自动合并；封禁账号返回 403。唯一约束冲突回滚；账号绑定行加锁。返回手机号继续掩码展示。缺少微信配置返回 503；微信授权码失败返回 400；上游异常返回 502。无密钥的 dev/test 环境保留既有 `dev-code` 自动化测试入口，真实环境不可用。
+
+前端登录前显式勾选协议，用户点击后由微信展示手机号授权。取消授权保留游客身份。登录后只返回原页面，不重放预约、消息等操作。无手机号的旧本地登录态在启动时清除，需重新授权。
 
 ## 一）首页聚合
 
@@ -433,3 +468,338 @@ access token，无效/过期或连接期间用户被封禁，服务端关闭连�
 `mp.appointment.confirm` · `mp.appointment.complete` · `mp.appointment.cancel` ·
 `mp.consult.close` · `mp.provider.update` · `mp.service.update` ·
 `mp.drug.feedback_delete` · `mp.notice.create` · `mp.notice.delete`
+
+---
+
+# 第四部分 · 全域健康管家服务包交易（工作一，2026-10-21 起）
+
+依据《全域健康管家服务包_工作一_ZCode开发执行指导》。本部分覆盖：服务包商品与版本、订单与微信支付、积分账本与兑换、采购单位批次与权益认领、授权记录、采购单位查看端与运营后台。**不覆盖** 45 天服务履约、每日触达（服务号 / 企微 / 订阅消息 / 短信均未选型、未接入，订单与权益模型不含渠道字段）、设备、医师与电话外呼（工作二）。
+
+金额一律整数「分」；时间存 UTC、输出 ISO-Z；权益有效期按 `Asia/Shanghai` 自然日计算。所有状态由服务端持久化；客户端不得以本地状态冒充已支付、已发放或已送达。既有 `GET /mp/products`（`status=coming` 骨架）保留给其他品类展示，**不改名冒充服务包**；可售服务包走下文 `/mp/packages`。
+
+## 枚举
+
+| 枚举 | 取值 |
+|---|---|
+| Package.status | `draft`(草稿，不对外) / `on_shelf`(上架可售) / `off_shelf`(已下架，详情 404) |
+| Order.pay_type | `wxpay`(微信支付) / `points`(积分兑换) |
+| Order.status | `pending_payment`(待支付) / `paid`(已支付) / `closed`(已关闭：超时或用户取消，未支付) / `refund_pending`(退款处理中) / `refund_failed`(退款失败，待人工) / `refunded`(已退款) |
+| Payment.status | `created`(已预下单) / `success`(支付成功) / `failed`(支付失败或关闭) |
+| PaymentEvent.event_type | `notify_accepted`(回调验签通过并入账) / `notify_replay`(重复回调，幂等忽略) / `notify_rejected`(验签 / 金额 / 未知单被拒) / `query_sync`(主动查单对账) |
+| Refund.channel | `wxpay`(调用微信退款接口) / `manual`(线下人工退款，仅登记) |
+| Refund.status | `pending`(已申请) / `processing`(微信受理中) / `success` / `failed` |
+| PointsEntry.biz_type | `admin_adjust`(后台调整) / `redeem`(兑换扣减) / `refund_revert`(退款返还) |
+| Batch.status | `preview`(已预览待确认) / `confirmed`(已确认并发放) / `cancelled`(已取消) |
+| BatchRow.status | `valid` / `duplicate`(与同批次或同单位同版本已有权益重复) / `format_error`(非大陆手机号) / `over_limit`(超出采购数量) |
+| Entitlement.source_type | `order`(本人购买 / 兑换) / `batch`(单位分配) |
+| Entitlement.status | `pending`(待本人认领，仅 batch) / `active`(已生效) / `rejected`(本人拒绝) / `void`(后台作废) |
+| Consent.purpose | `package_purchase`(服务包购买协议与售后规则) |
+
+## 对象结构
+
+**PackageSummary（C 端列表项）**
+```json
+{"id": 1, "name": "全域健康管家 · 45 天基础包", "subtitle": "……", "cover_url": null,
+ "price_cents": 0, "points_cost": null, "validity_days": 45, "benefit_count": 4,
+ "purchasable": {"wxpay": false, "points": false, "reasons": ["支付通道未开通"]}}
+```
+**PackageDetail** = PackageSummary + `{"version_id", "version_no", "benefits": [{"name", "desc"}], "service_desc", "terms", "terms_version"}`。`terms_version` 即当前版本号字符串（如 `"v3"`），下单时作为授权版本快照。
+
+**Order**
+```json
+{"id": 10, "order_no": "SP20261021A1B2C3", "status": "pending_payment", "pay_type": "wxpay",
+ "package": {"id": 1, "name": "…", "version_id": 3, "version_no": 3},
+ "total_cents": 0, "points_cost": null, "expires_at": "…", "paid_at": null, "closed_at": null,
+ "entitlement_id": null, "created_at": "…"}
+```
+详情另含 `refunds: [{id, refund_no, channel, status, amount_cents, reason, created_at, finished_at}]`。后台详情再含 `user: {id, nickname, phone(掩码)}`、`payments: [{id, prepay_id, transaction_id, status, amount_cents, created_at}]`、`events: [{id, event_type, result, detail, created_at}]`。
+
+**Entitlement**
+```json
+{"id": 5, "source_type": "batch", "status": "pending", "package": {"id": 1, "name": "…", "version_no": 3},
+ "benefits": [{"name": "…", "desc": "…"}], "validity_days": 45,
+ "activated_at": null, "valid_until": null, "org_name": "××公司", "order_id": null, "created_at": "…"}
+```
+C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹配）的权益；不匹配一律 404，不返回任何字段。后台视图另含 `phone`（掩码）、`batch_id`、`void_reason`。
+
+**PointsAccount** `{"balance": 0, "updated_at": "…"}`；**PointsEntry** `{"id", "delta", "balance_after", "biz_type", "order_id", "note", "created_at"}`。
+
+**Consent** `{"id", "purpose", "version", "text", "granted_at", "revoked_at"}`。
+
+## 一）C 端 · 服务包 `/mp`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/commerce/capabilities` | 需登录；`{wxpay_enabled, points_enabled:true, wxpay_reason?}`。`wxpay_enabled` 仅当商户号、APIv3 密钥、证书序列号、私钥、平台证书与回调地址全部配置时为 true |
+| GET | `/mp/packages?page=&page_size=` | 仅 `on_shelf` 且指向有效版本的服务包，按 `sort, id`；无检索条件的第一页游客可见（同 2026-10-19 游客规则），翻页需登录 |
+| GET | `/mp/packages/{id}` | 需登录；非 `on_shelf` 返回 404。`purchasable.reasons` 列出不可购买原因（支付通道未开通 / 未设置积分价 / 积分不足等），客户端按此禁用按钮，不自行推断 |
+
+## 二）C 端 · 订单 `/mp/orders`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/mp/orders` | 需登录；`{client_order_id(UUID), package_id, pay_type, agree_terms:true}`。`agree_terms≠true` 422；商品不可售 409；`wxpay` 未配置 503；`points` 余额不足 409 `{"detail":"积分余额不足"}`。**幂等**：同用户同 `client_order_id` 且同 `package_id/pay_type` 返回原订单 200；参数不同 409。`points` 单在同一事务内：锁账户行 → 校验余额 → 写 `redeem` 流水 → 订单 `paid` → 发一份 `active` 权益 → 写 `package_purchase` 授权快照。`wxpay` 单创建为 `pending_payment`，`expires_at = now + 30 分钟` |
+| GET | `/mp/orders?status=&page=&page_size=` | 需登录；仅本人，`created_at` 倒序。读取时已过期的 `pending_payment` 懒更新为 `closed` |
+| GET | `/mp/orders/{id}` | 需登录；非本人 404 |
+| POST | `/mp/orders/{id}/prepay` | 需登录；仅本人 `pending_payment` 且未过期（否则 409）；调用微信 JSAPI 下单，返回 `wx.requestPayment` 参数 `{timeStamp, nonceStr, package:"prepay_id=…", signType:"RSA", paySign}`；每次调用新建一条 `created` 支付记录；未配置 503，微信侧失败 502 |
+| POST | `/mp/orders/{id}/close` | 需登录；仅本人 `pending_payment` → `closed`，其余 409；已向微信预下单的会尝试关单（失败不阻断） |
+
+**支付成功的唯一依据**是服务端回调验签入账或主动查单对账结果；客户端 `wx.requestPayment` 成功回调只用于跳转结果页并轮询 `GET /mp/orders/{id}`，不得据此展示「已支付」。
+
+## 三）C 端 · 积分 `/mp/points`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/points` | 需登录；本人余额，无账户时 `{"balance":0}` |
+| GET | `/mp/points/entries?page=&page_size=` | 需登录；本人流水，`id` 倒序 |
+
+工作一不预置积分获取规则；余额只能由后台 `commerce.points.adjust` 调整或退款返还产生。
+
+## 四）C 端 · 权益 `/mp/entitlements`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/entitlements?status=&page=&page_size=` | 需登录；返回 `user_id` 为本人的权益 + `phone` 与本人核验手机号一致的 `pending`/`rejected` 待认领权益；本人无核验手机号时只返回前者 |
+| GET | `/mp/entitlements/{id}` | 需登录；不属于本人（含手机号不匹配）404 |
+| POST | `/mp/entitlements/{id}/claim` | 需登录；仅 `batch` 来源且 `phone` 与本人手机号一致、状态 `pending`/`rejected` → `active`，写入 `user_id`、`activated_at`、`valid_until`；重复请求返回同一权益 200；`active` 再领也返回 200 同结果；他人或不存在 404 |
+| POST | `/mp/entitlements/{id}/reject` | 需登录；`pending` → `rejected`；已 `active` 返回 409；重复拒绝 200 |
+
+认领以单条 `UPDATE … WHERE id=:id AND phone=:phone AND status IN ('pending','rejected')` 完成，并发只会有一次状态跃迁；`order` 来源权益随支付成功 / 兑换直接 `active`，无需认领。
+
+## 五）C 端 · 授权记录 `/mp/consents`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/consents?purpose=` | 需登录；本人授权记录（含已撤回），`granted_at` 倒序 |
+| POST | `/mp/consents/{id}/revoke` | 需登录；写 `revoked_at`，重复撤回 200；撤回不影响既有订单与权益状态，仅记录意愿供后续处理 |
+
+授权记录由下单时自动写入（`purpose=package_purchase`，`version=版本号`，`text=当时售后规则全文快照`）。
+
+## 六）微信支付回调 `/pay/wxpay/notify`
+
+`POST /api/v1/pay/wxpay/notify`，无需业务 token。处理顺序：
+
+1. 未配置平台证书 / APIv3 密钥 → `503`，写 `notify_rejected` 事件（不含请求体明文）。
+2. 校验 `Wechatpay-Timestamp`（±5 分钟）、`Wechatpay-Nonce`、`Wechatpay-Signature`（RSA-SHA256 over `timestamp\nnonce\nbody\n`）；失败 → `401 {"code":"FAIL","message":"签名校验失败"}` + `notify_rejected` 审计。
+3. AES-256-GCM 解密 `resource`，取 `out_trade_no`、`transaction_id`、`trade_state`、`amount.total`。
+4. 按 `out_trade_no` 锁订单：不存在 → `404` + 审计；金额 ≠ `total_cents` → `409` + 审计；订单已 `paid` 且 `transaction_id` 相同 → `200 {"code":"SUCCESS"}` + `notify_replay`（**不重复发权益**）。
+5. `trade_state=SUCCESS` 且订单 `pending_payment`/`closed`（支付成功晚于本地超时关闭也入账）→ 条件更新为 `paid`，支付记录 `success`，发一份 `active` 权益（`UNIQUE(order_id)` 兜底），写 `notify_accepted`。
+6. 其他 `trade_state`（`CLOSED/REVOKED/PAYERROR`）→ 支付记录 `failed`，订单不变，`200`。
+
+响应体按微信约定 `{"code":"SUCCESS","message":"成功"}` / `{"code":"FAIL","message":"…"}`。
+
+## 七）采购单位查看端 `/org`（scope=org）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/org/auth/login` | `{username, password}` → `{access_token, refresh_token, org:{id,name}, account:{id,username}}`；错误 401；账号停用 403 |
+| POST | `/auth/refresh` | 复用，按 refresh token 的 `scope=org` 重签 |
+| GET | `/org/me` | 当前单位与账号 |
+| GET | `/org/batches?page=&page_size=` | 本单位批次汇总：`{id, batch_no, package:{id,name,version_no}, quantity, valid_count, issued_count, claimed_count, rejected_count, pending_count, status, confirmed_at}`。**不返回任何手机号、姓名或个人健康信息** |
+| GET | `/org/batches/{id}` | 同上单条；非本单位 404 |
+
+`org` token 对 `/mp/*`、`/admin/*` 一律 401；`user`/`admin` token 对 `/org/*` 一律 401。
+
+## 八）后台 `/admin/mp/*`（commerce 权限点见第一部分矩阵）
+
+### 服务包与版本（`commerce.product.manage`；GET 仅需 admin token）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/mp/packages?status=&q=&page=&page_size=` | 分页，含 `current_version` 摘要与 `blockers`（当前不可上架原因） |
+| POST | `/admin/mp/packages` | `{name(1–100), subtitle?(≤200), cover_url?, sort?}` → 201 `draft` |
+| GET | `/admin/mp/packages/{id}` | 详情含全部 `versions` |
+| PATCH | `/admin/mp/packages/{id}` | `{name?, subtitle?, cover_url?, sort?}`；不改状态与版本 |
+| POST | `/admin/mp/packages/{id}/versions` | `{price_cents(>0), points_cost?(>0), validity_days(1–3650), benefits:[{name(1–50), desc?(≤200)}](1–20 项), service_desc(1–5000), terms(1–5000)}` → 201 新版本（`version_no` 自增）；**版本一经创建不可修改**，调价即建新版本 |
+| POST | `/admin/mp/packages/{id}/shelf` | `{on_shelf:true, version_id}` → `on_shelf` 并设 `current_version_id`；版本不属于该商品 404；配置不完整 409 `{"detail":"…", "blockers":[…]}`。`{on_shelf:false}` → `off_shelf`（已售订单与权益不受影响） |
+
+### 订单、对账与退款
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/mp/orders?status=&pay_type=&q=&page=&page_size=` | `commerce.order.read`；q 匹配订单号 / 用户昵称 / 手机号后四位 |
+| GET | `/admin/mp/orders/{id}` | `commerce.order.read`；含 payments / events / refunds / entitlement |
+| POST | `/admin/mp/orders/{id}/sync` | `commerce.order.refund`；主动调用微信查单接口对账（回调丢失补偿），结果写 `query_sync` 事件；`SUCCESS` 且本地未入账则按回调同一逻辑入账；未配置 503 |
+| POST | `/admin/mp/orders/{id}/refund` | `commerce.order.refund`；`{channel, amount_cents?, reason(1–200)}`；仅 `paid`/`refund_failed` 可发起；`amount_cents` 默认全额，累计不得超订单金额（409）。`wxpay`：调用退款接口 → `processing`，失败 → `failed` + 订单 `refund_failed`；`manual`：`pending`，由人工线下完成后登记结论。订单置 `refund_pending`；积分单仅允许 `manual`，结论成功时写 `refund_revert` 返还流水 |
+| GET | `/admin/mp/refunds?status=&page=&page_size=` | `commerce.order.read`；人工处理队列（`pending`/`processing`/`failed` 优先） |
+| POST | `/admin/mp/refunds/{id}/resolve` | `commerce.order.refund`；`{status:"success"\|"failed", note?(≤200)}`；`success` → 订单 `refunded`、`order` 来源权益置 `void`（原因「订单已退款」）、积分单返还；`failed` → 订单 `refund_failed`。记录处理人、理由、前后状态 |
+
+### 积分
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/mp/points/{user_id}?page=&page_size=` | `commerce.order.read`；余额 + 流水 |
+| POST | `/admin/mp/points/adjust` | `commerce.points.adjust`；`{user_id, delta(≠0, |delta|≤1,000,000), note(1–200)}`；扣减导致负数 409；写 `admin_adjust` 流水 + 审计 |
+
+### 采购单位与批次
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/mp/orgs?q=&page=&page_size=` | `commerce.batch.manage` |
+| POST | `/admin/mp/orgs` | `commerce.batch.manage`；`{name(1–100 唯一), contact_name?(≤50), contact_phone?(≤20), note?(≤500)}` → 201；重名 409 |
+| POST | `/admin/mp/orgs/{id}/accounts` | `commerce.batch.manage`；`{username(4–32，字母数字下划线，唯一), password(≥10)}` → 201 单位查看账号；不返回口令 |
+| POST | `/admin/mp/batches/preview` | `commerce.batch.manage`；`{org_id, package_id, version_id, quantity(1–10000), file_name(≤255), rows:[string](1–10000)}`。服务端逐行规范化（去空白、去 `+86`）后判定 `format_error` / `duplicate`（本批内重复、或该单位同版本已有非 `void` 权益）/ `over_limit`（有效行序号 > quantity）；创建 `preview` 批次并返回 `{batch, rows:[{row_no, phone(掩码), status, error_detail}], summary:{total, valid, duplicate, format_error, over_limit}}`；`file_sha256` 为服务端对规范化行内容计算，`uploaded_by` 为当前账号 |
+| GET | `/admin/mp/batches?org_id=&status=&page=&page_size=` | `commerce.batch.manage` |
+| GET | `/admin/mp/batches/{id}` | `commerce.batch.manage`；含行明细（手机号掩码）与汇总 |
+| POST | `/admin/mp/batches/{id}/confirm` | `commerce.batch.confirm`；仅 `preview` → `confirmed`；为每个 `valid` 行创建一条 `pending` 权益（`UNIQUE(batch_row_id)`）；记录 `confirmed_by/confirmed_at`；重复确认 409；版本已不是该商品版本不影响（按批次绑定版本发放） |
+| POST | `/admin/mp/batches/{id}/cancel` | `commerce.batch.confirm`；仅 `preview` → `cancelled` |
+
+### 权益异常处理
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/mp/entitlements?status=&source_type=&q=&page=&page_size=` | `commerce.batch.manage`；q 匹配手机号后四位 / 订单号 / 批次号 |
+| POST | `/admin/mp/entitlements/{id}/void` | `commerce.batch.confirm`；`{reason(1–200)}`；`pending`/`active` → `void`；已 `void` 409 |
+| POST | `/admin/mp/entitlements/{id}/reassign` | `commerce.batch.confirm`；`{phone, reason(1–200)}`；仅 `batch` 来源且 `pending`/`rejected`（错号修正）；新号格式错误 422；同单位同版本已有非 `void` 权益 409 |
+
+## 配置项与阻断
+
+| 配置 | 缺失时 |
+|---|---|
+| `WXPAY_MCHID` `WXPAY_API_V3_KEY`(32 位) `WXPAY_CERT_SERIAL_NO` `WXPAY_PRIVATE_KEY_PATH` `WXPAY_PLATFORM_CERT_PATH` `WXPAY_NOTIFY_URL` | `capabilities.wxpay_enabled=false`；`wxpay` 下单 / 预支付 / 查单 / 退款 503「支付通道未开通」；回调 503 并审计。私钥与平台证书只从文件读取，不入库不入日志 |
+| 服务包未录入版本 / 价格 / 权益 / 售后 | 后台 `blockers` 列出；不能上架；C 端不可见 |
+
+## 审计 action（第四部分新增）
+
+后台：`commerce.package.create/update/version_create/shelf` · `commerce.order.sync/refund` · `commerce.refund.resolve` · `commerce.points.adjust` · `commerce.org.create/account_create` · `commerce.batch.preview/confirm/cancel` · `commerce.entitlement.void/reassign`。
+系统（actor_type=system）：`commerce.payment.notify_accepted/notify_replay/notify_rejected`。
+用户（actor_type=user）：`commerce.consent.revoke` · `commerce.entitlement.claim/reject` · `commerce.order.close`。
+审计 `detail` 不含手机号全号、支付密钥、回调明文或证书。
+
+---
+
+# 第五部分 · 全域健康管家服务履约（工作二，2026-10-22 起）
+
+覆盖：服务实例与激活门禁、45 天日历与履约任务、暂停 / 补时 / 到期 / 退款联动 / 续期、履约人员、服务时间线。
+表名前缀 `steward_`。触达任务框架（切片 B）、设备（C）、医师工单（D）、CCC 电话（E）后续以第五之子部分追加。
+**通道边界**：本部分不包含任何消息发送能力；无发送 API、无发送回执字段。每日触达通道未决策前，任何界面与接口不得出现「已发送 / 已送达」状态。
+
+## 枚举
+
+| 枚举 | 取值 |
+|---|---|
+| 服务实例状态 | `preparing`(准备中) `active`(服务中) `paused`(已暂停) `expired`(已到期未结案) `closed`(已结案) `terminated`(提前终止) |
+| 准备检查项 check_type | `identity_phone`(本人手机号与微信身份核验) `entitlement_valid`(权益属于本人且有效) `delivery`(收货完成) `device_paired`(设备配对完成) `device_vendor_consent`(设备厂商数据授权) `platform_consent`(平台服务授权) `first_valid_data`(首条本人有效设备数据) `physician_plan`(医师初评并签发个人计划) `staffing_ready`(管家及替补排班就绪) |
+| 准备检查状态 | `pending` `passed` `blocked`；`source`：`auto`(服务端实时判定) `manual`(运营带凭据录入) |
+| 履约任务 task_type | `daily`(每日事项) `follow_up`(管家随访，第 7/14/21/28/35/42 天) `review_prep`(复评资料准备，第 43 天) `final_review`(期末复评，第 44 天) `closure`(结案，第 45 天) |
+| 履约任务状态 | `pending` `done` `cancelled` |
+| 任务责任人类型 | `user`(本人) `butler`(管家) `physician`(医师) `system` |
+| 暂停原因 cause | `provider_interruption`(服务方核心中断) `physician_advised`(医师建议暂停) `user_request`(用户申请，不补时) `other` |
+| 时间线事件 | `instance_created` `prep_check_passed` `prep_check_reset` `activated` `task_completed` `task_cancelled` `paused` `resumed` `compensated` `expired` `closed` `terminated` `staff_assigned` `renewed` |
+| 履约人员角色 | `butler`(管家) `physician`(医师) |
+| 授权 purpose 扩展 | 在 `package_purchase` 基础上新增 `steward_service`(平台服务授权) `steward_device_data`(设备厂商数据授权) `steward_phone_outreach`(本人电话外呼授权，切片 E 启用) `steward_contact_outreach`(联系人电话授权，切片 E 启用) |
+
+## 对象结构
+
+```jsonc
+// 服务实例（C 端视图）
+{
+  "id": 1, "instance_no": "SL20261022A1B2C3D4",
+  "package_name": "全域健康管家 · 45 天服务包", "version_no": 1,
+  "benefits": [{"name": "...", "desc": "..."}],
+  "service_days": 45,                 // 服务期天数（快照，激活时固化）
+  "status": "preparing",
+  "activated_at": null, "ends_at": null, "original_ends_at": null,
+  "compensated_seconds": 0,           // 累计补时（秒）
+  "current_day": null,                // active/paused 时按 Asia/Shanghai 业务日推算的第 N 天
+  "butler": {"id": 1, "name": "张管家"}, "backup_butler": {...}, "physician": {...},
+  "plan_version": null,               // 医师签发的个人计划版本（切片 D 前恒为 null）
+  "renewed_from_instance_id": null,
+  "termination_reason": null, "terminated_at": null, "closed_at": null
+}
+
+// 准备检查项
+{ "check_type": "delivery", "title": "收货完成", "source": "manual",
+  "status": "pending", "missing_reason": null,
+  "evidence": null, "completed_by": null, "completed_at": null }
+
+// 履约任务
+{ "id": 10, "service_day": 7, "service_date": "2026-11-05",
+  "task_type": "follow_up", "title": "第 7 天 · 管家随访",
+  "assignee_type": "butler", "status": "pending",
+  "due_at": "2026-11-05T15:59:59Z", "result": null, "completed_at": null,
+  "shifted_days": 0 }                  // 补时平移天数留痕
+
+// 暂停记录
+{ "id": 1, "cause": "provider_interruption", "reason": "设备云接口故障",
+  "started_at": "...Z", "ended_at": null, "duration_seconds": null,
+  "compensated_seconds": null, "tasks_shifted_days": null }
+
+// 时间线事件
+{ "event_type": "activated", "actor_type": "user", "actor_name": "138****0001",
+  "detail": {"ends_at": "..."}, "created_at": "...Z" }
+```
+
+## 一）C 端 · 我的服务 `/mp/steward`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/steward/instances` | 本人服务实例列表（懒创建：本人每份 `active` 权益自动生成唯一 `preparing` 实例，`UNIQUE(entitlement_id)` 兜底幂等）。返回同时做懒迁移：到期 → `expired`、权益作废 → `terminated` |
+| GET | `/mp/steward/instances/{id}` | 详情：实例 + 九项门禁（`auto` 项服务端实时判定并回写快照）+ 指派 + 当日任务摘要。跨用户 404 |
+| POST | `/mp/steward/instances/{id}/activate` | 本人确认激活。九项门禁任一未过 → 409 `{"detail": {"message": "激活条件未全部满足", "missing": [check_type...]}}`；全过 → 生成实例编号、`activated_at`、`ends_at = activated_at + service_days×24h`、日历任务，条件 UPDATE 保证并发恰一次；重复请求返回原实例（幂等） |
+| GET | `/mp/steward/instances/{id}/calendar?month=YYYY-MM` | 月视图：该月逐日 `{date, service_day, tasks:[...]}`；跨月正确（服务日 → 日期映射在补时平移后仍一致） |
+| GET | `/mp/steward/instances/{id}/tasks?service_day=&date=` | 任务明细（二选一过滤；都空返回当日） |
+| POST | `/mp/steward/instances/{id}/tasks/{task_id}/complete` | 本人完成本人任务（`assignee_type=user` 且归属校验）：`{result?(1–500)}` → `done`；重复完成 409；管家 / 医师任务仅后台登记 |
+| GET | `/mp/steward/instances/{id}/timeline` | 本人实例时间线（只读） |
+| POST | `/mp/steward/consents` | 授予履约授权：`{purpose: steward_service|steward_device_data}`；条款文本由服务端配置提供（`STEWARD_*_CONSENT_TEXT`），未配置 → 503「该授权条款尚未配置」，**不接受客户端自备文本**（防止绕过版本管理） |
+
+授权撤回复用第四部分 `POST /mp/consents/{id}/revoke`；撤回后对应自动门禁项回到 `pending`，未激活的实例不能激活，已激活实例记录时间线并停止相应后续动作（设备数据切片 C 生效）。
+
+## 二）后台 · 履约工作台 `/admin/steward`
+
+权限点：`steward.read`（编辑含；列表 / 详情 / 时间线 / 日历只读）、`steward.manage`（仅 admin；门禁录入、指派、暂停 / 恢复、结案、任务登记、员工管理）。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/steward/instances?status=&q=&page=&page_size=` | `steward.read`；q 匹配实例号 / 姓名 / 手机号后四位 |
+| GET | `/admin/steward/instances/{id}` | `steward.read`；详情含门禁、任务汇总、暂停史、时间线 |
+| GET | `/admin/steward/instances/{id}/calendar?month=` · `/timeline` | `steward.read` |
+| POST | `/admin/steward/instances/{id}/prep-checks/{check_type}/pass` | `steward.manage`；仅 `manual` 项（auto 项 409）；`{evidence(1–500 必填), note?}` → `passed` + 审计 + 时间线 |
+| POST | `/admin/steward/instances/{id}/prep-checks/{check_type}/reset` | `steward.manage`；回退人工项 `{reason(1–200)}` → `pending` + 审计（误录纠正，不删历史） |
+| POST | `/admin/steward/instances/{id}/assign` | `steward.manage`；`{butler_id?, backup_butler_id?, physician_id?}`；角色不匹配 422；指派变化写审计 + 时间线 |
+| POST | `/admin/steward/instances/{id}/pause` | `steward.manage`；`{cause, reason(1–200)}`；仅 `active` → `paused`；开启暂停记录 |
+| POST | `/admin/steward/instances/{id}/resume` | `steward.manage`；`{note?}`；结束暂停记录并按规则结算：`provider_interruption` 且中断 >24h → 补足全部时长；`physician_advised` → 补足全部时长；`<24h` 中断 / `user_request` / `other` → 仅记录不补时。补时 = `ends_at` 顺延 + 未开始任务按天平移（`shifted_days` 留痕）；全部写时间线 |
+| POST | `/admin/steward/instances/{id}/close` | `steward.manage`；`{closure_report(1–2000 必填)}`；要求 `final_review` 任务已完成且到期，否则 409；未结高优先级医师工单未转交时 409（切片 D 起检查）；→ `closed` |
+| POST | `/admin/steward/tasks/{task_id}/result` | `steward.manage`；`{result(1–500 必填), done=true}` → `done`；重复 409；写审计 |
+| GET | `/admin/steward/staff?role=&page=` | `steward.read`；履约人员名单 |
+| POST | `/admin/steward/staff` | `steward.manage`；`{name(1–50), phone, role, org_name?(1–100), title?(1–50), license_no?(1–50 医师建议必填), note?}` |
+| PATCH | `/admin/steward/staff/{id}` | `steward.manage`；改名 / 停用 `{status: active|inactive}` 等；停用不影响已指派实例（留痕） |
+
+## 三）门禁判定规则（服务端唯一权威）
+
+| check_type | source | 通过条件 |
+|---|---|---|
+| identity_phone | auto | `user.phone` 非空（微信手机号核验）且权益 `user_id` = 实例 `user_id` |
+| entitlement_valid | auto | 权益 `status=active` 且（`valid_until` 为空或未过期） |
+| delivery | manual | 运营凭据（物流单号 / 签收记录）；切片 C 前唯一来源 |
+| device_paired | manual | 运营凭据；切片 C 接入后由设备绑定事实自动判定 |
+| device_vendor_consent | auto | 存在未撤回的 `steward_device_data` 授权；条款未配置时显示「待配置」也判 `pending` |
+| platform_consent | auto | 存在未撤回的 `steward_service` 授权 |
+| first_valid_data | manual | 运营凭据（首条有效数据校验记录）；切片 C 后自动 |
+| physician_plan | manual | 运营凭据（初评 + 签发计划编号）；切片 D 后由签发事实自动 |
+| staffing_ready | auto | `butler_id`、`backup_butler_id`、`physician_id` 均已指派且人员 `active` |
+
+`auto` 项在每次门禁读取（C 端详情 / 激活尝试 / 后台详情）时实时重判并回写快照；`manual` 项只能经后台接口带凭据置 `passed`。激活 = 九项全部 `passed` + 本人确认，二者缺一不可。
+
+## 四）时间与补时口径
+
+- 时间存储 UTC（带时区）；业务服务日按 `Asia/Shanghai`。
+- 服务期 = 激活时刻起连续 `service_days×24h`（默认 45，配置 `STEWARD_SERVICE_DAYS`，激活时快照到实例）；与权益自然日有效期（第四部分 `valid_until`）是两个口径。
+- `service_day N` 的业务日期 = 激活日的上海日期 + (N−1) 天，再叠加补时平移（按天取整向上，`shifted_days` 留痕）。
+- 到期判定在实例读取路径懒触发（`active/paused` 且 `now ≥ ends_at` → `expired` + 时间线）；到期后不再生成新任务，未完成任务保留为历史不删除。
+
+## 五）配置项与阻断
+
+| 配置 | 缺失时 |
+|---|---|
+| `STEWARD_SERVICE_DAYS`(默认 45) | 使用默认；激活时快照 |
+| `STEWARD_SERVICE_CONSENT_TEXT` | 平台服务授权不能授予（503「该授权条款尚未配置」）；对应门禁项恒 `pending`，无法激活 |
+| `STEWARD_DEVICE_CONSENT_TEXT` | 同上（厂商数据授权） |
+| `STEWARD_FOLLOWUP_DAYS`(默认 `7,14,21,28,35,42`) | 使用默认；随访节点按此生成 |
+
+## 六）审计 action（第五部分新增）
+
+后台：`steward.prep.pass/reset` · `steward.assign` · `steward.pause/resume/close` · `steward.task.result` · `steward.staff.create/update`。
+用户（actor_type=user）：`steward.instance.activate` · `steward.task.complete` · `steward.consent.grant`。
+系统（actor_type=system）：`steward.instance.create/expire/terminate`。
+审计 detail 不含手机号全号与健康档案正文。

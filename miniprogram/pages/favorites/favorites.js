@@ -11,7 +11,7 @@ function tagsVM(tags) {
     .filter((x) => !!x);
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     needLogin: false,
     list: [],
@@ -85,10 +85,10 @@ Page({
   },
 
   goHall() {
-    wx.navigateTo({ url: '/pages/drug-hall/drug-hall' });
+    require('../../utils/access').navigate({ url: '/pages/drug-hall/drug-hall' });
   },
 
   goDetail(e) {
-    wx.navigateTo({ url: '/pages/drug-detail/drug-detail?id=' + e.currentTarget.dataset.id });
+    require('../../utils/access').navigate({ url: '/pages/drug-detail/drug-detail?id=' + e.currentTarget.dataset.id });
   }
-});
+}, 'favorites'));

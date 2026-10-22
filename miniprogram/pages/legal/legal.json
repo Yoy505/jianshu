@@ -1,4 +1,5 @@
 {
   "navigationBarTitleText": "杏临汇",
-  "usingComponents": {}
+  "usingComponents": {},
+  "navigationStyle": "custom"
 }

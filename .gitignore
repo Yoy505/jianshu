@@ -52,3 +52,9 @@ backend/private_occupational_submissions/
 
 # 本地私有备忘（真实 IP/主体信息，公开仓库已脱敏）
 docs/private/
+
+# 设计走查截图等会话产物（大文件，不入库）
+/artifacts/
+
+# 备案/上线证据截图（含控制台真实信息，不入库）
+/deploy/evidence/

@@ -1,0 +1,9 @@
+@import "../../styles/hifi.wxss";
+
+.result-hero{text-align:center;padding:7.692307692vw 4.102564103vw}
+.result-hero .t-h2{margin-top:3.076923077vw}
+.result-icon{font-size:13.333333334vw;line-height:15.384615385vw}
+.result-icon.ok{color:#0f766e}
+.result-icon.warn{color:#b88e45}
+.result-icon.err{color:#a34840}
+.result-icon.muted{color:#8ba396}

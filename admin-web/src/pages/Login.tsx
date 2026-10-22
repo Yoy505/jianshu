@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { toast } from '@/components/common/toast'
+import { IcpLink } from '@/components/common/IcpLink'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAdminLogin } from '@/hooks/useQueries'
@@ -43,7 +44,7 @@ export default function Login() {
     <div className="flex min-h-dvh items-center justify-center bg-[#f6f7f5] px-5 py-10 sm:px-8">
       <div className="grid w-full max-w-[980px] gap-10 lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:gap-20">
         <div className="max-w-lg">
-          <span className="flex size-12 items-center justify-center rounded-lg bg-[#244f42] text-xl font-semibold text-white">杏</span>
+          <img className="size-12 rounded-full object-cover" src="/brand/xinglinhui-mark.png" alt="杏临汇标识" width="48" height="48" />
           <p className="mt-10 text-xs font-semibold tracking-[0.16em] text-primary">XING LIN HUI · OPERATIONS</p>
           <h1 className="mt-4 text-[32px] font-semibold leading-tight tracking-[-0.04em] text-[#1d332a] sm:text-[42px]">
             杏临汇运营管理平台
@@ -88,7 +89,10 @@ export default function Login() {
               登录
             </Button>
           </form>
-          <p className="mt-8 border-t border-border pt-5 text-xs text-muted-foreground">杏临汇 · 运营后台 v0.1.0</p>
+          <div className="mt-8 flex flex-wrap justify-between gap-2 border-t border-border pt-5 text-xs text-muted-foreground">
+            <span>健树征文服务平台 · 运营后台</span>
+            <IcpLink className="underline underline-offset-2 hover:text-primary" />
+          </div>
         </section>
       </div>
     </div>

@@ -1,6 +1,6 @@
 """C 端用户 DTO。"""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.common import UTCDateTime
 
@@ -16,7 +16,8 @@ class UserOut(BaseModel):
 
 
 class WxLoginRequest(BaseModel):
-    code: str
+    code: str = Field(min_length=1, max_length=512)
+    phone_code: str | None = Field(default=None, min_length=1, max_length=512)
 
 
 class SmsSendRequest(BaseModel):

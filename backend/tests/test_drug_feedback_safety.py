@@ -21,7 +21,7 @@ async def test_drug_feedback_is_demo_only_and_hidden_from_public_environments(
     )
     assert posted.status_code == 201
 
-    demo_detail = await client.get(API)
+    demo_detail = await client.get(API, headers=auth_headers)
     assert demo_detail.status_code == 200
     assert demo_detail.json()["feedback_mode"] == "demo"
     assert demo_detail.json()["brand_name"] is not None
@@ -29,7 +29,7 @@ async def test_drug_feedback_is_demo_only_and_hidden_from_public_environments(
 
     for environment in ("staging", "prod"):
         monkeypatch.setattr(settings, "APP_ENV", environment)
-        detail = await client.get(API)
+        detail = await client.get(API, headers=auth_headers)
         assert detail.status_code == 404  # Legacy demo drug is not publicly listed.
 
         rejected = await client.post(
@@ -38,6 +38,6 @@ async def test_drug_feedback_is_demo_only_and_hidden_from_public_environments(
         assert rejected.status_code == 404
 
     monkeypatch.setattr(settings, "APP_ENV", "test")
-    restored = await client.get(API)
+    restored = await client.get(API, headers=auth_headers)
     assert restored.json()["feedback_mode"] == "demo"
     assert [entry["content"] for entry in restored.json()["board"]] == [DEMO_CONTENT]

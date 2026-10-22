@@ -1,57 +1,14 @@
-/* 管家（服务列表） */
-.page-list { padding-bottom: 40rpx; }
-
-.search-bar {
-  background: #FFFFFF;
-  border-radius: 999rpx;
-  border: 1rpx solid #EDF0EF;
-  display: flex;
-  align-items: center;
-  padding: 0 24rpx;
-  height: 80rpx;
-}
-.search-icon {
-  width: 24rpx;
-  height: 24rpx;
-  border: 3rpx solid #9CA3AF;
-  border-radius: 50%;
-  position: relative;
-  flex-shrink: 0;
-}
-.search-icon::after {
-  content: "";
-  position: absolute;
-  right: -10rpx;
-  bottom: -6rpx;
-  width: 12rpx;
-  height: 3rpx;
-  background: #9CA3AF;
-  border-radius: 2rpx;
-  transform: rotate(45deg);
-}
-.search-input { flex: 1; margin-left: 16rpx; font-size: 26rpx; height: 100%; }
-.search-clear { font-size: 24rpx; color: #0F766E; padding: 10rpx 0 10rpx 16rpx; }
-
-.chip-scroll { margin-top: 20rpx; white-space: nowrap; }
-.chip-scroll-inner { display: inline-block; }
-.hchip {
-  display: inline-block;
-  padding: 12rpx 30rpx;
-  background: #FFFFFF;
-  border: 2rpx solid #E5E7EB;
-  border-radius: 999rpx;
-  font-size: 26rpx;
-  color: #6B7280;
-  margin-right: 16rpx;
-  transition: all 150ms ease;
-}
-.hchip.on { background: #0F766E; border-color: #0F766E; color: #FFFFFF; font-weight: 600; }
-
-.skeleton + .skeleton { margin-top: 20rpx; }
-
-.service-card { margin-top: 20rpx; }
-.service-name { font-size: 30rpx; font-weight: 600; color: #1F2937; flex: 1; margin-right: 16rpx; }
-.service-type { flex-shrink: 0; margin-right: 0; }
-.service-desc { margin-top: 12rpx; font-size: 26rpx; color: #6B7280; }
-.service-meta { margin-top: 12rpx; font-size: 24rpx; }
-.service-bottom { margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx solid #F0F1F2; }
+/* Logical px source for native rpx conversion, 100.0vw baseline. */
+page{background:#f5f9f8;color:#123b43;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;font-size:4.102564103vw;line-height:normal}
+.st-page view,.st-page button,.st-page image{box-sizing:border-box}
+.st-page button{width:auto;margin:0;padding:0;border:0;background:transparent;color:inherit;border-radius:0;line-height:normal;font-weight:normal;font-size:inherit;text-align:left}.st-page button::after{border:0}
+.st-chrome{position:fixed;left:0;top:0;right:0;z-index:100;pointer-events:none}.st-chrome-scrolled{background:#f5f9f8;border-bottom:1px solid #e7eeee}.st-status{position:absolute;left:0;right:0;top:0;background:#edf5f2}
+.st-brand{position:absolute;left:5.128205129vw;display:flex;align-items:center;white-space:nowrap}.st-brand>image{height:7.692307693vw;width:7.692307693vw;border-radius:50%;flex-shrink:0}.st-brand-title{font-size:4.358974359vw;letter-spacing:-0.102564102vw;color:#064e50;font-weight:700;margin-left:2.051282052vw}.st-brand-sub{font-size:2.564102565vw;color:#657c7e;margin-left:2.051282052vw}
+.st-hero{position:relative;overflow:hidden;background:#edf5f2}.st-hero-photo{position:absolute;left:0;width:100%;height:64.615384616vw}.st-hero-copy{position:absolute;left:5.641025642vw}.st-eyebrow{color:#48756f;letter-spacing:0.333333334vw;font-size:2.564102565vw}.st-hero-title{font-family:"Songti SC","STSong",serif;font-size:6.923076924vw;font-weight:800;line-height:1.25;color:#065456;margin-top:1.794871795vw;letter-spacing:1px}.st-hero-sub{font-size:2.564102565vw;color:#657e80;margin-top:2.051282052vw}
+.st-content{padding:3.58974359vw 4.102564103vw 3.076923077vw}.st-search{height:11.282051283vw;border:1px solid #dfeae7;border-radius:3.076923077vw;background:#fff;display:flex;align-items:center;padding:0 3.076923077vw}.st-search-icon{width:4.871794872vw;height:4.871794872vw;flex-shrink:0;margin-right:2.051282052vw}.st-input{min-width:0;flex:1;font-size:2.820512821vw;color:#123b43;height:10.76923077vw;padding:0}.st-placeholder{color:#8a9c9c}.st-page .st-search-action{color:#0f766e;font-size:3.076923077vw;font-weight:600;height:10.76923077vw;min-width:8.205128206vw;line-height:normal;display:flex;align-items:center;justify-content:center;text-align:center;margin-left:2.051282052vw}.st-page .st-clear{width:5.641025642vw;height:10.76923077vw;display:flex;align-items:center;justify-content:center;margin-left:2.051282052vw}.st-clear image{width:3.846153847vw;height:3.846153847vw}
+.st-chips{width:calc(100% + 8.205128206vw);margin:2.051282052vw -4.102564102vw 0;white-space:nowrap;height:11.282051283vw}.st-chip-inner{display:inline-flex;align-items:center;height:11.282051283vw;padding:1.025641026vw 4.102564103vw}.st-page .st-chip{height:9.230769231vw;line-height:8.717948718vw;padding:0 3.333333334vw;font-size:2.820512821vw;color:#637b7d;background:#fff;border:1px solid #e7eeee;border-radius:2.307692308vw;display:inline-block;flex-shrink:0;margin-right:2.051282052vw}.st-page .st-chip:last-child{margin-right:0}.st-page .st-chip-active{color:#fff;background:#0f766e;border-color:#0f766e;font-weight:600}
+.st-heading{height:11.025641026vw;display:flex;align-items:center;justify-content:space-between;padding:0 0.512820513vw}.st-heading-title{font-size:4.615384616vw;font-weight:650;letter-spacing:-0.102564102vw}.st-heading>text{font-size:2.564102565vw;color:#7d9091}
+.st-card{background:#fff;border:1px solid #e7eeee;border-radius:3.846153847vw;padding:3.333333334vw 3.58974359vw 0;margin-bottom:2.564102565vw;min-height:31.282051283vw}.st-card-top{display:flex;align-items:center}.st-card-icon{width:10.76923077vw;height:10.76923077vw;border-radius:2.820512821vw;flex-shrink:0;margin-right:2.564102565vw}.st-card-titles{flex:1;min-width:0}.st-card-name{font-size:4.102564103vw;line-height:5.641025642vw;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.st-card-category{font-size:2.820512821vw;color:#62787b;line-height:4.615384616vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.st-tag{display:inline-flex;align-items:center;font-size:2.564102565vw;line-height:4.615384616vw;padding:0 1.538461539vw;background:#fff9ee;color:#996016;border:1px solid #edd5af;border-radius:1.282051283vw;white-space:nowrap;margin-left:2.051282052vw;flex-shrink:0}.st-card-desc{font-size:3.076923077vw;line-height:4.615384616vw;color:#62787b;margin-top:1.794871795vw;min-height:4.358974359vw;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.st-provider{font-size:2.564102565vw;line-height:4.615384616vw;color:#637b78;margin-top:1.025641026vw}.st-card-bottom{border-top:1px solid #eef3f1;margin-top:2.051282052vw;min-height:8.717948718vw;display:flex;align-items:center;justify-content:space-between}.st-card-meta{font-size:2.564102565vw;line-height:3.846153847vw;color:#637b78;flex:1;min-width:0;padding:1.538461539vw 0}.st-card-detail{height:8.717948718vw;min-width:18.974358975vw;font-size:2.820512821vw;font-weight:600;color:#0f766e;display:flex;justify-content:flex-end;align-items:center;margin-left:2.051282052vw}.st-card-detail image{width:3.076923077vw;height:3.076923077vw;margin-left:1.025641026vw}
+.st-empty{min-height:78.974358975vw;border:1px solid #e7eeee;border-radius:4.102564103vw;background:#fff;text-align:center;padding:12.307692308vw 5.128205129vw 7.692307693vw}.st-empty-icon{display:flex;width:20.0vw;height:20.0vw;align-items:center;justify-content:center;background:#edf7f3;border-radius:6.153846154vw;margin:0 auto}.st-empty-icon image{width:10.76923077vw;height:10.76923077vw}.st-empty-title{font-size:4.358974359vw;font-weight:700;margin-top:5.384615385vw;line-height:6.410256411vw}.st-empty-desc{font-size:3.076923077vw;color:#7c9090;line-height:5.384615385vw}.st-empty-title+.st-empty-desc{margin-top:2.051282052vw}.st-page .st-empty-action{height:10.256410257vw;line-height:9.743589744vw;padding:0 5.641025642vw;border:1px solid #d3e7df;border-radius:2.307692308vw;color:#0f766e;font-size:3.076923077vw;margin:5.128205129vw auto 0;display:inline-block}
+.st-skeleton{height:31.282051283vw;border:1px solid #e7eeee;border-radius:3.846153847vw;background:#fff;padding:4.615384616vw;margin-bottom:2.564102565vw}.st-skeleton view{background:#edf3f1;border-radius:1.282051283vw;height:3.076923077vw;margin-bottom:3.333333334vw;width:90%}.st-skeleton view:first-child{width:58%;height:4.615384616vw}.st-skeleton view:last-child{width:35%}.st-load-tip{font-size:2.564102565vw;color:#7c9090;text-align:center;line-height:6.153846154vw}.st-page .st-load-retry{font-size:3.076923077vw;line-height:5.641025642vw;padding:3.076923077vw;color:#996016;text-align:center;width:100%}.st-disclaimer{text-align:center;color:#62787b;font-size:2.564102565vw;line-height:4.102564103vw;padding:1.538461539vw 0 0.512820513vw;letter-spacing:0.051282052vw}.st-pressed{opacity:.78}
+.st-hero-copy{line-height:normal}.st-eyebrow{line-height:normal}

@@ -1,0 +1,61 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <block wx:if="{{loading}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+
+    <view wx:elif="{{error}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">订单加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+
+    <block wx:elif="{{order}}">
+      <view class="card result-hero">
+        <text class="ph {{statusText.cls === 'ok' ? 'ph-seal-check' : (statusText.cls === 'err' || statusText.cls === 'warn' ? 'ph-warning-circle' : 'ph-clock')}} result-icon {{statusText.cls}}"></text>
+        <view class="t-h2">{{statusText.label}}{{polling ? '…' : ''}}</view>
+        <view class="t-p">{{polling ? '正在确认支付结果，请稍候' : statusText.desc}}</view>
+      </view>
+
+      <view class="card">
+        <view class="kv"><text class="t-span">订单编号</text><text class="t-b">{{order.orderNo}}</text></view>
+        <view class="kv"><text class="t-span">服务包</text><text class="t-b">{{order.packageName}}</text></view>
+        <view class="kv"><text class="t-span">支付方式</text><text class="t-b">{{order.payTypeLabel}}</text></view>
+        <view class="kv"><text class="t-span">金额</text><text class="t-b">{{order.amount}}</text></view>
+        <view class="kv"><text class="t-span">下单时间</text><text class="t-b">{{order.created}}</text></view>
+      </view>
+
+      <view class="card" wx:if="{{order.refunds.length}}">
+        <view class="t-h3">退款记录</view>
+        <view class="kv" wx:for="{{order.refunds}}" wx:key="no">
+          <text class="t-span">{{item.no}}</text>
+          <text class="t-b">{{item.amount}} 元 · {{item.status}} · {{item.time}}</text>
+        </view>
+      </view>
+
+      <view class="quiet" wx:if="{{order.status === 'paid'}}">
+        <text class="ph ph-heart"></text>
+        <view class="grow">
+          <view class="t-h3">进入服务准备</view>
+          <view class="t-p">服务包权益已生效；45 天服务将由服务团队另行安排开通。</view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="actions" wx:if="{{order && !loading}}">
+    <button wx:if="{{order.status === 'pending_payment' && order.payType === 'wxpay'}}" class="primary" bindtap="payAgain" loading="{{paying}}">继续支付</button>
+    <button wx:if="{{order.status === 'paid'}}" class="primary" bindtap="goBenefits">查看我的权益</button>
+    <button class="secondary" bindtap="goOrders">订单列表</button>
+  </view>
+</view>
+</block>

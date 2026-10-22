@@ -56,7 +56,7 @@ async def test_drug_publication_filters_all_c_side_paths_and_admin_can_audit(
     assert test_list.status_code == 200
     assert {d["id"] for d in test_list.json()["items"]}.isdisjoint({2, 3})
     assert 1 in {d["id"] for d in test_list.json()["items"]}
-    public_detail = await client.get(f"{API}/drugs/1")
+    public_detail = await client.get(f"{API}/drugs/1", headers=user_headers)
     assert public_detail.status_code == 200
     assert public_detail.json()["publication_status"] == "published"
     assert public_detail.json()["approval_no"] == "TEST-APPROVAL-001"
@@ -66,7 +66,7 @@ async def test_drug_publication_filters_all_c_side_paths_and_admin_can_audit(
     assert public_detail.json()["brand_name"] is None
 
     for drug_id in (2, 3):
-        assert (await client.get(f"{API}/drugs/{drug_id}")).status_code == 404
+        assert (await client.get(f"{API}/drugs/{drug_id}", headers=user_headers)).status_code == 404
         assert (
             await client.post(f"{API}/drugs/{drug_id}/favorite", headers=user_headers)
         ).status_code == 404
@@ -107,8 +107,8 @@ async def test_drug_publication_filters_all_c_side_paths_and_admin_can_audit(
         public_list = await client.get(f"{API}/drugs", params={"page_size": 30})
         assert public_list.status_code == 200
         assert [d["id"] for d in public_list.json()["items"]] == [1]
-        assert (await client.get(f"{API}/drugs/4")).status_code == 404
-        assert (await client.get(f"{API}/drugs/1")).status_code == 200
+        assert (await client.get(f"{API}/drugs/4", headers=user_headers)).status_code == 404
+        assert (await client.get(f"{API}/drugs/1", headers=user_headers)).status_code == 200
         assert (
             await client.post(
                 f"{API}/drugs/1/feedback", json={"content": FEEDBACK}, headers=user_headers

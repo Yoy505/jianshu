@@ -28,7 +28,7 @@ function publicationVM(status) {
   return { label: '资料状态待核对', cls: 'unknown' };
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     tagChips: TAG_CHIPS,
     letters: LETTERS,
@@ -108,6 +108,7 @@ Page({
 
   onReachBottom() {
     if (this.data.finished || this.data.loading || !this.data.list.length) return;
+    if (!getApp().ensureLogin('/pages/drug-hall/drug-hall')) return;
     this.setData({ page: this.data.page + 1 });
     this.fetch();
   },
@@ -117,6 +118,7 @@ Page({
   },
 
   onSearch() {
+    if (!getApp().ensureLogin('/pages/drug-hall/drug-hall')) return;
     this.reload();
   },
 
@@ -127,6 +129,7 @@ Page({
   },
 
   onTag(e) {
+    if (!getApp().ensureLogin('/pages/drug-hall/drug-hall')) return;
     const v = e.currentTarget.dataset.v || '';
     if (v === this.data.activeTag) return;
     this.setData({ activeTag: v });
@@ -134,6 +137,7 @@ Page({
   },
 
   onLetter(e) {
+    if (!getApp().ensureLogin('/pages/drug-hall/drug-hall')) return;
     const v = e.currentTarget.dataset.letter;
     // 再次点击同一字母取消筛选
     const next = v === this.data.activeLetter ? '' : v;
@@ -142,10 +146,11 @@ Page({
   },
 
   goDetail(e) {
-    wx.navigateTo({ url: '/pages/drug-detail/drug-detail?id=' + e.currentTarget.dataset.id });
+    require('../../utils/access').navigate({ url: '/pages/drug-detail/drug-detail?id=' + e.currentTarget.dataset.id });
   },
 
   copyOfficialQuery() {
+    if (!getApp().ensureLogin('/pages/drug-hall/drug-hall')) return;
     wx.setClipboardData({ data: OFFICIAL_QUERY_URL });
   }
-});
+}, 'drug-hall'));

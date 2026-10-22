@@ -1,87 +1,124 @@
-<view class="chat-page">
-  <!-- 顶部合规提示条 + 通道状态 -->
-  <view class="notice-bar chat-tip">
-    <text class="tip-text">{{tip}}</text>
-    <text class="channel-dot {{realtime ? 'on' : ''}}"></text>
-  </view>
-
-  <!-- 骨架 -->
-  <view class="chat-body" wx:if="{{loading}}">
-    <view class="skeleton chat-sk">
-      <view class="sk-line first sk-w40"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w60"></view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf {{(!loading && !error) ? 'has-actions' : ''}}" style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
+    </view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
     </view>
   </view>
-
-  <!-- 错误 -->
-  <view class="chat-body" wx:elif="{{error}}">
-    <view class="card">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">{{error}}</view>
-        <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
       </view>
     </view>
-  </view>
-
-  <!-- 消息区 -->
-  <scroll-view
-    wx:else
-    class="msg-scroll"
-    scroll-y
-    scroll-into-view="{{scrollAnchor}}"
-    scroll-with-animation
-  >
-    <view class="msg-pad-top"></view>
-
-    <view class="sys-hint" wx:if="{{empty}}">发送第一条消息体验系统自动回执</view>
-
-    <view wx:for="{{messages}}" wx:key="id" id="msg-{{item.id}}" class="msg-row {{item.sender}}">
-      <!-- system：明确标记自动回执 -->
-      <view wx:if="{{item.sender === 'system'}}" class="msg-system">
-        <view class="msg-system-label">系统自动回执</view>
-        <view class="msg-system-content">{{item.content}}</view>
-        <view class="msg-system-time">{{item.time}}</view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
       </view>
-      <!-- user：右侧深青 -->
-      <view wx:elif="{{item.sender === 'user'}}" class="bubble bubble-user">
-        <view class="bubble-text">{{item.content}}</view>
-        <view class="bubble-time">{{item.time}}</view>
-      </view>
-      <!-- 兼容旧会话：历史 provider 记录无法核验是否由真人发送 -->
-      <view wx:elif="{{item.sender === 'provider'}}" class="bubble bubble-provider">
-        <view class="bubble-origin">旧版会话消息 · 来源未标注</view>
-        <view class="bubble-text">{{item.content}}</view>
-        <view class="bubble-time">{{item.time}}</view>
-      </view>
-      <view wx:else class="msg-system">{{item.content}}</view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
     </view>
-
-    <!-- 正在输入 -->
-    <view class="msg-row provider" wx:if="{{typing}}">
-      <view class="bubble bubble-provider typing-bubble">
-        <view class="tdot"></view>
-        <view class="tdot d2"></view>
-        <view class="tdot d3"></view>
-        <view class="typing-text">正在生成系统回执…</view>
+  </block>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
       </view>
     </view>
-
-    <view id="anchor-bottom" class="msg-pad-bottom"></view>
-  </scroll-view>
-
-  <!-- 输入区 -->
-  <view class="input-bar">
-    <input
-      class="chat-input"
-      value="{{inputValue}}"
-      confirm-type="send"
-      confirm-hold
-      placeholder="输入演示留言…"
-      bindinput="onInput"
-      bindconfirm="send"
-    />
-    <view class="send-btn {{inputValue && !sending ? '' : 'disabled'}}" bindtap="send">发送</view>
+  </block>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="pad chat-area" >
+      <view class="notice " >
+        <text class="ph ph-info">
+        </text>
+        <view class="t-p " >系统自动回执中，非真人接诊。请勿输入真实病情或个人隐私信息。</view>
+      </view>
+      <view class="summary">
+        <view class="row">
+          <text class="ph ph-clipboard-text">
+          </text>
+          <view>
+            <view class="t-h3">{{hfServiceName || '健康服务咨询'}}</view>
+            <view class="t-p">{{hfProviderName || '系统自动回执'}} · 资料待核验</view>
+          </view>
+        </view>
+      </view>
+      <view class="conversation-time">会话记录</view>
+      <block wx:if="{{messages.length}}">
+        <block wx:for="{{messages}}" wx:key="id">
+          <view class="message-row user" wx:if="{{item.sender === 'user'}}">
+            <view class="bubble">{{item.content}}<view class="small muted">{{item.time}}</view>
+          </view>
+        </view>
+        <view class="receipt" wx:else>
+          <view class="t-h3">
+            <text class="ph ph-info">
+            </text>{{item.sender === 'system' ? '系统自动回执' : '历史消息 · 来源待核'}}</view>
+            <view class="t-p">{{item.content}}</view>
+            <text class="t-small">{{item.time}} · {{item.sender === 'system' ? '自动回执，不是医师接诊意见' : '消息来源未经核实'}}</text>
+          </view>
+        </block>
+      </block>
+      <view class="empty-card" wx:else>
+        <text class="ph ph-chat-centered-text">
+        </text>
+        <view class="t-h2">开启会话</view>
+        <view class="t-p">输入一条留言，了解消息界面。</view>
+      </view>
+      <view class="footer-note" >本页显示系统回执，也不提供真人诊疗</view>
+      <view class="" id="anchor-bottom">
+      </view>
+    </view>
+  </block>
+  <view class="actions" wx:if="{{!loading && !error}}">
+    <view class="composer" >
+      <input value="{{inputValue}}" placeholder="输入留言…" bindinput="onInput" confirm-type="send" bindconfirm="send" adjust-position="{{true}}" />
+      <button class="primary" bindtap="send" disabled="{{sending}}">{{sending ? '发送中' : '发送'}}</button>
+    </view>
   </view>
 </view>
+
+</block>

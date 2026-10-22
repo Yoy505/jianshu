@@ -1,71 +1,155 @@
-<view class="page page-detail has-action-bar">
-  <!-- 骨架 -->
-  <block wx:if="{{loading}}">
-    <view class="skeleton">
-      <view class="sk-line first sk-w60"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w40"></view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf {{(service && !loading && !error) ? 'has-actions' : ''}}" style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
     </view>
-    <view class="skeleton gap-top">
-      <view class="sk-line first sk-w30"></view>
-      <view class="sk-line sk-w80"></view>
-    </view>
-  </block>
-
-  <!-- 错误 -->
-  <view class="card" wx:elif="{{error}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">{{error}}</view>
-      <view class="empty-btn btn-mini" bindtap="retry">重新加载</view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
     </view>
   </view>
-
-  <block wx:else>
-    <!-- 服务头 -->
-    <view class="card">
-      <view class="row">
-        <view class="tag tag-brand" wx:if="{{service.scenarioName}}">{{service.scenarioName}}</view>
-        <view class="tag {{service.typeCls}}">{{service.typeLabel}}</view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
       </view>
-      <view class="sd-name">{{service.name}}</view>
-      <view class="t3 f-small">服务资料演示，尚未开放真实预约或真人接诊。</view>
-      <view class="t3 f-small">参考价格</view>
-      <view class="price sd-price">
-        <text class="price-symbol">¥</text>{{service.price}}<text class="price-unit">/{{service.unit}}</text>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
       </view>
-      <view class="sd-meta t3">参考时长 {{service.duration}} · 人员资料 {{service.providerCount}} 条</view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
     </view>
-
-    <!-- 服务内容 -->
-    <view class="card gap-top">
-      <view class="section-title">服务内容</view>
-      <view class="article sd-text">{{service.desc}}</view>
-    </view>
-
-    <!-- 适用人群 -->
-    <view class="card gap-top">
-      <view class="section-title">适用人群</view>
-      <view class="sd-text t2">{{service.audience}}</view>
-    </view>
-
-    <!-- 服务须知 -->
-    <view class="card gap-top">
-      <view class="section-title">服务须知</view>
-      <view class="sd-notice">
-        <view class="sd-notice-dot"></view>
-        <view class="flex-1 sd-text t2">{{service.notice}}</view>
+  </block>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
       </view>
-      <view class="sd-notice">
-        <view class="sd-notice-dot"></view>
-        <view class="flex-1 sd-text t2">当前页面价格和服务说明仅供开发演示；真实服务主体、价格和履约方式待核定。</view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
       </view>
     </view>
   </block>
-
-  <!-- 底部操作 -->
-  <view class="action-bar" wx:if="{{service}}">
-    <view class="btn-ghost" wx:if="{{service.isOnline}}" bindtap="consultNow">查看演示流程</view>
-    <view class="btn-primary" bindtap="matchProviders">查看人员资料</view>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <block wx:if="{{service}}">
+      <view class="detail-hero" >
+        <image class="t-img" src="/assets/hifi-v2/checkup-hero.jpg" mode="aspectFill" />
+        <view class="detail-hero-copy" >
+          <text class="eyebrow">{{service.scenarioName || '服务资料'}} · {{service.typeLabel || (service.isOnline ? '线上服务' : '服务资料')}}</text>
+          <view class="t-h1" >{{service.name === '体检报告一对一解读' ? '体检报告\n一对一解读' : service.name}}</view>
+        </view>
+        <text class="image-note">场景示意</text>
+      </view>
+      <view class="detail-content" >
+        <view class="facts" >
+          <view class="" >
+            <text class="t-span">参考费用</text>
+            <text class="t-strong">{{service.price || '待确认'}}</text>
+          </view>
+          <view class="" >
+            <text class="t-span">参考时长</text>
+            <text class="t-strong">{{service.duration || '待确认'}}</text>
+          </view>
+          <view class="" >
+            <text class="t-span">人员资料</text>
+            <text class="t-strong">{{service.providerCount || 0}} 位</text>
+          </view>
+        </view>
+        <view class="detail-card service-content" >
+          <view class="section-title" >
+            <text class="ph ph-clipboard-text">
+            </text>
+            <view class="t-h2" >服务内容</view>
+          </view>
+          <view class="t-p " >{{service.desc}}</view>
+          <view class="content-tags" wx:if="{{service.scenarioKey === 'checkup'}}">
+            <text class="t-span">体检指标</text>
+            <text class="t-span">健康信息</text>
+            <text class="t-span">管理参考</text>
+          </view>
+        </view>
+        <view class="detail-card audience" >
+          <view class="section-title" >
+            <text class="ph ph-users">
+            </text>
+            <view class="t-h2" >适用人群</view>
+          </view>
+          <view class="t-p " >{{service.audience}}</view>
+        </view>
+        <view class="detail-card service-notice" >
+          <view class="section-title" >
+            <text class="ph ph-info">
+            </text>
+            <view class="t-h2" >服务须知</view>
+            <text class="t-span">请先了解</text>
+          </view>
+          <view class="notice-item" >
+            <text class="t-b">01</text>
+            <view class="t-p " >{{service.notice}}</view>
+          </view>
+          <view class="notice-item" >
+            <text class="t-b">02</text>
+            <view class="t-p " >选择服务前，请查看人员资料、服务费用与具体安排。</view>
+          </view>
+        </view>
+        <view class="disclaimer" >健康管理与信息服务，不替代诊疗</view>
+      </view>
+    </block>
+    <block wx:else>
+      <view class="pad" >
+        <view class="empty-card" >
+          <text class="ph ph-file-text">
+          </text>
+          <view class="t-h2" >该服务暂不可用</view>
+          <view class="t-p hf-empty-text" >服务资料可能已更新或下架，可返回健康管家查看其他服务。</view>
+          <button class="secondary" bindtap="hfGo" data-url="/pages/steward/steward">返回健康管家</button>
+        </view>
+      </view>
+    </block>
+  </block>
+  <view class="actions" wx:if="{{service && !loading && !error}}">
+    <button class="secondary" bindtap="consultNow" >选择服务人员</button>
+    <button class="primary" bindtap="matchProviders" >查看人员资料</button>
   </view>
 </view>
+
+</block>

@@ -1,0 +1,77 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf has-actions" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <block wx:if="{{loading}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+
+    <view wx:elif="{{error}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">服务包加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+
+    <block wx:elif="{{pkg}}">
+      <view class="card pkg-hero">
+        <text class="badge teal">{{pkg.termsVersion}} · 有效期 {{pkg.validityDays}} 天</text>
+        <view class="t-h2 pkg-name">{{pkg.name}}</view>
+        <view class="t-p" wx:if="{{pkg.subtitle}}">{{pkg.subtitle}}</view>
+        <view class="row price-row">
+          <view class="price"><text class="price-num">{{pkg.price}}</text><text class="price-unit">元</text></view>
+          <text class="badge" wx:if="{{pkg.pointsCost}}">{{pkg.pointsCost}} 积分可兑</text>
+        </view>
+      </view>
+
+      <view class="card" wx:if="{{pkg.blockReasons.length}}">
+        <view class="t-h3">暂不可购买</view>
+        <view class="t-p" wx:for="{{pkg.blockReasons}}" wx:key="*this">· {{item}}</view>
+      </view>
+
+      <view class="card">
+        <view class="t-h3">权益项目（{{pkg.benefits.length}} 项）</view>
+        <view class="benefit-item" wx:for="{{pkg.benefits}}" wx:key="name">
+          <text class="ph ph-seal-check"></text>
+          <view class="grow">
+            <view class="t-h3">{{item.name}}</view>
+            <view class="t-p" wx:if="{{item.desc}}">{{item.desc}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="card" wx:if="{{pkg.serviceDesc}}">
+        <view class="t-h3">服务说明</view>
+        <view class="t-p pre-line">{{pkg.serviceDesc}}</view>
+      </view>
+
+      <view class="card">
+        <view class="t-h3">售后规则（{{pkg.termsVersion}}）</view>
+        <view class="t-p pre-line">{{pkg.terms}}</view>
+      </view>
+
+      <view class="quiet">
+        <text class="ph ph-shield-check"></text>
+        <view class="grow">
+          <view class="t-h3">支付安全说明</view>
+          <view class="t-p">支付结果以微信支付服务端通知为准；下单即表示同意上述售后规则。</view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="actions" wx:if="{{pkg && !loading && !error}}">
+    <button class="primary full {{(!pkg.canWxpay && !pkg.canPoints) ? 'disabled' : ''}}" bindtap="goBuy"
+      disabled="{{!pkg.canWxpay && !pkg.canPoints}}">
+      {{pkg.canWxpay || pkg.canPoints ? '立即购买' : '暂不可购买'}}
+    </button>
+  </view>
+</view>
+</block>

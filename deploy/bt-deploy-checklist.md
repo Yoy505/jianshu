@@ -1,5 +1,7 @@
 # 宝塔部署清单（singlin.cn · 对齐 ClinInsOS 拓扑）
 
+> 备案完成后的当前执行顺序与实测状态请以 [post-icp-launch.md](post-icp-launch.md) 为准。本文件含备案前联调和历史模板，不能直接作为生产 Nginx 配置；HTTPS 配置见 `nginx-singlin-bootstrap.conf` 与 `nginx-singlin-production.conf`。
+
 > 服务器：阿里云 ECS 2核2G3M「99计划」，公网 IP **<SERVER_IP>**，到期 2027-09-23（2026-09-23 购入，建树科技天津账号）（Ubuntu 26.04，实际购入）｜域名：singlin.cn（备案主体：健树科技（天津）有限公司）
 > 子域：`mp.`（API+WS :8000）· `essay.`（H5）· `admin.`（后台）｜Nginx 模板：[nginx-singlin.conf](nginx-singlin.conf)
 

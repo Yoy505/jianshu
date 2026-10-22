@@ -25,10 +25,13 @@ async def test_mp_admin_appointment_lifecycle_and_audit(client):
     # 直接用用户 token 创建预约（conftest 已有种子女用户）
     from app.core.security import create_token, SCOPE_USER
 
+    user_token = create_token(1, SCOPE_USER, "access")
+    user_headers = {"Authorization": f"Bearer {user_token}"}
+
     # 找一个可预约组合
     resp = await client.get("/api/v1/mp/services?scenario=rehab", headers=headers)
     service_id = resp.json()["items"][0]["id"]
-    resp = await client.get(f"/api/v1/mp/providers?service_id={service_id}", headers=headers)
+    resp = await client.get(f"/api/v1/mp/providers?service_id={service_id}", headers=user_headers)
     provider_id = resp.json()["items"][0]["id"]
 
     from datetime import date, timedelta

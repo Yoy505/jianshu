@@ -24,9 +24,9 @@ function readOnlyRows(p) {
   ];
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   openPrivacy() {
-    wx.navigateTo({ url: '/pages/legal/legal?doc=privacy' });
+    require('../../utils/access').navigate({ url: '/pages/legal/legal?doc=privacy' });
   },
 
   data: {
@@ -228,4 +228,4 @@ Page({
         this.setData({ saving: false });
       });
   }
-});
+}, 'profile-edit'));

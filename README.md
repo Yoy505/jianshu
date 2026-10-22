@@ -74,7 +74,7 @@ cd backend && .venv/bin/python -m pytest  # sqlite 内存库 + FakeRedis，无�
 
 ## 生产部署（阿里云）
 
-部署拓扑规划为 ECS + FastAPI/Celery/Nginx、PostgreSQL、Redis 与 HTTPS 域名。数据库托管方案尚未定稿；OSS 驱动、生产短信等能力仍需开发和验收。管理员已有独立初始化流程，但须在真实环境验收。现有部署文档仅供环境准备，不能视为上线许可。详见 [docs/deploy.md](docs/deploy.md)。
+部署拓扑规划为 ECS + FastAPI/Celery/Nginx、PostgreSQL、Redis 与 HTTPS 域名。数据库托管方案尚未定稿；OSS 驱动、生产短信等能力仍需开发和验收。管理员已有独立初始化流程，但须在真实环境验收。备案完成后的域名、证书与上线检查见 [deploy/post-icp-launch.md](deploy/post-icp-launch.md)；基础部署说明见 [docs/deploy.md](docs/deploy.md)。
 
 ## 约定
 

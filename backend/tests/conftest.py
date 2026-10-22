@@ -144,7 +144,13 @@ async def client():
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        # 挂同库会话工厂，供测试做 ORM 级数据准备 / 时间推进（ steward 等域）
+        test_client.session_factory = session_factory  # type: ignore[attr-defined]
         yield test_client
 
     app.dependency_overrides.clear()
     await engine.dispose()
+
+
+# 工作二履约域夹具（条款文本配置）注册进全局命名空间
+from tests.steward_helpers import file_db_steward, steward_env  # noqa: E402,F401

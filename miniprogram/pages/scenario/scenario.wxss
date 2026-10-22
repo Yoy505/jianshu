@@ -1,11 +1,58 @@
-/* 场景服务列表 */
-.page-scenario { padding-bottom: 40rpx; }
-.scenario-title { font-size: 34rpx; font-weight: 700; color: #1F2937; }
-.scenario-tagline { margin-top: 12rpx; font-size: 26rpx; }
-.skeleton + .skeleton { margin-top: 20rpx; }
-.service-card { margin-top: 20rpx; }
-.service-name { font-size: 30rpx; font-weight: 600; color: #1F2937; flex: 1; margin-right: 16rpx; }
-.service-type { flex-shrink: 0; margin-right: 0; }
-.service-desc { margin-top: 12rpx; font-size: 26rpx; color: #6B7280; }
-.service-meta { margin-top: 12rpx; font-size: 24rpx; }
-.service-bottom { margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx solid #F0F1F2; }
+@import "../../styles/hifi.wxss";
+.hf .scene-nav{height:14.871794872vw;position:relative;display:flex;align-items:center;justify-content:center;background:#fff;border-bottom:0.256410257vw solid #edf2ef}
+.hf .scene-nav>.t-a{position:absolute;left:4.102564103vw;top:1.794871795vw;height:11.282051283vw;min-width:11.282051283vw;display:flex;align-items:center;color:#286b61;font-size:3.076923077vw}
+.hf .scene-nav>.t-strong{font-size:4.102564103vw;font-weight:650}
+.hf .scene-hero{position:relative;height:46.153846154vw;overflow:hidden;background:#e9f1eb}
+.hf .scene-hero>.t-img{width:100%;height:100%;object-fit:cover;object-position:center 40%;position:absolute;inset:0}
+.hf .scene-copy{position:absolute;left:5.641025642vw;top:5.641025642vw}
+.hf .scene-copy .eyebrow{font-size:2.307692308vw;letter-spacing:0.256410257vw;color:#527b6e}
+.hf .scene-copy .t-h1{font-family:"Songti SC","STSong",serif;font-size:7.948717949vw;font-weight:800;color:#065456;letter-spacing:0.256410257vw;line-height:10.0vw;margin-top:2.051282052vw}
+.hf .scene-copy .t-h2{font-size:3.076923077vw;font-weight:500;line-height:5.384615385vw;color:#22665d;margin-top:0.76923077vw}
+.hf .scene-copy .t-p{font-size:2.564102565vw;line-height:4.615384616vw;color:#5b786e;margin-top:2.307692308vw}
+.hf .scene-hero>.t-small{position:absolute;bottom:2.051282052vw;right:3.076923077vw;background:#ffffffc7;color:#526f62;padding:0.512820513vw 1.282051283vw;border-radius:0.76923077vw;font-size:2.051282052vw}
+.hf .scene-content{padding:3.076923077vw 4.102564103vw 0}
+.hf .audience{border:0.256410257vw solid #deebe3;background:#edf5ef;border-radius:3.076923077vw;padding:2.820512821vw 3.333333334vw;display:flex;gap:2.820512821vw;align-items:center}
+.hf .audience>.ph{font-size:5.897435898vw;color:#5a8b72;flex:none}
+.hf .audience .t-h2{font-size:3.076923077vw;line-height:4.871794872vw;font-weight:600;color:#326b56}
+.hf .audience .t-p{font-size:2.564102565vw;line-height:4.358974359vw;color:#637e71}
+.hf .directory-heading{display:flex;align-items:center;justify-content:space-between;min-height:16.666666667vw;padding:0 0.512820513vw}
+.hf .directory-heading .t-h2{font-size:4.615384616vw;line-height:6.410256411vw;font-weight:650}
+.hf .directory-heading .t-p{font-size:2.564102565vw;line-height:4.358974359vw;color:#6e837c;margin-top:0.512820513vw}
+.hf .directory-heading>.t-span{font-size:2.564102565vw;line-height:5.128205129vw;padding:0 1.794871795vw;border-radius:1.282051283vw;color:#926b32;background:#fbf4e5}
+.hf .scene-service{padding:3.58974359vw 3.846153847vw 0;background:#fff;border:0.256410257vw solid #e0eae4;border-radius:3.846153847vw;margin-bottom:2.820512821vw}
+.hf .service-heading{display:flex;align-items:center;gap:2.564102565vw}
+.hf .service-symbol{font-size:6.153846154vw;width:10.256410257vw;height:10.256410257vw;display:flex;align-items:center;justify-content:center;border-radius:2.820512821vw;background:#edf6f1;color:#3f8777;flex:none}
+.hf .scene-service:nth-child(2) .service-symbol{color:#a18044;background:#f9f1e0}
+.hf .service-heading>view{flex:1}
+.hf .service-heading .t-h3{font-size:4.102564103vw;line-height:5.897435898vw;font-weight:650;letter-spacing:-0.076923076vw}
+.hf .service-heading .t-p{font-size:2.564102565vw;line-height:4.358974359vw;color:#667e73}
+.hf .scene-description{font-size:3.076923077vw;line-height:4.871794872vw;color:#5f786f;margin-top:2.307692308vw;min-height:9.743589744vw}
+.hf .service-meta{font-size:2.564102565vw;line-height:4.358974359vw;color:#708378;margin-top:2.051282052vw}
+.hf .service-footer{min-height:10.256410257vw;border-top:0.256410257vw solid #edf2ef;display:flex;align-items:center;justify-content:space-between;margin-top:2.307692308vw}
+.hf .service-footer>.t-span{font-size:2.820512821vw;color:#896934}
+.hf .service-footer>button{height:10.256410257vw;color:#0f766e;font-size:2.820512821vw;font-weight:600;min-width:17.948717949vw;text-align:right}
+.hf .scene-notice{border:0.256410257vw solid #eee0c7;border-radius:2.564102565vw;background:#fff9ee;display:flex;align-items:flex-start;gap:2.051282052vw;padding:2.564102565vw 3.076923077vw;margin-top:0.256410257vw;color:#8c6a36}
+.hf .scene-notice>.ph{font-size:4.102564103vw;margin-top:0.512820513vw;flex:none}
+.hf .scene-notice .t-p{font-size:2.564102565vw;line-height:4.358974359vw}
+.hf .more-scenes{display:flex;align-items:center;justify-content:center;color:#397566;font-size:2.820512821vw;min-height:11.025641026vw}
+.hf .disclaimer{font-size:2.307692308vw;line-height:4.102564103vw;color:#708078;padding:0 0 4.102564103vw}
+.hf .empty{min-height:76.923076924vw;padding:10.256410257vw 4.615384616vw 7.17948718vw}
+.hf .empty .t-h3{margin-top:4.358974359vw}
+.hf .skeleton{height:42.307692308vw}
+.hf .scene-hero{height:43.58974359vw}
+.hf .audience{padding-top:2.307692308vw;padding-bottom:2.307692308vw}
+.hf .directory-heading{min-height:14.615384616vw}
+.hf .scene-service{padding-top:3.076923077vw}
+.hf .service-symbol{height:9.230769231vw;width:9.230769231vw;font-size:5.897435898vw}
+.hf .scene-description{margin-top:1.794871795vw}
+.hf .service-meta{margin-top:1.025641026vw}
+.hf .service-footer{margin-top:1.538461539vw}
+.hf .disclaimer{padding-bottom:3.076923077vw}
+.hf .more-scenes{min-height:10.256410257vw}
+.hf .disclaimer{padding-bottom:1.794871795vw}
+.hf .variant-art{position:absolute;right:2.564102565vw;top:8.205128206vw;width:28.205128206vw;height:28.205128206vw;background-image:url('../01-首页/assets/scenarios-atlas.png');background-size:117.897435898vw 117.897435898vw;border-radius:10.76923077vw}
+.hf .scene-copy{z-index:1}
+.hf .scene-hero>.t-img[hidden]{display:none}
+.hf .t-h1,.hf .t-p,.hf .disclaimer{white-space:pre-line}.hf .image-note{position:absolute;right:3.076923077vw;bottom:2.051282052vw;font-size:2.051282052vw;color:#526f62;background:#ffffffc7;padding:0.512820513vw 1.282051283vw;border-radius:0.76923077vw}.hf .hero{padding:0;min-height:0}.hf .hero-copy .t-h1{max-width:none}.hf .category-grid,.hf .quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.hf .list-heading,.hf .section-head{margin:0}.hf .catalog-state .t-p{white-space:pre-line}.hf .notice{margin:0}.hf .disclaimer{text-align:center}.hf .category.selected{border-color:#0f766e;background:#edf7f3}.hf .catalog-state{margin-bottom:0}.hf .identity>.ph{width:12.307692308vw;height:12.307692308vw;font-size:9.743589744vw;border-radius:3.846153847vw;background:#edf5f0;color:#3c8876;display:flex;align-items:center;justify-content:center}.hf .hf-mask{position:fixed;inset:0;background:#123b434d;z-index:200;display:flex;align-items:center;justify-content:center;padding:5.128205129vw}.hf .hf-dialog{width:100%;max-height:85vh;overflow:auto;background:#fff;border-radius:4.358974359vw;padding:6.153846154vw;border:1px solid #dce8e0}.hf .hf-dialog .t-h2{font-size:5.384615385vw}.hf .hf-dialog .primary{margin-top:5.128205129vw}.hf .scene-art{position:absolute!important;width:28.205128206vw!important;height:28.205128206vw!important;right:2.564102565vw;top:8.205128206vw;left:auto!important}.hf .scene-hero{height:43.58974359vw}.hf .detail-hero-copy .t-h1{max-width:45.333333334vw}.hf .detail-content .facts{display:flex}.hf .facts>view{width:33.333%}.hf .detail-actions{position:fixed}.hf .service-heading>view{flex:1}.hf .service-heading>.service-symbol{flex:none}.hf .service-footer button{font-size:2.820512821vw;min-height:8.717948718vw;color:#0f766e}.hf .scene-notice{margin-top:3.076923077vw}.hf .more-scenes{width:100%;text-align:center;display:block}.hf .hf-dialog .phone-form input{height:10.76923077vw}.hf .brandbar .t-strong{font-weight:700}
+
+.hf .scene-hero>.t-img{width:100%;height:66.666666667vw;top:-9.23076923vw;bottom:auto}.hf .service-footer button{display:flex;align-items:center;justify-content:flex-end}.hf .more-scenes{display:flex;align-items:center;justify-content:center}.hf .scene-notice{margin-top:0.256410257vw}

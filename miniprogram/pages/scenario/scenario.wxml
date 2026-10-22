@@ -1,66 +1,138 @@
-<view class="page page-scenario">
-  <!-- 场景头 -->
-  <view class="card scenario-head">
-    <view class="row-between">
-      <view class="scenario-title">{{title}}</view>
-      <view class="tag tag-brand" wx:if="{{keyword}}">搜索</view>
-      <view class="tag tag-brand" wx:elif="{{tagline}}">场景</view>
+<view class="hf " style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
     </view>
-    <view class="scenario-tagline t2" wx:if="{{tagline}}">{{tagline}}</view>
-    <view class="scenario-tagline t2" wx:if="{{keyword}}">关键词：{{keyword}}</view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
   </view>
-
-  <!-- 骨架 -->
-  <block wx:if="{{loading && !list.length}}">
-    <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="sk-line first sk-w60"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w40"></view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
     </view>
   </block>
-
-  <!-- 错误 -->
-  <view class="card" wx:elif="{{error && !list.length}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">{{error}}</view>
-      <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
-    </view>
-  </view>
-
-  <!-- 空态 -->
-  <view class="card" wx:elif="{{!list.length}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">暂无匹配的服务</view>
-      <view class="empty-desc">换个场景或稍后再来看看</view>
-    </view>
-  </view>
-
-  <!-- 服务列表（复用服务卡） -->
-  <block wx:else>
-    <view
-      class="card service-card fade-in"
-      wx:for="{{list}}"
-      wx:key="id"
-      data-id="{{item.id}}"
-      bindtap="goDetail"
-    >
-      <view class="row-between">
-        <view class="service-name ellipsis">{{item.name}}</view>
-        <view class="tag {{item.typeCls}} service-type">{{item.typeLabel}}</view>
-      </view>
-      <view class="service-desc ellipsis-2">{{item.desc}}</view>
-      <view class="service-meta t3">演示资料 · 参考时长 {{item.duration}} · 人员资料 {{item.providerCount}} 条</view>
-      <view class="row-between service-bottom">
-        <view class="price">
-          <text class="price-symbol">参考 ¥</text>{{item.price}}<text class="price-unit">/{{item.unit}}</text>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
         </view>
-        <view class="btn-mini">查看详情</view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
       </view>
     </view>
-
-    <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
-    <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
   </block>
-</view>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="scene-hero" >
+      <image class="t-img" src="/assets/hifi-v2/checkup-hero.jpg" mode="aspectFill" wx:if="{{hfSceneKey === 'checkup'}}" />
+      <image class="scene-art" src="/assets/home-v1/scene-{{hfSceneKey}}.png" mode="aspectFit" wx:else />
+      <view class="scene-copy" >
+        <text class="eyebrow">九大健康场景 · {{hfSceneNumber}}</text>
+        <view class="t-h1" >{{title}}</view>
+        <view class="t-h2" >{{tagline || hfSceneDesc}}</view>
+        <view class="t-p " >{{hfSceneCaption}}</view>
+      </view>
+      <text class="image-note">{{hfSceneKey === 'checkup' ? '场景示意' : '服务方向'}}</text>
+    </view>
+    <view class="scene-content" >
+      <view class="audience" >
+        <text class="ph ph-users">
+        </text>
+        <view class="" >
+          <view class="t-h2" >适用人群</view>
+          <view class="t-p " >{{hfAudience}}</view>
+        </view>
+      </view>
+      <view class="directory-heading" >
+        <view class="" >
+          <view class="t-h2" >相关服务资料</view>
+          <view class="t-p " >先了解服务内容，再作选择</view>
+        </view>
+        <text class="t-span">{{list.length ? total + ' 项资料' : '暂无匹配服务'}}</text>
+      </view>
+      <block wx:if="{{list.length}}">
+        <view class="scene-service" wx:for="{{list}}" wx:key="id">
+          <view class="service-heading" >
+            <view class="service-symbol" >
+              <text class="ph ph-clipboard-text">
+              </text>
+            </view>
+            <view class="" >
+              <view class="t-h3" >{{item.name}}</view>
+              <view class="t-p " >{{title}} · {{item.typeLabel}}</view>
+            </view>
+            <text class="badge">服务资料</text>
+          </view>
+          <view class="t-p scene-description" >{{item.desc}}</view>
+          <view class="t-p service-meta" >参考时长 {{item.duration}}</view>
+          <view class="service-footer" >
+            <text class="t-span">参考费用 {{item.price}}</text>
+            <button class="" bindtap="goDetail" data-id="{{item.id}}">查看详情</button>
+          </view>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="empty-card" >
+          <text class="ph ph-clipboard-text">
+          </text>
+          <view class="t-h2" >暂无匹配的服务</view>
+          <view class="t-p hf-empty-text" >可以换个场景，或稍后刷新服务目录</view>
+            <button class="secondary" bindtap="hfGo" data-url="/pages/index/index">查看其他场景</button>
+          </view>
+        </block>
+        <button class="more-scenes" bindtap="hfGo" data-url="/pages/index/index">查看其他健康场景</button>
+        <view class="disclaimer" >健康管理与信息服务，不替代诊疗。
+          如需就医，请前往正规医疗机构。</view>
+        </view>
+      </block>
+      <view class="hf-pagination" wx:if="{{list.length && (loading || error)}}">
+        <text wx:if="{{loading}}">正在加载更多…</text>
+        <button wx:else bindtap="hfRetry">{{error}} · 重新加载</button>
+      </view>
+    </view>

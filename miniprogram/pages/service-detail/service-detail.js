@@ -4,12 +4,12 @@ const config = require('../../utils/config');
 const format = require('../../utils/format');
 
 const SERVICE_NOTICE = {
-  online: '目前仅可查看服务介绍并体验系统自动回执，尚未接入真人线上服务。',
-  offline: '上门服务人员核验和真实排班尚未接入，暂不能作为实际预约依据。',
-  third: '三方机构合作和实际履约流程尚未核验，暂不能作为实际预约依据。'
+  online: '请先查看服务内容，并选择相关服务人员。',
+  offline: '请根据可选时段预约，并确认服务地点和具体需求。',
+  third: '请查看机构与人员资料，确认服务内容和具体安排。'
 };
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     loading: true,
     error: '',
@@ -34,7 +34,7 @@ Page({
             scenarioKey: s.scenario,
             scenarioName: s.scenario_name || '',
             name: s.name,
-            desc: s.desc || '服务介绍筹备中',
+            desc: s.desc || '暂无详细介绍',
             typeLabel: t.label,
             typeCls: t.cls,
             isOnline: s.service_type === 'online',
@@ -59,7 +59,7 @@ Page({
 
   matchProviders() {
     const s = this.data.service;
-    wx.navigateTo({
+    require('../../utils/access').navigate({
       url:
         '/pages/providers/providers?service_id=' +
         s.id +
@@ -71,4 +71,4 @@ Page({
   consultNow() {
     this.matchProviders();
   }
-});
+}, 'service-detail'));

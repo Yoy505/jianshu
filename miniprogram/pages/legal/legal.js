@@ -2,7 +2,7 @@
 // 内容来自 utils/legal.js；仅静态展示，无任何数据请求。
 const legal = require('../../utils/legal');
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     doc: null
   },
@@ -12,4 +12,4 @@ Page({
     this.setData({ doc: legal[key] });
     wx.setNavigationBarTitle({ title: legal[key].title });
   }
-});
+}, 'legal'));

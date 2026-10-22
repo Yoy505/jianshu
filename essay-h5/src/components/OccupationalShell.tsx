@@ -1,8 +1,11 @@
 import { Link, NavLink } from 'react-router-dom';
 
+const icpNumber = import.meta.env.VITE_ICP_NUMBER?.trim() || '津ICP备2026014961号-1';
+
 export function OccupationalHeader() {
   return (
     <header className="oh-header">
+      <a className="oh-skip-link" href="#main-content">跳到主要内容</a>
       <div className="oh-container oh-header-inner">
         <Link className="oh-brand" to="/" aria-label="杏临汇职业健康科普作品征集首页">
           <img className="oh-brand-mark" src="/brand/xinglinhui-mark.png" alt="" width="40" height="40" />
@@ -31,10 +34,18 @@ export function OccupationalFooter() {
         <div className="oh-footer-identity">
           <span className="oh-footer-label">杏临汇 · 2026</span>
           <strong>职业健康科普作品征集</strong>
+          <span className="oh-footer-site-name">备案网站名称：健树征文服务平台</span>
         </div>
         <div className="oh-footer-meta">
           <span>图文作品 / 科普视频</span>
           <p>投稿通道状态以提交作品页实时提示为准</p>
+          {icpNumber && (
+            <p>
+              <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+                {icpNumber}
+              </a>
+            </p>
+          )}
         </div>
       </div>
     </footer>

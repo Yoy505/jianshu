@@ -1,0 +1,5 @@
+@import "../../styles/hifi.wxss";
+
+.order-card{width:100%;text-align:left}
+.order-card .grow{flex:1;min-width:0}
+.order-amount{font-weight:700;color:#0f766e}

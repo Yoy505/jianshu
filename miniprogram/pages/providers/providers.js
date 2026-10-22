@@ -19,7 +19,7 @@ function toVM(p) {
   };
 }
 
-Page({
+Page(require('../../utils/hifi-page')({
   data: {
     list: [],
     page: 1,
@@ -87,7 +87,7 @@ Page({
 
   goDetail(e) {
     const id = e.currentTarget.dataset.id;
-    wx.navigateTo({
+    require('../../utils/access').navigate({
       url:
         '/pages/provider-detail/provider-detail?id=' +
         id +
@@ -99,4 +99,4 @@ Page({
         encodeURIComponent(this.scenario || '')
     });
   }
-});
+}, 'providers'));

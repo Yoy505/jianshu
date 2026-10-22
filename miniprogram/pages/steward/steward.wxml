@@ -1,82 +1,27 @@
-<view class="page page-list">
-  <!-- 搜索框 -->
-  <view class="search-bar">
-    <view class="search-icon"></view>
-    <input
-      class="search-input"
-      placeholder="搜索服务，如：上门护理、用药咨询"
-      value="{{keyword}}"
-      confirm-type="search"
-      bindinput="onKeyword"
-      bindconfirm="onSearch"
-    />
-    <view class="search-clear" wx:if="{{keyword}}" bindtap="onClearKeyword">清除</view>
+<view class="st-page">
+  <view class="st-chrome {{navScrolled ? 'st-chrome-scrolled' : ''}}" style="height: {{navBottom}}px">
+    <view class="st-status" style="height: {{statusBarHeight}}px"></view>
+    <view class="st-brand" style="top: {{menuTop}}px; height: {{menuHeight}}px; right: {{menuRightSpace}}px"><image src="/assets/brand/xinglinhui-mark.png" mode="aspectFit" aria-hidden="true"/><text class="st-brand-title">健康管家</text><text class="st-brand-sub">杏临汇</text></view>
   </view>
-
-  <!-- 场景横向筛选 chips -->
-  <scroll-view scroll-x class="chip-scroll" enhanced show-scrollbar="{{false}}">
-    <view class="chip-scroll-inner">
-      <view
-        class="hchip {{activeKey === item.key ? 'on' : ''}}"
-        wx:for="{{chips}}"
-        wx:key="key"
-        data-key="{{item.key}}"
-        bindtap="onChip"
-      >{{item.name}}</view>
-    </view>
-  </scroll-view>
-
-  <!-- 骨架 -->
-  <block wx:if="{{loading && !list.length}}">
-    <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="sk-line first sk-w60"></view>
-      <view class="sk-line sk-w80"></view>
-      <view class="sk-line sk-w40"></view>
-    </view>
-  </block>
-
-  <!-- 错误 -->
-  <view class="card" wx:elif="{{error && !list.length}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">{{error}}</view>
-      <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
-    </view>
+  <view class="st-hero" style="height: calc(50.256410257vw + {{statusBarHeight}}px)">
+    <image class="st-hero-photo" src="/assets/home-v1/hero-rehab.jpg" mode="aspectFill" style="top: {{statusBarHeight}}px" aria-hidden="true"/>
+    <view class="st-hero-copy" style="top: calc(16.923076924vw + {{statusBarHeight}}px)"><text class="st-eyebrow">全域健康 · 日常相伴</text><view class="st-hero-title">让健康支持<view>更贴近生活</view></view><view class="st-hero-sub">从需求出发，了解适合的服务</view></view>
   </view>
-
-  <!-- 空态 -->
-  <view class="card" wx:elif="{{!list.length}}">
-    <view class="empty">
-      <view class="empty-art"></view>
-      <view class="empty-title">暂无匹配的服务</view>
-      <view class="empty-desc">换个筛选条件或关键词试试</view>
-    </view>
-  </view>
-
-  <!-- 服务列表 -->
-  <block wx:else>
-    <view
-      class="card service-card fade-in"
-      wx:for="{{list}}"
-      wx:key="id"
-      data-id="{{item.id}}"
-      bindtap="goDetail"
-    >
-      <view class="row-between">
-        <view class="service-name ellipsis">{{item.name}}</view>
-        <view class="tag {{item.typeCls}} service-type">{{item.typeLabel}}</view>
+  <view class="st-content">
+    <view class="st-search"><image class="st-search-icon" src="/assets/steward-v1/search.png" aria-hidden="true"/><input class="st-input" value="{{keyword}}" placeholder="搜索服务，如上门护理、用药咨询" placeholder-class="st-placeholder" confirm-type="search" bindinput="onKeyword" bindconfirm="onSearch" aria-label="搜索服务"/><button class="st-clear" wx:if="{{keyword}}" bindtap="onClearKeyword" aria-label="清除搜索"><image src="/assets/steward-v1/close.png"/></button><button class="st-search-action" bindtap="onSearch">搜索</button></view>
+    <scroll-view class="st-chips" scroll-x enhanced show-scrollbar="{{false}}"><view class="st-chip-inner"><button wx:for="{{chips}}" wx:key="key" class="st-chip {{activeKey === item.key ? 'st-chip-active' : ''}}" data-key="{{item.key}}" bindtap="onChip" aria-label="{{item.name}}">{{item.name}}</button></view></scroll-view>
+    <view class="st-heading"><view class="st-heading-title">服务目录</view><text>{{loading && !list.length ? '目录加载中' : error && !list.length ? '目录暂不可用' : '了解内容，再作选择'}}</text></view>
+    <block wx:if="{{loading && !list.length}}"><view class="st-skeleton" wx:for="{{[1,2,3]}}" wx:key="*this" aria-label="正在加载服务"><view></view><view></view><view></view></view></block>
+    <view class="st-empty" wx:elif="{{error && !list.length}}"><view class="st-empty-icon"><image src="/assets/steward-v1/cloud-off.png"/></view><view class="st-empty-title">目录暂时加载失败</view><view class="st-empty-desc">{{error}}</view><view class="st-empty-desc">你的筛选条件会保留</view><button class="st-empty-action" bindtap="reload">重新加载</button></view>
+    <view class="st-empty" wx:elif="{{!list.length}}"><view class="st-empty-icon"><image src="{{hasFilter ? '/assets/steward-v1/search.png' : '/assets/steward-v1/empty-heart.png'}}"/></view><view class="st-empty-title">{{hasFilter ? '暂无匹配的服务' : '暂无服务信息'}}</view><view class="st-empty-desc">{{hasFilter ? '换个筛选条件或关键词试试' : '可以稍后刷新服务目录'}}</view><button class="st-empty-action" wx:if="{{hasFilter}}" bindtap="onResetFilters">清除筛选条件</button></view>
+    <block wx:else>
+      <view class="st-card" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="goDetail" hover-class="st-pressed" role="button" aria-label="查看{{item.name}}详情">
+        <view class="st-card-top"><image class="st-card-icon" src="{{item.icon}}" mode="aspectFit" aria-hidden="true"/><view class="st-card-titles"><view class="st-card-name">{{item.name}}</view><view class="st-card-category">{{item.category}}</view></view></view>
+        <view class="st-card-desc">{{item.desc}}</view><view class="st-provider" wx:if="{{item.providerLabel}}">{{item.providerLabel}}</view>
+        <view class="st-card-bottom"><text class="st-card-meta">{{item.meta}}</text><view class="st-card-detail">查看详情</view></view>
       </view>
-      <view class="service-desc ellipsis-2">{{item.desc}}</view>
-      <view class="service-meta t3">演示资料 · 参考时长 {{item.duration}} · 人员资料 {{item.providerCount}} 条</view>
-      <view class="row-between service-bottom">
-        <view class="price">
-          <text class="price-symbol">参考 ¥</text>{{item.price}}<text class="price-unit">/{{item.unit}}</text>
-        </view>
-        <view class="btn-mini">查看详情</view>
-      </view>
-    </view>
-
-    <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
-    <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
-  </block>
+      <view class="st-load-tip" wx:if="{{loading}}">正在加载…</view><button class="st-load-retry" wx:elif="{{error}}" bindtap="retryMore">{{error}} · 点击重试</button><view class="st-load-tip" wx:elif="{{finished}}">没有更多了</view>
+    </block>
+    <view class="st-disclaimer">健康管理与信息服务，不替代诊疗</view>
+  </view>
 </view>

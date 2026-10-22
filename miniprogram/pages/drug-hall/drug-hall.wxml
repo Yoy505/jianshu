@@ -1,94 +1,133 @@
-<view class="page page-hall">
-  <!-- 搜索框 -->
-  <view class="search-bar">
-    <view class="search-icon"></view>
-    <input
-      class="search-input"
-      placeholder="搜索通用名 / 商品名"
-      value="{{q}}"
-      confirm-type="search"
-      bindinput="onInput"
-      bindconfirm="onSearch"
-    />
-    <view class="search-clear" wx:if="{{q}}" bindtap="onClear">清除</view>
-  </view>
-
-  <!-- 标签筛选 -->
-  <scroll-view scroll-x class="chip-scroll" enhanced show-scrollbar="{{false}}">
-    <view class="chip-scroll-inner">
-      <view
-        class="hchip {{activeTag === item.v ? 'on' : ''}}"
-        wx:for="{{tagChips}}"
-        wx:key="v"
-        data-v="{{item.v}}"
-        bindtap="onTag"
-      >{{item.n}}</view>
+<view class="hf " style="padding-top:calc(14.871794872vw + {{hfStatus}}px)">
+  <view class="hf-nav" style="top:0">
+    <view class="hf-status" style="height:{{hfStatus}}px">
     </view>
-  </scroll-view>
-
-  <!-- 结果区（右侧字母索引留白） -->
-  <view class="hall-body">
-    <!-- 骨架 -->
-    <block wx:if="{{loading && !list.length}}">
-      <view class="skeleton" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-        <view class="sk-line first sk-w60"></view>
-        <view class="sk-line sk-w80"></view>
+    <view class="hf-nav-inner" >
+      <button class="hf-back" bindtap="hfBack" >返回</button>
+      <view class="hf-nav-title" >{{hfTitle}}</view>
+    </view>
+  </view>
+  <block wx:if="{{needLogin}}">
+    <view class="hero with-icon" >
+      <text class="eyebrow">杏临汇 · 个人服务</text>
+      <view class="t-h1" >登录后继续</view>
+      <view class="t-p " >个人记录仅向当前登录账户展示</view>
+      <view class="hero-icon" >
+        <text class="ph ph-lock-key">
+        </text>
+      </view>
+    </view>
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-user-circle">
+        </text>
+        <view class="t-h2" >登录后查看{{hfTitle}}</view>
+        <view class="t-p hf-empty-text" >前往「我的」完成登录后，再回来查看相关信息。</view>
+        <button class="primary" bindtap="hfGo" data-url="/pages/my/my">前往登录</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:elif="{{loading && (!list || !list.length)}}">
+    <view class="pad" >
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+      <view class="skeleton" >
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+        <view class="t-span" >
+        </view>
+      </view>
+    </view>
+  </block>
+  <block wx:elif="{{(error && (!list || !list.length)) || statusUnavailable}}">
+    <view class="pad" >
+      <view class="empty-card" >
+        <text class="ph ph-cloud-slash">
+        </text>
+        <view class="t-h2" >暂时无法加载内容</view>
+        <view class="t-p hf-empty-text" >{{error || statusMessage}}</view>
+        <button class="secondary" bindtap="hfRetry" >重新加载</button>
+      </view>
+      <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="hero drug-hero" >
+      <image class="t-img" src="/assets/home-v1/drug-exhibit.jpg" mode="aspectFill" />
+      <text class="eyebrow">杏临汇 · 药品资料</text>
+      <view class="t-h1" >药品数字展厅</view>
+      <view class="t-p " >让资料来源清楚，让查阅更方便</view>
+    </view>
+    <view class="pad" >
+      <view class="search" >
+        <text class="ph ph-magnifying-glass">
+        </text>
+        <input value="{{q}}" bindinput="onInput" bindconfirm="onSearch" placeholder="搜索通用名 / 商品名" confirm-type="search" />
+        <button class="" bindtap="onSearch" >搜索</button>
+      </view>
+      <view class="chips" >
+        <button class="{{activeTag === item.v ? 'active' : ''}}" bindtap="onTag" wx:for="{{tagChips}}" wx:key="v" data-v="{{item.v}}">{{item.n}}</button>
+      </view>
+      <view class="section-head" >
+        <view class="t-h2" >药品资料</view>
+        <text class="t-small">{{list.length ? total + ' 条资料' : '暂无已审核发布资料'}}</text>
+      </view>
+      <view class="drug-layout" >
+        <block wx:if="{{list.length}}">
+          <view class="card drug-card" wx:for="{{list}}" wx:key="id">
+            <view class="row between" >
+              <view class="t-h3" >{{item.commonName}}</view>
+              <text class="badge">{{item.publicationLabel || '资料查阅'}}</text>
+            </view>
+            <view class="t-p " >{{item.formSpec || item.form || '剂型、规格资料待载入'}}</view>
+            <view class="t-p small" >{{item.manufacturer || '生产企业待载入'}}</view>
+            <view class="card-foot" >
+              <text class="t-span">{{item.approvalNo || '批准文号待载入'}}</text>
+              <button class="text-action" bindtap="goDetail" data-id="{{item.id}}">查看资料</button>
+            </view>
+          </view>
+        </block>
+        <block wx:else>
+          <view class="empty-card" >
+            <text class="ph ph-folder-open">
+            </text>
+            <view class="t-h2" >{{q || activeTag || activeLetter ? '暂无匹配资料' : '资料正在准备中'}}</view>
+            <view class="t-p hf-empty-text" >本展厅暂未发布可供查阅的药品资料。
+              需要核对注册信息，可查阅官方公开资料。</view>
+              <button class="secondary" bindtap="copyOfficialQuery" >查看官方查询入口</button>
+            </view>
+          </block>
+          <view class="letter-rail" >
+            <button class="{{activeLetter === item ? 'active' : ''}}" bindtap="onLetter" wx:for="{{letters}}" wx:key="*this" data-letter="{{item}}">{{item}}</button>
+          </view>
+        </view>
+        <view class="notice cool" >
+          <text class="ph ph-info">
+          </text>
+          <view class="t-p " >用药请遵医嘱或咨询执业药师，资料查阅不替代诊疗。</view>
+        </view>
+        <view class="footer-note" >健康管理与信息服务，不替代诊疗</view>
       </view>
     </block>
-
-    <!-- 错误 -->
-    <view class="card" wx:elif="{{error && !list.length}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">{{error}}</view>
-        <view class="empty-btn btn-mini" bindtap="reload">重新加载</view>
-      </view>
+    <view class="hf-pagination" wx:if="{{list.length && (loading || error)}}">
+      <text wx:if="{{loading}}">正在加载更多…</text>
+      <button wx:else bindtap="hfRetry">{{error}} · 重新加载</button>
     </view>
-
-    <!-- 空态 -->
-    <view class="card" wx:elif="{{!list.length}}">
-      <view class="empty">
-        <view class="empty-art"></view>
-        <view class="empty-title">{{q || activeTag || activeLetter ? '暂无匹配资料' : '尚无已审核发布的药品资料'}}</view>
-        <view class="empty-desc" wx:if="{{q || activeTag || activeLetter}}">可调整关键词或标签后重新查找。</view>
-        <view class="empty-desc" wx:else>本展厅暂未发布可供查阅的药品资料。</view>
-        <view class="official-query-tip">需核对药品注册信息，可前往国家药监局公开查询。</view>
-        <view class="official-query-copy" bindtap="copyOfficialQuery">复制官方查询入口</view>
-      </view>
-    </view>
-
-    <!-- 结果列表 -->
-    <block wx:else>
-      <view class="drug-demo-notice" wx:if="{{hasDemo}}">当前包含演示资料，仅供功能测试；不代表已核实或正式发布。</view>
-      <view class="card drug-card fade-in" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="goDetail">
-        <view class="row-between">
-          <view class="drug-name ellipsis">{{item.commonName}}</view>
-          <view class="cell-arrow"></view>
-        </view>
-        <view class="drug-publication {{item.publicationClass}}">{{item.publicationLabel}}</view>
-        <view class="row drug-tags" wx:if="{{item.tags.length}}">
-          <view class="tag {{t.cls}}" wx:for="{{item.tags}}" wx:for-item="t" wx:key="key">{{t.label}}</view>
-        </view>
-        <view class="drug-sub t2" wx:if="{{item.formSpec}}">{{item.formSpec}}</view>
-        <view class="drug-sub t2" wx:if="{{item.manufacturer}}">生产企业：{{item.manufacturer}}</view>
-        <view class="drug-meta" wx:if="{{item.approvalNo}}">批准文号：{{item.approvalNo}}</view>
-        <view class="drug-meta" wx:if="{{item.sourceName}}">资料来源：{{item.sourceName}}</view>
-      </view>
-
-      <view class="load-tip" wx:if="{{loading}}">正在加载…</view>
-      <view class="load-tip" wx:elif="{{finished && list.length}}">没有更多了</view>
-    </block>
   </view>
-
-  <!-- 字母索引右侧条 -->
-  <view class="letter-rail">
-    <view
-      class="letter {{activeLetter === l ? 'on' : ''}}"
-      wx:for="{{letters}}"
-      wx:for-item="l"
-      wx:key="*this"
-      data-letter="{{l}}"
-      bindtap="onLetter"
-    >{{l}}</view>
-  </view>
-</view>

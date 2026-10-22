@@ -2,6 +2,10 @@ import type { ReactElement } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import AuditLogs from '@/pages/AuditLogs'
+import CommerceBatches from '@/pages/CommerceBatches'
+import CommerceOrders from '@/pages/CommerceOrders'
+import CommercePackages from '@/pages/CommercePackages'
+import CommercePoints from '@/pages/CommercePoints'
 import Dashboard from '@/pages/Dashboard'
 import Login from '@/pages/Login'
 import MpAppointments from '@/pages/MpAppointments'
@@ -10,6 +14,7 @@ import MpDrugs from '@/pages/MpDrugs'
 import MpProviders from '@/pages/MpProviders'
 import MpServices from '@/pages/MpServices'
 import OccupationalSubmissions from '@/pages/OccupationalSubmissions'
+import VolunteerApplications from '@/pages/VolunteerApplications'
 import { useAuthStore } from '@/stores/auth'
 
 /** 未登录访问受保护路由时重定向 /login */
@@ -35,11 +40,16 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="occupational-submissions" element={<OccupationalSubmissions />} />
+        <Route path="volunteer-applications" element={<VolunteerApplications />} />
         <Route path="mp/appointments" element={<MpAppointments />} />
         <Route path="mp/consults" element={<MpConsults />} />
         <Route path="mp/providers" element={<MpProviders />} />
         <Route path="mp/drugs" element={<MpDrugs />} />
         <Route path="mp/services" element={<MpServices />} />
+        <Route path="mp/commerce/packages" element={<CommercePackages />} />
+        <Route path="mp/commerce/orders" element={<CommerceOrders />} />
+        <Route path="mp/commerce/batches" element={<CommerceBatches />} />
+        <Route path="mp/commerce/points" element={<CommercePoints />} />
         <Route path="audit-logs" element={<AuditLogs />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
