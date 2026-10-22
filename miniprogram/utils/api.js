@@ -186,5 +186,11 @@ module.exports = {
   },
   grantStewardConsent(data) {
     return request({ url: '/mp/steward/consents', method: 'POST', data });
+  },
+  getStewardConsentTerms() {
+    return request({ url: '/mp/steward/consent-terms', silent: true });
+  },
+  getStewardConsentRecords() {
+    return request({ url: '/mp/steward/consent-records', silent: true });
   }
 };

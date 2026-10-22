@@ -92,8 +92,27 @@
           </view>
           <button class="primary act-btn" bindtap="activate"
             loading="{{activating}}"
-            disabled="{{instance.passedCount < instance.prepChecks.length}}">确认开通服务</button>
+            disabled="{{instance.passedCount < instance.prepChecks.length || instance.releaseBlocked}}">确认开通服务</button>
+          <view class="t-p quiet-note" wx:if="{{instance.releaseBlocked}}">{{instance.releaseNote || '试点放行未配置，服务方完成上线准备后开放开通。'}}</view>
           <view class="t-p quiet-note">开通即从确认时刻起连续计算 {{instance.service_days}}×24 小时服务期。</view>
+        </view>
+
+        <view class="card" wx:if="{{consentRecords.length}}">
+          <view class="t-h3">授权管理</view>
+          <view class="check-line" wx:for="{{consentRecords}}" wx:key="purpose">
+            <view class="grow">
+              <view class="row between">
+                <view class="grow">
+                  <view class="t-h3">{{item.label}}</view>
+                  <view class="t-p">{{item.statusText}}</view>
+                  <view class="t-p" wx:if="{{item.granted && item.grantedText}}">授权时间：{{item.grantedText}}</view>
+                </view>
+                <button wx:if="{{item.granted}}" class="mini" size="mini"
+                  bindtap="revokeConsent" data-id="{{item.consent_id}}" loading="{{busy}}">撤回</button>
+              </view>
+            </view>
+          </view>
+          <view class="t-p quiet-note">各用途授权相互独立；撤回后对应服务准备项回退，撤回授权不代表申请退款。</view>
         </view>
 
         <view class="card" wx:if="{{instance.status === 'active' || instance.status === 'paused'}}">

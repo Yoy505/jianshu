@@ -121,3 +121,22 @@ def snapshot_daily_stats() -> dict:
     """每日 00:30 执行：汇总刚结束一天的累计用户/投稿/点赞数。"""
     for_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
     return asyncio.run(_run_snapshot(for_date))
+
+
+async def _run_steward_sweep() -> dict:
+    from app.services import steward_service
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            return await steward_service.lifecycle_sweep(session)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.steward_lifecycle_sweep")
+def steward_lifecycle_sweep() -> dict:
+    """每 5 分钟（beat）：批量推进服务实例到期与权益作废终止（A3）。
+    条件 UPDATE 幂等；与读路径懒迁移共用同一组迁移函数与审计 action。"""
+    return asyncio.run(_run_steward_sweep())

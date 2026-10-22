@@ -516,6 +516,12 @@ async def revoke_consent(
     if consent is None or consent.user_id != user.id:
         raise HTTPException(status_code=404, detail="授权记录不存在")
     consent = await svc.revoke_consent(db, user, consent)
+    # 工作二最小联动（S1）：履约用途撤回 → 实例时间线 + 审计 + 门禁回退；
+    # 非履约用途不受影响。撤回授权不触发退款。
+    if consent.purpose.startswith("steward_"):
+        from app.services import steward_service as steward_svc
+
+        await steward_svc.on_consent_revoked(db, consent)
     return ConsentOut(
         id=consent.id,
         purpose=consent.purpose,

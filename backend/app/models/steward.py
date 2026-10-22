@@ -25,6 +25,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -107,7 +108,7 @@ PREP_CHECK_META: dict[str, tuple[str, PrepCheckSource]] = {
     PrepCheckType.DEVICE_VENDOR_CONSENT.value: ("设备厂商数据授权", PrepCheckSource.AUTO),
     PrepCheckType.PLATFORM_CONSENT.value: ("平台服务授权", PrepCheckSource.AUTO),
     PrepCheckType.FIRST_VALID_DATA.value: ("首条本人有效设备数据", PrepCheckSource.MANUAL),
-    PrepCheckType.PHYSICIAN_PLAN.value: ("医师初评并签发个人计划", PrepCheckSource.MANUAL),
+    PrepCheckType.PHYSICIAN_PLAN.value: ("医师初评并签发个人计划", PrepCheckSource.AUTO),
     PrepCheckType.STAFFING_READY.value: ("管家及替补排班就绪", PrepCheckSource.AUTO),
 }
 
@@ -273,6 +274,8 @@ class StewardTask(TimestampMixin, Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     result: Mapped[str | None] = mapped_column(String(500), nullable=True)
     shifted_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    actual_occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    backfill_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_by_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
@@ -330,3 +333,134 @@ class StewardTimelineEvent(TimestampMixin, Base):
     actor_type: Mapped[str] = mapped_column(String(8), default="system", server_default="system", nullable=False)
     actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actor_name: Mapped[str] = mapped_column(String(100), default="", server_default="", nullable=False)
+
+
+class StewardConsentTerms(TimestampMixin, Base):
+    """履约授权条款版本（S1）：运营发布新版本即成为该 purpose 唯一 active 当前版本；
+    门禁与授权都以当前版本为准，旧版本授权不自动沿用。"""
+
+    __tablename__ = "steward_consent_terms"
+    __table_args__ = (
+        UniqueConstraint("purpose", "version", name="uq_steward_consent_terms_version"),
+        Index("ix_steward_consent_terms_purpose", "purpose", "status", "id"),
+        CheckConstraint(
+            "purpose IN ('steward_service', 'steward_device_data')",
+            name="ck_steward_consent_terms_purpose",
+        ),
+        CheckConstraint("status IN ('active', 'retired')", name="ck_steward_consent_terms_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    version: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(8), default="active", server_default="active", nullable=False)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+# 试点放行凭据必填八项（S2）：结构化来源与编号，不接受「已完成」式描述
+PILOT_RELEASE_EVIDENCE_ITEMS = (
+    "contract_attachment",
+    "device_supply",
+    "org_contract",
+    "physician_staffing",
+    "care_plan_rules",
+    "refund_interruption",
+    "duty_ops",
+    "outreach_channel",
+)
+
+
+class StewardPilotRelease(TimestampMixin, Base):
+    """试点放行（S2）：可审计的激活前置放行记录；无有效记录时激活一律阻断（默认未放行）。"""
+
+    __tablename__ = "steward_pilot_releases"
+    __table_args__ = (
+        Index("ix_steward_releases_lookup", "package_version_id", "env", "revoked_at"),
+        CheckConstraint(
+            "env IN ('dev', 'test', 'staging', 'prod')", name="ck_steward_releases_env"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(ForeignKey("mp_packages.id", ondelete="RESTRICT"), nullable=False)
+    package_version_id: Mapped[int] = mapped_column(
+        ForeignKey("mp_package_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    env: Mapped[str] = mapped_column(String(10), nullable=False)
+    owner_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    evidence: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    effective_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoke_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class StewardCarePlan(TimestampMixin, Base):
+    """医师签发的个人计划（A1 最小结构；切片 D 扩展为完整版本化签发与适用范围）。
+    physician_plan 门禁按「未撤销、未过期、签发医师 = 实例签约医师」自动判定。"""
+
+    __tablename__ = "steward_care_plans"
+    __table_args__ = (
+        UniqueConstraint("user_id", "version", name="uq_steward_care_plans_user_version"),
+        Index("ix_steward_care_plans_user", "user_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    instance_id: Mapped[int | None] = mapped_column(
+        ForeignKey("steward_service_instances.id", ondelete="SET NULL"), nullable=True
+    )
+    physician_id: Mapped[int] = mapped_column(
+        ForeignKey("steward_staff.id", ondelete="RESTRICT"), nullable=False
+    )
+    org_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(32), nullable=False)
+    content: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoke_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class StewardActivationCredential(TimestampMixin, Base):
+    """正式激活凭证（A1）：与激活同事务写入的不可变快照；preparing 草稿不产生凭证。"""
+
+    __tablename__ = "steward_activation_credentials"
+    __table_args__ = (
+        UniqueConstraint("instance_id", name="uq_steward_activation_credentials_instance"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    instance_id: Mapped[int] = mapped_column(
+        ForeignKey("steward_service_instances.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    gate_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    consent_versions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    plan_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    butler_id: Mapped[int] = mapped_column(ForeignKey("steward_staff.id", ondelete="RESTRICT"), nullable=False)
+    backup_butler_id: Mapped[int] = mapped_column(
+        ForeignKey("steward_staff.id", ondelete="RESTRICT"), nullable=False
+    )
+    physician_id: Mapped[int] = mapped_column(ForeignKey("steward_staff.id", ondelete="RESTRICT"), nullable=False)
+    service_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    service_ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

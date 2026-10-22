@@ -679,15 +679,18 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | 枚举 | 取值 |
 |---|---|
 | 服务实例状态 | `preparing`(准备中) `active`(服务中) `paused`(已暂停) `expired`(已到期未结案) `closed`(已结案) `terminated`(提前终止) |
-| 准备检查项 check_type | `identity_phone`(本人手机号与微信身份核验) `entitlement_valid`(权益属于本人且有效) `delivery`(收货完成) `device_paired`(设备配对完成) `device_vendor_consent`(设备厂商数据授权) `platform_consent`(平台服务授权) `first_valid_data`(首条本人有效设备数据) `physician_plan`(医师初评并签发个人计划) `staffing_ready`(管家及替补排班就绪) |
+| 准备检查项 check_type | `identity_phone`(本人手机号与微信身份核验) `entitlement_valid`(权益属于本人且有效) `delivery`(收货完成) `device_paired`(设备配对完成) `device_vendor_consent`(设备厂商数据授权) `platform_consent`(平台服务授权) `first_valid_data`(首条本人有效设备数据) `physician_plan`(医师初评并签发个人计划，按签发记录自动判定) `staffing_ready`(管家及替补排班就绪) |
+| 激活放行 `pilot_release`（第十项门禁，非 prep_check 行） | 存在未撤销、在有效期内、覆盖该实例 `package_version_id` 与当前 `APP_ENV` 的试点放行记录；缺失 / 已撤销 / 环境或版本不匹配均判未过，激活 409 的 `missing` 中列 `pilot_release`。默认无记录 = 一律阻断 |
 | 准备检查状态 | `pending` `passed` `blocked`；`source`：`auto`(服务端实时判定) `manual`(运营带凭据录入) |
 | 履约任务 task_type | `daily`(每日事项) `follow_up`(管家随访，第 7/14/21/28/35/42 天) `review_prep`(复评资料准备，第 43 天) `final_review`(期末复评，第 44 天) `closure`(结案，第 45 天) |
 | 履约任务状态 | `pending` `done` `cancelled` |
 | 任务责任人类型 | `user`(本人) `butler`(管家) `physician`(医师) `system` |
 | 暂停原因 cause | `provider_interruption`(服务方核心中断) `physician_advised`(医师建议暂停) `user_request`(用户申请，不补时) `other` |
-| 时间线事件 | `instance_created` `prep_check_passed` `prep_check_reset` `activated` `task_completed` `task_cancelled` `paused` `resumed` `compensated` `expired` `closed` `terminated` `staff_assigned` `renewed` |
+| 时间线事件 | `instance_created` `prep_check_passed` `prep_check_reset` `activated` `task_completed` `task_cancelled` `paused` `resumed` `compensated` `expired` `closed` `terminated` `staff_assigned` `renewed` `consent_revoked` `care_plan_bound` |
 | 履约人员角色 | `butler`(管家) `physician`(医师) |
 | 授权 purpose 扩展 | 在 `package_purchase` 基础上新增 `steward_service`(平台服务授权) `steward_device_data`(设备厂商数据授权) `steward_phone_outreach`(本人电话外呼授权，切片 E 启用) `steward_contact_outreach`(联系人电话授权，切片 E 启用) |
+| 条款版本状态 | `active`(当前版本，同 purpose 唯一) `retired`(历史版本，仅留存) |
+| 放行环境 env | `dev` `test` `staging` `prod`（与 `APP_ENV` 一致） |
 
 ## 对象结构
 
@@ -703,8 +706,8 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
   "compensated_seconds": 0,           // 累计补时（秒）
   "current_day": null,                // active/paused 时按 Asia/Shanghai 业务日推算的第 N 天
   "butler": {"id": 1, "name": "张管家"}, "backup_butler": {...}, "physician": {...},
-  "plan_version": null,               // 医师签发的个人计划版本（切片 D 前恒为 null）
-  "renewed_from_instance_id": null,
+  "plan_version": null,               // 激活时固化的医师签发个人计划版本；preparing 期为 null
+  "renewed_from_instance_id": null,   // 仅显式续期动作写入；普通再次购买不自动挂链
   "termination_reason": null, "terminated_at": null, "closed_at": null
 }
 
@@ -718,7 +721,9 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
   "task_type": "follow_up", "title": "第 7 天 · 管家随访",
   "assignee_type": "butler", "status": "pending",
   "due_at": "2026-11-05T15:59:59Z", "result": null, "completed_at": null,
-  "shifted_days": 0 }                  // 补时平移天数留痕
+  "shifted_days": 0,                   // 补时平移天数留痕
+  "actual_occurred_at": null,          // 补录时的实际发生时间
+  "backfill_reason": null }            // 补录原因（历史任务补登记必填）
 
 // 暂停记录
 { "id": 1, "cause": "provider_interruption", "reason": "设备云接口故障",
@@ -728,6 +733,36 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 // 时间线事件
 { "event_type": "activated", "actor_type": "user", "actor_name": "138****0001",
   "detail": {"ends_at": "..."}, "created_at": "...Z" }
+
+// 授权条款（当前版本；C 端展示全文供确认，后台发布新版本即成为当前版本）
+{ "purpose": "steward_service", "version": "v1", "title": "平台服务授权条款",
+  "text": "条款全文……", "effective_from": "...Z" }
+
+// 试点放行（后台可审计的激活前置放行；evidence 为结构化凭据，非布尔勾选）
+{ "id": 1, "package_id": 3, "package_version_id": 5, "env": "dev",
+  "owner_name": "运营负责人", "evidence": [
+    {"item": "contract_attachment", "source": "合同系统", "reference": "HT-2026-001", "note": "服务包合同附件"},
+    {"item": "device_supply", "source": "采购单", "reference": "CG-2026-118"},
+    {"item": "org_contract", "source": "机构合同", "reference": "JG-2026-07"},
+    {"item": "physician_staffing", "source": "排班表", "reference": "PB-2026-W43"},
+    {"item": "care_plan_rules", "source": "医务文档", "reference": "PLAN-SLEEP-V2"},
+    {"item": "refund_interruption", "source": "售后方案", "reference": "SH-2026-09"},
+    {"item": "duty_ops", "source": "值班表", "reference": "ZB-2026-10"},
+    {"item": "outreach_channel", "source": "触达决策记录", "reference": "TD-2026-01"}],
+  "effective_from": "...Z", "effective_until": null, "revoked_at": null }
+
+// 医师签发个人计划（A1 最小结构；切片 D 扩展为完整版本化签发与适用范围）
+{ "id": 1, "user_id": 1, "instance_id": null, "physician_id": 3,
+  "org_name": "杏临汇签约服务机构", "version": "v1", "content": {"sleep_plan": "..."},
+  "issued_at": "...Z", "valid_until": null, "revoked_at": null }
+
+// 激活凭证（与激活同事务写入的不可变快照；preparing 草稿不产生凭证）
+{ "instance_id": 1, "user_id": 1, "confirmed_at": "...Z",
+  "gate_snapshot": {"identity_phone": "passed", "delivery": "passed", "...": "..."},
+  "consent_versions": {"steward_service": "v1", "steward_device_data": "v1"},
+  "plan_version": "v1",
+  "butler_id": 1, "backup_butler_id": 2, "physician_id": 3,
+  "service_started_at": "...Z", "service_ends_at": "...Z" }
 ```
 
 ## 一）C 端 · 我的服务 `/mp/steward`
@@ -735,15 +770,17 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/mp/steward/instances` | 本人服务实例列表（懒创建：本人每份 `active` 权益自动生成唯一 `preparing` 实例，`UNIQUE(entitlement_id)` 兜底幂等）。返回同时做懒迁移：到期 → `expired`、权益作废 → `terminated` |
-| GET | `/mp/steward/instances/{id}` | 详情：实例 + 九项门禁（`auto` 项服务端实时判定并回写快照）+ 指派 + 当日任务摘要。跨用户 404 |
-| POST | `/mp/steward/instances/{id}/activate` | 本人确认激活。九项门禁任一未过 → 409 `{"detail": {"message": "激活条件未全部满足", "missing": [check_type...]}}`；全过 → 生成实例编号、`activated_at`、`ends_at = activated_at + service_days×24h`、日历任务，条件 UPDATE 保证并发恰一次；重复请求返回原实例（幂等） |
+| GET | `/mp/steward/instances/{id}` | 详情：实例 + 九项门禁（`auto` 项服务端实时判定并回写快照）+ 指派 + 当日任务摘要 + 激活放行状态 `pilot_release_ready`。跨用户 404 |
+| POST | `/mp/steward/instances/{id}/activate` | 本人确认激活。九项门禁 + 试点放行（`pilot_release`）任一未过 → 409 `{"detail": {"message": "激活条件未全部满足", "missing": [check_type..., "pilot_release"]}}`；全过 → 生成实例编号、`activated_at`、`ends_at = activated_at + service_days×24h`、日历任务、激活凭证快照（门禁事实 / 条款版本 / 计划版本 / 责任人），条件 UPDATE 保证并发恰一次；重复请求返回原实例（幂等）。preparing 草稿与正式激活凭证是两个概念：只有本人确认且全部门禁通过才产生凭证并开始计时 |
 | GET | `/mp/steward/instances/{id}/calendar?month=YYYY-MM` | 月视图：该月逐日 `{date, service_day, tasks:[...]}`；跨月正确（服务日 → 日期映射在补时平移后仍一致） |
 | GET | `/mp/steward/instances/{id}/tasks?service_day=&date=` | 任务明细（二选一过滤；都空返回当日） |
-| POST | `/mp/steward/instances/{id}/tasks/{task_id}/complete` | 本人完成本人任务（`assignee_type=user` 且归属校验）：`{result?(1–500)}` → `done`；重复完成 409；管家 / 医师任务仅后台登记 |
+| POST | `/mp/steward/instances/{id}/tasks/{task_id}/complete` | 本人完成本人任务（`assignee_type=user` 且归属校验）：`{result?(1–500), backfill_reason?(1–200)}` → `done`。门禁：实例须 `active`（`paused` 409「服务暂停中」、`expired/terminated/closed` 409）；任务 `service_date` 须 ≤ 当日（未来任务 409「不能提前完成未来任务」）；`service_date <` 当日的补录必填 `backfill_reason`（422）；重复完成 409；管家 / 医师任务仅后台登记 |
 | GET | `/mp/steward/instances/{id}/timeline` | 本人实例时间线（只读） |
-| POST | `/mp/steward/consents` | 授予履约授权：`{purpose: steward_service|steward_device_data}`；条款文本由服务端配置提供（`STEWARD_*_CONSENT_TEXT`），未配置 → 503「该授权条款尚未配置」，**不接受客户端自备文本**（防止绕过版本管理） |
+| GET | `/mp/steward/consent-terms` | 各 purpose 当前有效条款 `{purpose, version, title, text, effective_from}` 全文，供确认前展示；未发布的 purpose 不返回（前端显示待配置） |
+| POST | `/mp/steward/consents` | 授予履约授权：`{purpose: steward_service|steward_device_data, version: v\d+}`。服务端比对当前条款版本：未发布条款 → 503「该授权条款尚未配置」；`version` 与当前版本不一致 → 409「条款版本已更新，请查看最新条款」（旧版本不能冒充新版本同意）；一致 → 保存条款文本快照。**不接受客户端自备文本**。同版本重复提交幂等返回原记录 |
+| GET | `/mp/steward/consent-records` | 本人各 purpose 当前授权状态：`{purpose, granted: bool, version, granted_at, consent_id}`；`version` 为已授权版本，若低于当前条款版本则 `outdated: true`（须重新确认） |
 
-授权撤回复用第四部分 `POST /mp/consents/{id}/revoke`；撤回后对应自动门禁项回到 `pending`，未激活的实例不能激活，已激活实例记录时间线并停止相应后续动作（设备数据切片 C 生效）。
+授权撤回复用第四部分 `POST /mp/consents/{id}/revoke`；撤回后：对应自动门禁项回到 `pending`（未激活实例不能激活）、本人全部非终态实例写入时间线 `consent_revoked` + 审计 `steward.consent.revoke`，并为切片 B/C/E 预留「执行前重查授权」的统一判定函数。撤回授权不等于申请退款，二者互不触发。
 
 ## 二）后台 · 履约工作台 `/admin/steward`
 
@@ -756,50 +793,63 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | GET | `/admin/steward/instances/{id}/calendar?month=` · `/timeline` | `steward.read` |
 | POST | `/admin/steward/instances/{id}/prep-checks/{check_type}/pass` | `steward.manage`；仅 `manual` 项（auto 项 409）；`{evidence(1–500 必填), note?}` → `passed` + 审计 + 时间线 |
 | POST | `/admin/steward/instances/{id}/prep-checks/{check_type}/reset` | `steward.manage`；回退人工项 `{reason(1–200)}` → `pending` + 审计（误录纠正，不删历史） |
-| POST | `/admin/steward/instances/{id}/assign` | `steward.manage`；`{butler_id?, backup_butler_id?, physician_id?}`；角色不匹配 422；指派变化写审计 + 时间线 |
-| POST | `/admin/steward/instances/{id}/pause` | `steward.manage`；`{cause, reason(1–200)}`；仅 `active` → `paused`；开启暂停记录 |
-| POST | `/admin/steward/instances/{id}/resume` | `steward.manage`；`{note?}`；结束暂停记录并按规则结算：`provider_interruption` 且中断 >24h → 补足全部时长；`physician_advised` → 补足全部时长；`<24h` 中断 / `user_request` / `other` → 仅记录不补时。补时 = `ends_at` 顺延 + 未开始任务按天平移（`shifted_days` 留痕）；全部写时间线 |
-| POST | `/admin/steward/instances/{id}/close` | `steward.manage`；`{closure_report(1–2000 必填)}`；要求 `final_review` 任务已完成且到期，否则 409；未结高优先级医师工单未转交时 409（切片 D 起检查）；→ `closed` |
-| POST | `/admin/steward/tasks/{task_id}/result` | `steward.manage`；`{result(1–500 必填), done=true}` → `done`；重复 409；写审计 |
+| POST | `/admin/steward/instances/{id}/assign` | `steward.manage`；`{butler_id?, backup_butler_id?, physician_id?}`；角色不匹配 422；**负责管家与替补不能为同一人**（同时存在时 422）；指派变化写审计 + 时间线 |
+| POST | `/admin/steward/instances/{id}/pause` | `steward.manage`；`{cause, reason(1–200)}`；仅 `active` → `paused`；开启暂停记录。暂停期间服务计时停止：`paused` 实例**不**按 `ends_at` 过期（见「时间与补时口径」） |
+| POST | `/admin/steward/instances/{id}/resume` | `steward.manage`；`{note?}`；结束暂停记录并按规则结算补偿：`physician_advised` → 全额补时；`provider_interruption` 且中断**严格大于** 24h（≥ 24h+1s）→ 全额补时；恰 24h 及不足 24h / `user_request` / `other` → 仅记录不补时。补时 = `ends_at` 顺延精确秒数 + 待办任务按天平移（`shifted_days` 留痕）；平移范围 = **暂停开始日（上海日期）当天及之后**的全部 `pending` 任务（暂停期间滑入过去日期的任务一并顺延补交）；暂停开始日之前已到期的本人任务不平移（用户不记录不顺延，走补录）。全部写时间线 |
+| POST | `/admin/steward/instances/{id}/close` | `steward.manage`；`{closure_report(1–2000 必填)}`；要求 `final_review` 任务已完成且到期，否则 409；存在未结高优先级医师工单时 409（切片 D 落地前查询钩子返回 0，接入后查真表）；→ `closed` |
+| POST | `/admin/steward/tasks/{task_id}/result` | `steward.manage`；`{result(1–500 必填), actual_occurred_at?, backfill_reason?(1–200)}` → `done`；重复 409（结果更正不覆盖，D 域报告版本化时统一）；未来日期任务须同时提供 `actual_occurred_at` + `backfill_reason`（补录留痕），否则 422；写审计 |
 | GET | `/admin/steward/staff?role=&page=` | `steward.read`；履约人员名单 |
 | POST | `/admin/steward/staff` | `steward.manage`；`{name(1–50), phone, role, org_name?(1–100), title?(1–50), license_no?(1–50 医师建议必填), note?}` |
 | PATCH | `/admin/steward/staff/{id}` | `steward.manage`；改名 / 停用 `{status: active|inactive}` 等；停用不影响已指派实例（留痕） |
+| GET | `/admin/steward/consent-terms` | `steward.read`；条款版本史（含 retired） |
+| POST | `/admin/steward/consent-terms` | `steward.manage`；发布新版本 `{purpose, version: v\d+, title(1–100), text(1–5000), note?}`：同 purpose 旧版本自动 `retired`，新版本 `active` 并即刻成为授权依据；已有旧版本授权在门禁判定中判「条款已更新，请重新确认」；发布写审计 `steward.terms.publish` |
+| GET | `/admin/steward/pilot-releases?package_id=&page=` | `steward.read`；放行记录列表（含已撤销，凭据全文仅 manage 可见完整 reference） |
+| POST | `/admin/steward/pilot-releases` | `steward.manage`；`{package_id, package_version_id, env, owner_name(1–50), evidence[8 项结构化凭据 {item, source(1–50), reference(1–100), note?}], effective_from?, effective_until?}`。八项凭据 `item` 缺一不可（422）：`contract_attachment` `device_supply` `org_contract` `physician_staffing` `care_plan_rules` `refund_interruption` `duty_ops` `outreach_channel`；凭据必须给出真实来源与编号，不接受「已完成」式描述。发布写审计 |
+| POST | `/admin/steward/pilot-releases/{id}/revoke` | `steward.manage`；`{reason(1–200)}` → 立即失效，激活阻断；写审计 |
+| GET | `/admin/steward/care-plans?user_id=&page=` | `steward.read`；签发计划列表（含撤销史） |
+| POST | `/admin/steward/care-plans` | `steward.manage`；`{user_id, physician_id, version: v\d+, org_name(1–100), content(JSON), valid_until?}`。校验：医师 `active` 且角色 `physician`（422）；同用户同版本唯一（409）。签发后 `physician_plan` 门禁自动判定；若用户已有 preparing 实例且 `physician_id` 一致，写时间线 `care_plan_bound` |
+| POST | `/admin/steward/care-plans/{id}/revoke` | `steward.manage`；`{reason(1–200)}` → 已撤销计划不再满足门禁；已激活实例的 `plan_version` 快照不回改（历史留痕）；写审计 |
 
 ## 三）门禁判定规则（服务端唯一权威）
 
 | check_type | source | 通过条件 |
 |---|---|---|
-| identity_phone | auto | `user.phone` 非空（微信手机号核验）且权益 `user_id` = 实例 `user_id` |
+| identity_phone | auto | `user.phone` 非空**且 `user.wx_openid` 非空**（手机号须来自微信身份核验，非自填）且权益 `user_id` = 实例 `user_id` |
 | entitlement_valid | auto | 权益 `status=active` 且（`valid_until` 为空或未过期） |
 | delivery | manual | 运营凭据（物流单号 / 签收记录）；切片 C 前唯一来源 |
 | device_paired | manual | 运营凭据；切片 C 接入后由设备绑定事实自动判定 |
-| device_vendor_consent | auto | 存在未撤回的 `steward_device_data` 授权；条款未配置时显示「待配置」也判 `pending` |
-| platform_consent | auto | 存在未撤回的 `steward_service` 授权 |
+| device_vendor_consent | auto | 当前条款已发布，且存在**未撤回且版本 = 当前条款版本**的 `steward_device_data` 授权；条款未发布时显示「待配置」判 `pending`；条款升版后旧版本授权判「条款已更新，请重新确认」 |
+| platform_consent | auto | 同上（`steward_service`） |
 | first_valid_data | manual | 运营凭据（首条有效数据校验记录）；切片 C 后自动 |
-| physician_plan | manual | 运营凭据（初评 + 签发计划编号）；切片 D 后由签发事实自动 |
-| staffing_ready | auto | `butler_id`、`backup_butler_id`、`physician_id` 均已指派且人员 `active` |
+| physician_plan | auto | 存在未撤销、未过期的本人签发计划（`steward_care_plans`），且签发医师 = 实例 `physician_id`（未指派医师时判「未指派签约医师」） |
+| staffing_ready | auto | `butler_id`、`backup_butler_id`、`physician_id` 均已指派、人员 `active`，且**负责管家 ≠ 替补管家** |
+| pilot_release（第十项） | auto | 存在未撤销、在有效期、`package_version_id` 与 `env=APP_ENV` 均匹配的放行记录 |
 
-`auto` 项在每次门禁读取（C 端详情 / 激活尝试 / 后台详情）时实时重判并回写快照；`manual` 项只能经后台接口带凭据置 `passed`。激活 = 九项全部 `passed` + 本人确认，二者缺一不可。
+`auto` 项在每次门禁读取（C 端详情 / 激活尝试 / 后台详情）时实时重判并回写快照；`manual` 项只能经后台接口带凭据置 `passed`。激活 = 十项全部 `passed` + 本人确认，二者缺一不可；激活成功在**同一事务**内写激活凭证（门禁快照 / 条款版本 / 计划版本 / 责任人 / 起止时间）。
 
 ## 四）时间与补时口径
 
 - 时间存储 UTC（带时区）；业务服务日按 `Asia/Shanghai`。
-- 服务期 = 激活时刻起连续 `service_days×24h`（默认 45，配置 `STEWARD_SERVICE_DAYS`，激活时快照到实例）；与权益自然日有效期（第四部分 `valid_until`）是两个口径。
+- 服务期 = 激活时刻起连续 `service_days×24h`（默认 45，配置 `STEWARD_SERVICE_DAYS`，激活时快照到实例）+ Σ补偿秒数；与权益自然日有效期（第四部分 `valid_until`）是两个口径。
 - `service_day N` 的业务日期 = 激活日的上海日期 + (N−1) 天，再叠加补时平移（按天取整向上，`shifted_days` 留痕）。
-- 到期判定在实例读取路径懒触发（`active/paused` 且 `now ≥ ends_at` → `expired` + 时间线）；到期后不再生成新任务，未完成任务保留为历史不删除。
+- **暂停期间计时停止**：`paused` 实例不按 `ends_at` 判到期（即使自然时间越过原 `ends_at`）；其出路只有恢复（结算补偿）或终止。恢复时不补时的场景（如用户申请暂停）随后仍按 `active` 到期规则正常过期。
+- 补偿边界口径（固定）：医师建议暂停 → 全额补时；服务方核心中断**严格大于 24 小时**（≥ 24h+1s）→ 全额补时；**恰 24 小时（86400s）及不足 24 小时 → 不补时**，仅记录中断并按平移规则补交任务；用户申请 / 其他 → 不补时。
+- 平移范围：暂停开始日（上海日期）当天及之后的全部 `pending` 任务顺延 `ceil(补偿秒/86400)` 天（`service_date`、`due_at`、`shifted_days` 一致更新，随访 / 复评 / 结案节点相对顺序不变）；暂停开始日之前已到期的本人任务不平移，走补录（`backfill_reason`）。
+- `current_day`：`active` 时按当日所属服务日；`paused` 时冻结为**暂停开始日**所属服务日（计时已停止，页面文案一致）。
+- 到期与作废判定：读路径懒触发（`active` 且 `now ≥ ends_at` → `expired`）之外，另有周期任务 `steward_lifecycle_sweep`（Celery beat 每 5 分钟）批量推进到期与权益作废终止——无人访问页面也能及时停止后续任务；到期后不再生成新任务，未完成任务保留为历史不删除。
 
 ## 五）配置项与阻断
 
 | 配置 | 缺失时 |
 |---|---|
 | `STEWARD_SERVICE_DAYS`(默认 45) | 使用默认；激活时快照 |
-| `STEWARD_SERVICE_CONSENT_TEXT` | 平台服务授权不能授予（503「该授权条款尚未配置」）；对应门禁项恒 `pending`，无法激活 |
-| `STEWARD_DEVICE_CONSENT_TEXT` | 同上（厂商数据授权） |
 | `STEWARD_FOLLOWUP_DAYS`(默认 `7,14,21,28,35,42`) | 使用默认；随访节点按此生成 |
+| 条款表 `steward_consent_terms` 无 active 版本 | 对应授权不能授予（503「该授权条款尚未配置」）；门禁项恒 `pending`，无法激活。原 `STEWARD_*_CONSENT_TEXT` 配置项已由条款表取代（S1），环境变量残留不生效 |
+| 放行表 `steward_pilot_releases` 无有效记录 | 激活一律 409（missing 含 `pilot_release`）——默认未放行是安全态 |
 
 ## 六）审计 action（第五部分新增）
 
-后台：`steward.prep.pass/reset` · `steward.assign` · `steward.pause/resume/close` · `steward.task.result` · `steward.staff.create/update`。
-用户（actor_type=user）：`steward.instance.activate` · `steward.task.complete` · `steward.consent.grant`。
-系统（actor_type=system）：`steward.instance.create/expire/terminate`。
+后台：`steward.prep.pass/reset` · `steward.assign` · `steward.pause/resume/close` · `steward.task.result` · `steward.staff.create/update` · `steward.terms.publish` · `steward.release.create/revoke` · `steward.careplan.create/revoke`。
+用户（actor_type=user）：`steward.instance.activate` · `steward.task.complete` · `steward.consent.grant` · `steward.consent.revoke`。
+系统（actor_type=system）：`steward.instance.create/expire/terminate`（读路径懒迁移与 sweep 共用同一组 action）。
 审计 detail 不含手机号全号与健康档案正文。

@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db, pagination_params
 from app.core.permissions import require_permission
 from app.models import (
+    StewardCarePlan,
     StewardPauseRecord,
+    StewardPilotRelease,
     StewardServiceInstance,
     StewardStaff,
     StewardTask,
@@ -24,6 +26,9 @@ from app.schemas.common import Page, mask_phone
 from app.schemas.steward import (
     AssignIn,
     CalendarDayOut,
+    CarePlanCreateIn,
+    CarePlanOut,
+    CarePlanRevokeIn,
     CloseIn,
     InstanceDetailOut,
     PauseIn,
@@ -31,6 +36,9 @@ from app.schemas.steward import (
     PrepPassIn,
     PrepResetIn,
     PrepCheckOut,
+    ReleaseCreateIn,
+    ReleaseOut,
+    ReleaseRevokeIn,
     ResumeIn,
     StaffCreateIn,
     StaffOut,
@@ -38,6 +46,8 @@ from app.schemas.steward import (
     StaffUpdateIn,
     StewardTaskOut,
     TaskResultIn,
+    TermsOut,
+    TermsPublishIn,
     TimelineOut,
 )
 from app.services import steward_service as svc
@@ -64,6 +74,8 @@ def _task_out(task: StewardTask) -> StewardTaskOut:
         result=task.result,
         completed_at=task.completed_at,
         shifted_days=task.shifted_days,
+        actual_occurred_at=task.actual_occurred_at,
+        backfill_reason=task.backfill_reason,
     )
 
 
@@ -385,8 +397,152 @@ async def task_result(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> StewardTaskOut:
-    task = await svc.record_task_result(db, admin, task_id, payload.result)
+    task = await svc.record_task_result(
+        db, admin, task_id, payload.result, payload.actual_occurred_at, payload.backfill_reason
+    )
     return _task_out(task)
+
+
+# ───────────────────────── 授权条款（S1） ─────────────────────────
+
+
+def _terms_out(t) -> TermsOut:
+    return TermsOut(
+        id=t.id,
+        purpose=t.purpose,
+        version=t.version,
+        title=t.title,
+        text=t.text,
+        effective_from=t.effective_from,
+        status=t.status,
+        note=t.note,
+    )
+
+
+@router.get("/consent-terms", response_model=list[TermsOut])
+async def list_consent_terms(
+    purpose: str | None = Query(default=None, max_length=32),
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[TermsOut]:
+    return [_terms_out(t) for t in await svc.list_terms(db, purpose)]
+
+
+@router.post("/consent-terms", response_model=TermsOut, status_code=201)
+async def publish_consent_terms(
+    payload: TermsPublishIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> TermsOut:
+    terms = await svc.publish_terms(
+        db, admin, payload.purpose, payload.version, payload.title, payload.text, payload.note
+    )
+    return _terms_out(terms)
+
+
+# ───────────────────────── 试点放行（S2） ─────────────────────────
+
+
+def _release_out(r) -> ReleaseOut:
+    return ReleaseOut(
+        id=r.id,
+        package_id=r.package_id,
+        package_version_id=r.package_version_id,
+        env=r.env,
+        owner_name=r.owner_name,
+        evidence=r.evidence or [],
+        effective_from=r.effective_from,
+        effective_until=r.effective_until,
+        revoked_at=r.revoked_at,
+        revoke_reason=r.revoke_reason,
+        created_at=r.created_at,
+    )
+
+
+@router.get("/pilot-releases", response_model=list[ReleaseOut])
+async def list_pilot_releases(
+    package_id: int | None = Query(default=None),
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[ReleaseOut]:
+    return [_release_out(r) for r in await svc.list_releases(db, package_id)]
+
+
+@router.post("/pilot-releases", response_model=ReleaseOut, status_code=201)
+async def create_pilot_release(
+    payload: ReleaseCreateIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> ReleaseOut:
+    release = await svc.create_release(db, admin, payload.model_dump())
+    return _release_out(release)
+
+
+@router.post("/pilot-releases/{release_id}/revoke", response_model=ReleaseOut)
+async def revoke_pilot_release(
+    release_id: int,
+    payload: ReleaseRevokeIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> ReleaseOut:
+    release = await db.get(StewardPilotRelease, release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="放行记录不存在")
+    release = await svc.revoke_release(db, admin, release, payload.reason)
+    return _release_out(release)
+
+
+# ───────────────────────── 医师签发计划（A1） ─────────────────────────
+
+
+def _care_plan_out(p) -> CarePlanOut:
+    return CarePlanOut(
+        id=p.id,
+        user_id=p.user_id,
+        instance_id=p.instance_id,
+        physician_id=p.physician_id,
+        org_name=p.org_name,
+        version=p.version,
+        content=p.content or {},
+        issued_at=p.issued_at,
+        valid_until=p.valid_until,
+        revoked_at=p.revoked_at,
+        revoke_reason=p.revoke_reason,
+        created_at=p.created_at,
+    )
+
+
+@router.get("/care-plans", response_model=list[CarePlanOut])
+async def list_care_plans(
+    user_id: int | None = Query(default=None),
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[CarePlanOut]:
+    return [_care_plan_out(p) for p in await svc.list_care_plans(db, user_id)]
+
+
+@router.post("/care-plans", response_model=CarePlanOut, status_code=201)
+async def create_care_plan(
+    payload: CarePlanCreateIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> CarePlanOut:
+    plan = await svc.create_care_plan(db, admin, payload.model_dump())
+    return _care_plan_out(plan)
+
+
+@router.post("/care-plans/{plan_id}/revoke", response_model=CarePlanOut)
+async def revoke_care_plan(
+    plan_id: int,
+    payload: CarePlanRevokeIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> CarePlanOut:
+    plan = await db.get(StewardCarePlan, plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="签发计划不存在")
+    plan = await svc.revoke_care_plan(db, admin, plan, payload.reason)
+    return _care_plan_out(plan)
 
 
 # ───────────────────────── 履约人员 ─────────────────────────

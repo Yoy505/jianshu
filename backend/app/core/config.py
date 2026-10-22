@@ -54,12 +54,11 @@ class Settings(BaseSettings):
     # 待支付订单超时（分钟）；超时后懒更新为 closed，支付成功晚到仍可入账
     COMMERCE_ORDER_TTL_MINUTES: int = 30
 
-    # 服务履约（工作二，2026-10-22）。服务期天数在激活时快照到实例；
-    # 授权条款文本为空时对应授权不能授予（503 待配置），门禁项恒 pending，无法激活——
-    # 条款必须由运营/合规定稿后注入，不接受客户端自备文本。
+    # 服务履约（工作二，2026-10-22）。服务期天数在激活时快照到实例。
+    # 授权条款自批次一起以 steward_consent_terms 表管理（后台发布版本、
+    # 展示-确认-版本校验）；原 STEWARD_*_CONSENT_TEXT 配置项已废止，残留环境变量不生效。
+    # 条款未发布时授权 503 待配置、门禁恒 pending；试点放行表无有效记录时激活一律阻断。
     STEWARD_SERVICE_DAYS: int = 45
-    STEWARD_SERVICE_CONSENT_TEXT: str = ""
-    STEWARD_DEVICE_CONSENT_TEXT: str = ""
     STEWARD_FOLLOWUP_DAYS: str = "7,14,21,28,35,42"
 
     # 阿里云 OSS（生产预留）

@@ -24,6 +24,11 @@ celery_app.conf.update(
         "snapshot-daily-stats": {
             "task": "app.workers.tasks.snapshot_daily_stats",
             "schedule": crontab(minute=30, hour=0),
-        }
+        },
+        # 工作二 A3：每 5 分钟推进服务实例到期 / 权益作废终止（无人读页面也能停止后续任务）
+        "steward-lifecycle-sweep": {
+            "task": "app.workers.tasks.steward_lifecycle_sweep",
+            "schedule": crontab(minute="*/5"),
+        },
     },
 )

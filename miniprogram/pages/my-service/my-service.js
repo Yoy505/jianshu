@@ -16,6 +16,14 @@ const TASK_TYPE_LABEL = {
   daily: '日常', follow_up: '随访', review_prep: '复评准备',
   final_review: '期末复评', closure: '结案'
 };
+const CONSENT_LABEL = {
+  steward_service: '平台服务授权',
+  steward_device_data: '设备厂商数据授权'
+};
+// 激活缺项里非门禁行的文案（S2 试点放行）
+const MISSING_LABEL = {
+  pilot_release: '试点放行未配置（服务方完成上线准备后开放）'
+};
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function monthOf(dateStr) { return dateStr.slice(0, 7); }
@@ -44,6 +52,7 @@ Page(require('../../utils/hifi-page')({
     selectedDate: '',
     selectedTasks: [],
     timeline: [],
+    consentRecords: [],
     busy: false,
     activating: false
   },
@@ -93,6 +102,8 @@ Page(require('../../utils/hifi-page')({
         statusLabel: STATUS_LABEL[detail.status] || detail.status,
         prepChecks: checks,
         passedCount: checks.filter((c) => c.status === 'passed').length,
+        releaseBlocked: detail.pilot_release_ready === false,
+        releaseNote: detail.pilot_release_reason || '',
         todayTasks: (detail.today_tasks || []).map(this.mapTask),
         endsAtText: detail.ends_at ? format.full(detail.ends_at) : '',
         activatedText: detail.activated_at ? format.full(detail.activated_at) : ''
@@ -100,6 +111,7 @@ Page(require('../../utils/hifi-page')({
       const month = this.data.month || (detail.activated_at ? monthOf(detail.activated_at) : '');
       this.setData({ instance, month });
       this.loadTimeline();
+      this.loadConsentRecords();
       if (this.data.view === 'calendar') this.loadCalendar();
     }).catch((err) => {
       this.setData({ error: err.detail || '服务详情加载失败' });
@@ -122,6 +134,21 @@ Page(require('../../utils/hifi-page')({
           type: ev.event_type,
           actor: ev.actor_type === 'user' ? '本人' : (ev.actor_type === 'admin' ? '服务方' : '系统'),
           created: format.full(ev.created_at)
+        }))
+      });
+    }).catch(() => {});
+  },
+
+  loadConsentRecords() {
+    api.getStewardConsentRecords().then((list) => {
+      this.setData({
+        consentRecords: (list || []).map((r) => Object.assign({}, r, {
+          label: CONSENT_LABEL[r.purpose] || r.purpose,
+          grantedText: r.granted_at ? format.full(r.granted_at) : '',
+          statusText: !r.terms_available
+            ? '条款待配置'
+            : r.granted ? (r.outdated ? '已授权（条款已更新，需重新确认）' : '已授权 ' + r.version)
+              : '未授权'
         }))
       });
     }).catch(() => {});
@@ -176,17 +203,72 @@ Page(require('../../utils/hifi-page')({
     });
   },
 
+  // S1：先展示服务端条款全文，本人确认后提交所见版本；服务端校验版本一致
   grantConsent(e) {
     const purpose = e.currentTarget.dataset.purpose;
     if (this.data.busy) return;
     this.setData({ busy: true });
-    api.grantStewardConsent({ purpose }).then(() => {
+    api.getStewardConsentTerms().then((terms) => {
+      const current = (terms || []).find((t) => t.purpose === purpose);
+      if (!current) {
+        this.setData({ busy: false });
+        wx.showToast({ title: '该授权条款尚未配置', icon: 'none' });
+        return;
+      }
+      const self = this;
+      wx.showModal({
+        title: current.title + '（' + current.version + '）',
+        content: current.text,
+        confirmText: '同意并确认',
+        cancelText: '再看看',
+        success(res) {
+          if (!res.confirm) {
+            self.setData({ busy: false });
+            return;
+          }
+          api.grantStewardConsent({ purpose: purpose, version: current.version }).then(() => {
+            self.setData({ busy: false });
+            wx.showToast({ title: '授权成功', icon: 'success' });
+            self.loadDetail();
+          }).catch((err) => {
+            self.setData({ busy: false });
+            const detail = err.detail || '授权失败';
+            wx.showToast({ title: typeof detail === 'string' ? detail : '条款版本已更新，请重新查看', icon: 'none' });
+            if (err.detail && err.detail.indexOf && err.detail.indexOf('版本') >= 0) self.loadDetail();
+          });
+        },
+        fail() {
+          self.setData({ busy: false });
+        }
+      });
+    }).catch(() => {
       this.setData({ busy: false });
-      wx.showToast({ title: '授权成功', icon: 'success' });
-      this.loadDetail();
-    }).catch((err) => {
-      this.setData({ busy: false });
-      wx.showToast({ title: err.detail || '授权失败', icon: 'none' });
+      wx.showToast({ title: '条款加载失败', icon: 'none' });
+    });
+  },
+
+  revokeConsent(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    const record = (this.data.consentRecords || []).find((r) => r.consent_id === id);
+    if (!id || !record || this.data.busy) return;
+    const self = this;
+    wx.showModal({
+      title: '撤回「' + record.label + '」',
+      content: '撤回后对应服务准备项将回退，进行中的服务会停止相应的后续处理；撤回授权不代表申请退款。',
+      confirmText: '确认撤回',
+      cancelText: '暂不',
+      success(res) {
+        if (!res.confirm) return;
+        self.setData({ busy: true });
+        api.revokeConsent(id).then(() => {
+          self.setData({ busy: false });
+          wx.showToast({ title: '已撤回', icon: 'success' });
+          self.loadDetail();
+        }).catch((err) => {
+          self.setData({ busy: false });
+          wx.showToast({ title: err.detail || '撤回失败', icon: 'none' });
+        });
+      }
     });
   },
 
@@ -206,10 +288,13 @@ Page(require('../../utils/hifi-page')({
       this.setData({ activating: false });
       const detail = err.detail || {};
       const missing = detail && detail.missing ? detail.missing : null;
+      const missingText = missing
+        ? missing.map((k) => MISSING_LABEL[k] || k).join('；')
+        : '';
       wx.showModal({
         title: '暂时无法开通',
         content: missing
-          ? '以下准备项尚未完成：' + missing.join('、')
+          ? '以下条件尚未就绪：' + missingText
           : (typeof detail === 'string' ? detail : '请稍后重试或联系管家'),
         showCancel: false
       });

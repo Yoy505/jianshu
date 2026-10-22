@@ -45,6 +45,19 @@ class StewardTaskOut(BaseModel):
     result: str | None
     completed_at: UTCDateTime | None
     shifted_days: int
+    actual_occurred_at: UTCDateTime | None = None
+    backfill_reason: str | None = None
+
+
+class ConsentRecordOut(BaseModel):
+    purpose: str
+    granted: bool
+    version: str | None
+    granted_at: UTCDateTime | None
+    consent_id: int | None
+    current_version: str | None
+    outdated: bool
+    terms_available: bool
 
 
 class CalendarDayOut(BaseModel):
@@ -109,6 +122,8 @@ class InstanceDetailOut(InstanceOut):
     open_pause: PauseOut | None = None
     task_summary: dict | None = None
     pauses: list[PauseOut] = []
+    pilot_release_ready: bool | None = None  # preparing 时给出；已激活后为 None
+    pilot_release_reason: str | None = None
 
 
 # ───────────────────────── C 端请求 ─────────────────────────
@@ -116,10 +131,12 @@ class InstanceDetailOut(InstanceOut):
 
 class ConsentGrantIn(BaseModel):
     purpose: StewardPurposeType
+    version: str = Field(pattern=r"^v\d+$")  # 本人确认时所见的条款版本（S1）
 
 
 class TaskCompleteIn(BaseModel):
     result: str | None = Field(default=None, max_length=500)
+    backfill_reason: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 # ───────────────────────── 后台请求 ─────────────────────────
@@ -156,6 +173,98 @@ class CloseIn(BaseModel):
 class TaskResultIn(BaseModel):
     result: str = Field(min_length=1, max_length=500)
     done: bool = True
+    actual_occurred_at: UTCDateTime | None = None  # 未来日期补录必填
+    backfill_reason: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class TermsPublishIn(BaseModel):
+    purpose: StewardPurposeType
+    version: str = Field(pattern=r"^v\d+$")
+    title: str = Field(min_length=1, max_length=100)
+    text: str = Field(min_length=1, max_length=5000)
+    note: str | None = Field(default=None, max_length=200)
+
+
+class TermsOut(BaseModel):
+    id: int
+    purpose: str
+    version: str
+    title: str
+    text: str
+    effective_from: UTCDateTime
+    status: str
+    note: str | None
+
+
+class ReleaseEvidenceItem(BaseModel):
+    item: Literal[
+        "contract_attachment",
+        "device_supply",
+        "org_contract",
+        "physician_staffing",
+        "care_plan_rules",
+        "refund_interruption",
+        "duty_ops",
+        "outreach_channel",
+    ]
+    source: str = Field(min_length=1, max_length=50)
+    reference: str = Field(min_length=1, max_length=100)
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ReleaseCreateIn(BaseModel):
+    package_id: int
+    package_version_id: int
+    env: Literal["dev", "test", "staging", "prod"]
+    owner_name: str = Field(min_length=1, max_length=50)
+    evidence: list[ReleaseEvidenceItem] = Field(min_length=8, max_length=8)
+    effective_until: UTCDateTime | None = None
+
+
+class ReleaseRevokeIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class ReleaseOut(BaseModel):
+    id: int
+    package_id: int
+    package_version_id: int
+    env: str
+    owner_name: str
+    evidence: list[dict]
+    effective_from: UTCDateTime
+    effective_until: UTCDateTime | None
+    revoked_at: UTCDateTime | None
+    revoke_reason: str | None
+    created_at: UTCDateTime
+
+
+class CarePlanCreateIn(BaseModel):
+    user_id: int
+    physician_id: int
+    version: str = Field(pattern=r"^v\d+$")
+    org_name: str = Field(min_length=1, max_length=100)
+    content: dict = Field(default_factory=dict)
+    valid_until: UTCDateTime | None = None
+
+
+class CarePlanRevokeIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class CarePlanOut(BaseModel):
+    id: int
+    user_id: int
+    instance_id: int | None
+    physician_id: int
+    org_name: str
+    version: str
+    content: dict
+    issued_at: UTCDateTime
+    valid_until: UTCDateTime | None
+    revoked_at: UTCDateTime | None
+    revoke_reason: str | None
+    created_at: UTCDateTime
 
 
 class StaffCreateIn(BaseModel):

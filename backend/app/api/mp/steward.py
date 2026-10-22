@@ -15,6 +15,7 @@ from app.models import StewardStaff, StewardTask, User
 from app.schemas.steward import (
     CalendarDayOut,
     ConsentGrantIn,
+    ConsentRecordOut,
     InstanceDetailOut,
     InstanceOut,
     PrepCheckOut,
@@ -22,6 +23,7 @@ from app.schemas.steward import (
     StaffRef,
     TimelineOut,
     TaskCompleteIn,
+    TermsOut,
 )
 from app.schemas.commerce import BenefitItem, ConsentOut
 from app.services import steward_service as svc
@@ -57,6 +59,8 @@ def _task_out(task: StewardTask) -> StewardTaskOut:
         result=task.result,
         completed_at=task.completed_at,
         shifted_days=task.shifted_days,
+        actual_occurred_at=task.actual_occurred_at,
+        backfill_reason=task.backfill_reason,
     )
 
 
@@ -96,6 +100,11 @@ async def instance_out(db: AsyncSession, instance, *, detail: bool = False) -> d
     if not detail:
         return data
     checks = await svc.evaluate_prep_checks(db, instance)
+    # 激活放行状态（S2）：仅 preparing 期展示；已激活实例不再重复判定
+    if instance.status == "preparing":
+        release_reason = await svc.release_missing_reason(db, instance)
+        data["pilot_release_ready"] = release_reason is None
+        data["pilot_release_reason"] = release_reason
     data["prep_checks"] = [
         PrepCheckOut(
             check_type=row.check_type,
@@ -203,7 +212,9 @@ async def complete_task(
     db: AsyncSession = Depends(get_db),
 ) -> StewardTaskOut:
     instance = await svc.instance_for_user(db, user, instance_id)
-    task = await svc.complete_user_task(db, user, instance, task_id, payload.result)
+    task = await svc.complete_user_task(
+        db, user, instance, task_id, payload.result, payload.backfill_reason
+    )
     return _task_out(task)
 
 
@@ -236,13 +247,45 @@ async def my_timeline(
     ]
 
 
+@router.get("/consent-terms", response_model=list[TermsOut])
+async def consent_terms(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[TermsOut]:
+    """当前有效条款全文（S1：授权前展示、确认后提交所见版本）。"""
+    rows = await svc.current_terms_all(db)
+    return [
+        TermsOut(
+            id=t.id,
+            purpose=t.purpose,
+            version=t.version,
+            title=t.title,
+            text=t.text,
+            effective_from=t.effective_from,
+            status=t.status,
+            note=t.note,
+        )
+        for t in rows
+    ]
+
+
+@router.get("/consent-records", response_model=list[ConsentRecordOut])
+async def consent_records(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ConsentRecordOut]:
+    """本人各用途授权现状；outdated=true 须重新确认新版本条款。"""
+    records = await svc.consent_records(db, user)
+    return [ConsentRecordOut(**r) for r in records]
+
+
 @router.post("/consents", response_model=ConsentOut)
 async def grant_consent(
     payload: ConsentGrantIn,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ConsentOut:
-    consent = await svc.grant_steward_consent(db, user, payload.purpose)
+    consent = await svc.grant_steward_consent(db, user, payload.purpose, payload.version)
     return ConsentOut(
         id=consent.id,
         purpose=consent.purpose,
