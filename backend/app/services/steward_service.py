@@ -448,6 +448,19 @@ async def _auto_check_states(
         else:
             states[check_type] = "尚未完成该授权"
 
+    # 设备门禁（切片 C 起自动判定）：active 绑定 + 有效数据
+    from app.services import device_service
+
+    if await device_service.active_binding_for_user(db, instance.user_id) is None:
+        states[PrepCheckType.DEVICE_PAIRED.value] = "尚未绑定设备（或绑定已解绑）"
+        states[PrepCheckType.FIRST_VALID_DATA.value] = "尚未绑定设备，无有效数据"
+    elif await device_service.has_valid_data(db, instance.user_id):
+        states[PrepCheckType.DEVICE_PAIRED.value] = None
+        states[PrepCheckType.FIRST_VALID_DATA.value] = None
+    else:
+        states[PrepCheckType.DEVICE_PAIRED.value] = None
+        states[PrepCheckType.FIRST_VALID_DATA.value] = "尚无本人有效设备数据（须厂商侧实际同步）"
+
     plan = await valid_care_plan(db, instance.user_id, instance.physician_id)
     if plan is not None:
         states[PrepCheckType.PHYSICIAN_PLAN.value] = None

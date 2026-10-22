@@ -153,6 +153,7 @@
           <view class="quiet paused-tip">
             <view class="t-p">随访、复评等安排以服务日历为准；服务期内可通过客服渠道联系管家。</view>
           </view>
+          <button class="secondary act-btn" bindtap="goDeviceData">设备数据</button>
         </view>
 
         <view class="card" wx:if="{{timeline.length}}">

@@ -37,6 +37,9 @@ STEWARD_MANAGE = "steward.manage"
 # 触达工作台（工作二切片 B）：查询对编辑开放；流转与交接仅管理员
 OUTREACH_READ = "outreach.read"
 OUTREACH_MANAGE = "outreach.manage"
+# 设备云数据（工作二切片 C）：查询对编辑开放；厂商/绑定/同步/复核仅管理员
+DEVICE_READ = "device.read"
+DEVICE_MANAGE = "device.manage"
 
 _ALL = {
     ESSAY_REVIEW,
@@ -62,6 +65,8 @@ _ALL = {
     STEWARD_MANAGE,
     OUTREACH_READ,
     OUTREACH_MANAGE,
+    DEVICE_READ,
+    DEVICE_MANAGE,
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -82,6 +87,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         COMMERCE_BATCH_MANAGE,
         STEWARD_READ,
         OUTREACH_READ,
+        DEVICE_READ,
     },
 }
 

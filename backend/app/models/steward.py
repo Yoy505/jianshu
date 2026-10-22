@@ -104,10 +104,10 @@ PREP_CHECK_META: dict[str, tuple[str, PrepCheckSource]] = {
     PrepCheckType.IDENTITY_PHONE.value: ("本人手机号与微信身份核验", PrepCheckSource.AUTO),
     PrepCheckType.ENTITLEMENT_VALID.value: ("权益属于本人且有效", PrepCheckSource.AUTO),
     PrepCheckType.DELIVERY.value: ("收货完成", PrepCheckSource.MANUAL),
-    PrepCheckType.DEVICE_PAIRED.value: ("设备配对完成", PrepCheckSource.MANUAL),
+    PrepCheckType.DEVICE_PAIRED.value: ("设备配对完成", PrepCheckSource.AUTO),
     PrepCheckType.DEVICE_VENDOR_CONSENT.value: ("设备厂商数据授权", PrepCheckSource.AUTO),
     PrepCheckType.PLATFORM_CONSENT.value: ("平台服务授权", PrepCheckSource.AUTO),
-    PrepCheckType.FIRST_VALID_DATA.value: ("首条本人有效设备数据", PrepCheckSource.MANUAL),
+    PrepCheckType.FIRST_VALID_DATA.value: ("首条本人有效设备数据", PrepCheckSource.AUTO),
     PrepCheckType.PHYSICIAN_PLAN.value: ("医师初评并签发个人计划", PrepCheckSource.AUTO),
     PrepCheckType.STAFFING_READY.value: ("管家及替补排班就绪", PrepCheckSource.AUTO),
 }

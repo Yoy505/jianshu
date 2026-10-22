@@ -59,6 +59,19 @@ from app.models.steward import (
     StewardTimelineEvent,
     TaskAssigneeType,
 )
+from app.models.device import (
+    DEVICE_METRIC_RANGES,
+    TREND_QUALITIES,
+    DeviceBinding,
+    DeviceBindingStatus,
+    DeviceCursorStatus,
+    DeviceMetric,
+    DeviceQuality,
+    DeviceSyncCursor,
+    DeviceSyncLog,
+    DeviceSyncStatus,
+    DeviceVendor,
+)
 from app.models.outreach import (
     OUTREACH_OPEN_STATUSES,
     OutreachAttempt,

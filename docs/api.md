@@ -40,6 +40,8 @@ Base URL：`http://<host>:8000/api/v1`
 | `steward.manage`（门禁录入、指派、暂停/恢复/结案、任务登记、人员管理） | ✓ | ✗ |
 | `outreach.read`（触达待办、详情、尝试记录查询，2026-10-22 切片 B 起） | ✓ | ✓ |
 | `outreach.manage`（触达转人工、领取/退回、提交结果、确认/驳回、取消、离岗交接） | ✓ | ✗ |
+| `device.read`（设备厂商/绑定/同步记录/数据与质量查询，2026-10-22 切片 C 起） | ✓ | ✓ |
+| `device.manage`（厂商注册、绑定/解绑、触发同步、游标重置、质量复核） | ✓ | ✗ |
 
 ### 限流与防重复提交（2026-09-22 起）
 
@@ -673,7 +675,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 # 第五部分 · 全域健康管家服务履约（工作二，2026-10-22 起）
 
 覆盖：服务实例与激活门禁、45 天日历与履约任务、暂停 / 补时 / 到期 / 退款联动 / 续期、履约人员、服务时间线、触达任务框架（切片 B，见第七节）。
-表名前缀 `steward_`（触达域 `outreach_`）。设备（C）、医师工单（D）、CCC 电话（E）后续以第五之子部分追加。
+表名前缀 `steward_`（触达域 `outreach_`、设备域 `device_`）。医师工单（D）、CCC 电话（E）后续以第五之子部分追加。
 **通道边界**：本部分不包含任何消息发送能力；无发送 API、无发送回执字段。每日触达通道未决策前，任何界面与接口不得出现「已发送 / 已送达」状态。
 
 ## 枚举
@@ -938,3 +940,98 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | 配置 | 说明 |
 |---|---|
 | `STEWARD_OUTREACH_MAX_ATTEMPTS`(默认 3) | 人工驳回重办次数上限，达到后意图 `failed` |
+
+## 八）设备云数据（切片 C，2026-10-22 起，标准域 + 适配接口）
+
+表前缀 `device_`。**外部边界**：设备型号与厂商尚未书面确定——本节交付标准数据域、质量策略、适配器接口与隔离测试；**无真实厂商 API 调用**（生产环境适配器注册表为空，触发同步返回「厂商适配待配置」并记录，不伪造数据）。真实接入须另备：已确认型号、书面厂商范围、测试凭据与脱敏回执。手环数据不得单独作为疾病诊断或紧急判断。
+
+### 枚举
+
+| 枚举 | 取值 |
+|---|---|
+| 绑定状态 | `active`(绑定中) `unbound`(已解绑；换绑=解绑后新建行，历史保留) |
+| 游标状态 | `idle`(正常) `blocked`(连续失败达上限，须人工重置) |
+| 数据质量 quality | `valid`(有效) `invalid_value`(数值超出生理合理范围) `late`(晚到，超过补传窗口) `reviewed`(晚到经复核解除) |
+| 同步结果 status | `success` `partial`(部分失败仍推进游标) `failed`(异常未推进) `blocked`(授权缺失/解绑/无适配器等前置不满足) |
+| 指标 metric_type | `sleep_duration`(分钟, 0–1440) `sleep_score`(0–100) `heart_rate`(次/分, 20–250) `steps`(0–200000) |
+
+### 幂等、去重与修订
+
+- 去重键 `dedup_key = vendor_record_id:metric_type`，`UNIQUE(binding_id, dedup_key, revision)`：同一厂商记录重复拉取跳过（重复）；`vendor_updated_at` 前进则追加 `revision+1` 新行（合法修订），趋势取每键最大 revision。
+- 游标按绑定持久化（`device_sync_cursors`）：断点恢复=重跑同游标仅得重复跳过；连续失败 ≥ `STEWARD_DEVICE_MAX_SYNC_FAILURES`(默认 5) → `blocked`，人工重置后方可继续。
+- 同步前置检查（每次执行前重查）：绑定 `active`、厂商 `active`、`steward_device_data` 授权未撤回且版本=当前条款、适配器已注册。任一不满足 → `blocked` + 原因，不拉取。
+
+### 质量策略（可测试、留痕、不静默改正）
+
+| 判定 | 规则 | 去向 |
+|---|---|---|
+| 错人 wrong_user | 厂商记录的账号标识 ≠ 绑定归属用户 | **拒绝入库**（不落健康数据），同步日志计数留痕 |
+| 无效 invalid_value | 数值超出该指标合理范围 | 入库标 `invalid_value`，不入趋势/规则 |
+| 晚到 late | 接收时 `business_date` 距今 > `STEWARD_DEVICE_LATE_DAYS`(默认 7 天) | 入库标 `late`，不入趋势；后台复核（`review`）附原因后转 `reviewed` 入趋势 |
+| 缺失 | 某日无数据 | **不用 0 填补**：趋势如实返回缺口与最近同步时间 |
+
+趋势与任何规则判断只使用 `valid/reviewed` 且最大 revision 的数据；授权撤回、解绑后旧数据保留（归属与来源可追溯）但不再新增。
+
+### 对象结构
+
+```jsonc
+// 绑定（换绑=新行；跨用户重复绑定被唯一约束拒绝）
+{ "id": 1, "user_id": 1, "vendor_id": 1, "device_model": "WRIST-X1(待定型号占位)",
+  "device_sn": "SN-001", "status": "active", "bound_at": "...Z",
+  "unbound_at": null, "unbind_reason": null }
+
+// 同步游标
+{ "binding_id": 1, "cursor": "rec-100", "status": "idle",
+  "last_success_at": "...Z", "failure_count": 0 }
+
+// 数据点（append-only；revision 区分修订）
+{ "id": 1, "binding_id": 1, "user_id": 1, "metric_type": "sleep_duration",
+  "value": 412, "unit": "min", "business_date": "2026-11-01",
+  "tz_offset_minutes": 480, "vendor_record_id": "rec-100",
+  "vendor_updated_at": "...Z", "received_at": "...Z",
+  "quality": "valid", "revision": 1, "review_note": null }
+```
+
+### 后台 `/admin/devices`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/admin/devices/vendors` | `device.read`；厂商注册表（含停用） |
+| POST | `/admin/devices/vendors` | `device.manage`；`{code(2–32), name(1–100), note?}`；同 code 409。注册≠接通：真实适配器上线前同步一律待配置 |
+| GET | `/admin/devices/bindings?user_id=&status=&page=` | `device.read`；绑定列表（含解绑史、手机号掩码） |
+| POST | `/admin/devices/bindings` | `device.manage`；`{user_id, vendor_id, device_model(1–50), device_sn(1–64)}`；同一设备已有 active 绑定（不论归属）→ 409（跨用户归属校验）；同用户同设备重复 active → 409 |
+| POST | `/admin/devices/bindings/{id}/unbind` | `device.manage`；`{reason(1–200)}` → `unbound`；旧数据保留 |
+| POST | `/admin/devices/bindings/{id}/sync` | `device.manage`；触发一次同步（幂等）；返回同步日志摘要 |
+| POST | `/admin/devices/bindings/{id}/cursor/reset` | `device.manage`；`{reason}`：blocked 游标人工重置（失败清零、游标回退可重拉补传） |
+| GET | `/admin/devices/sync-logs?binding_id=&status=&page=` | `device.read`；同步与失败列表（各计数、错误、时长） |
+| GET | `/admin/devices/metrics?binding_id=&quality=&business_date=&page=` | `device.read`；数据点与质量筛选 |
+| POST | `/admin/devices/metrics/{id}/review` | `device.manage`；`{reason(1–200)}`：`late` → `reviewed`（解除排除并留痕）；非 late 409 |
+
+### C 端 `/mp/steward/devices`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/mp/steward/devices` | 本人绑定（状态/型号/最近同步）+ 数据授权状态 + 趋势摘要提示 |
+| GET | `/mp/steward/devices/trend?metric=&days=`(默认 14) | 仅 `valid/reviewed` 最大 revision，按业务日聚合；**无数据日不填补**，返回 `{dates:[], series:[], gaps:[], last_synced_at, quality_note}`；附质量与延迟提示文案 |
+| POST | `/mp/steward/devices/bindings/{id}/unbind` | 本人解绑 `{reason(1–200)}`；解绑即停止后续同步，不影响已发生数据归属 |
+
+### 门禁联动（切片 C 起）
+
+| check_type | source（本批起） | 通过条件 |
+|---|---|---|
+| device_paired | **auto**（原 manual） | 本人存在 `active` 设备绑定 |
+| first_valid_data | **auto**（原 manual） | 本人 active 绑定下存在 ≥1 条 `valid/reviewed` 数据 |
+
+既有 manual 行由迁移转 `auto/pending`（原人工凭据不自动视作设备事实，如实重判）。厂商适配器未上线时运营可经绑定 + 隔离导入通道（测试/开发环境合成适配器）达成门禁；生产真实数据接入仍待外部条件。
+
+### 配置
+
+| 配置 | 说明 |
+|---|---|
+| `STEWARD_DEVICE_LATE_DAYS`(默认 7) | 晚到判定窗口（天） |
+| `STEWARD_DEVICE_MAX_SYNC_FAILURES`(默认 5) | 连续失败上限，达限 blocked |
+
+### 审计 action（本节新增）
+
+后台：`device.vendor.create` · `device.binding.create/unbind` · `device.sync.trigger` · `device.cursor.reset` · `device.metric.review`。
+系统（actor_type=system）：`device.sync.run`（每次同步结果摘要，detail 不含健康数值明细）。

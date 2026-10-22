@@ -1,5 +1,5 @@
 // 首页可浏览，使用操作和二级业务页面需登录。协议页面始终公开。
-const PAGE_KEYS = ['index', 'steward', 'mall', 'my', 'scenario', 'service-detail', 'providers', 'provider-detail', 'book', 'appointments', 'review', 'consult-list', 'chat', 'drug-hall', 'drug-detail', 'favorites', 'profile-edit', 'certify', 'legal', 'package-detail', 'order-confirm', 'order-result', 'orders', 'order-detail', 'benefits', 'my-service'];
+const PAGE_KEYS = ['index', 'steward', 'mall', 'my', 'scenario', 'service-detail', 'providers', 'provider-detail', 'book', 'appointments', 'review', 'consult-list', 'chat', 'drug-hall', 'drug-detail', 'favorites', 'profile-edit', 'certify', 'legal', 'package-detail', 'order-confirm', 'order-result', 'orders', 'order-detail', 'benefits', 'my-service', 'device-data'];
 const routes = PAGE_KEYS.map(key => 'pages/' + key + '/' + key);
 const PUBLIC = ['index', 'steward', 'mall', 'my', 'scenario', 'drug-hall', 'certify', 'legal'];
 const TABS = ['index', 'steward', 'mall', 'my'];

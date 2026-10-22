@@ -159,3 +159,22 @@ def outreach_sweep() -> dict:
     """每 5 分钟（beat，切片 B）：生成当日触达意图（幂等）并停止失效意图。
     无任何发送调用；通道未决策期间意图保持待通道配置。"""
     return asyncio.run(_run_outreach_sweep())
+
+
+async def _run_device_sync() -> dict:
+    from app.services import device_service
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            return await device_service.sync_all_active(session)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.device_sync_sweep")
+def device_sync_sweep() -> dict:
+    """每 15 分钟（beat，切片 C）：批量同步 active 绑定。适配器未注册时逐条
+    记录 blocked「厂商适配待配置」，不伪造数据。"""
+    return asyncio.run(_run_device_sync())

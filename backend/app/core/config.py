@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     STEWARD_FOLLOWUP_DAYS: str = "7,14,21,28,35,42"
     # 触达（切片 B）：人工驳回重办次数上限，达到后意图置 failed（失败队列终态）
     STEWARD_OUTREACH_MAX_ATTEMPTS: int = 3
+    # 设备云数据（切片 C）：晚到判定窗口（天）与连续同步失败上限（达限 blocked 须人工重置）
+    STEWARD_DEVICE_LATE_DAYS: int = 7
+    STEWARD_DEVICE_MAX_SYNC_FAILURES: int = 5
 
     # 阿里云 OSS（生产预留）
     OSS_ACCESS_KEY_ID: str = ""

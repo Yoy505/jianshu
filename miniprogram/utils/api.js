@@ -198,5 +198,14 @@ module.exports = {
   },
   setOutreachSubscription(subscribed) {
     return request({ url: '/mp/steward/outreach/subscription', method: 'POST', data: { subscribed: subscribed } });
+  },
+  getMyDevice() {
+    return request({ url: '/mp/steward/devices', silent: true });
+  },
+  getDeviceTrend(metric, days) {
+    return request({ url: '/mp/steward/devices/trend', data: { metric: metric, days: days }, silent: true });
+  },
+  unbindDevice(bindingId, reason) {
+    return request({ url: '/mp/steward/devices/bindings/' + bindingId + '/unbind', method: 'POST', data: { reason: reason } });
   }
 };

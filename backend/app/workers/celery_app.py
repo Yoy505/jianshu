@@ -35,5 +35,10 @@ celery_app.conf.update(
             "task": "app.workers.tasks.outreach_sweep",
             "schedule": crontab(minute="*/5"),
         },
+        # 工作二切片 C：每 15 分钟批量同步设备数据（无适配器时如实 blocked）
+        "device-sync-sweep": {
+            "task": "app.workers.tasks.device_sync_sweep",
+            "schedule": crontab(minute="*/15"),
+        },
     },
 )

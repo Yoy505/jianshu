@@ -13,6 +13,7 @@ from app.api.mp import (
     profile,
     providers,
     services,
+    devices,
     steward,
     ws,
 )
@@ -28,5 +29,6 @@ mp_router.include_router(profile.router)
 mp_router.include_router(products.router)
 mp_router.include_router(commerce.router)
 mp_router.include_router(steward.router)
+mp_router.include_router(devices.router)
 # WebSocket 端点：最终路径 /api/v1/mp/ws（契约五之二）
 mp_router.include_router(ws.router)

@@ -361,5 +361,9 @@ Page(require('../../utils/hifi-page')({
 
   goOrders() {
     require('../../utils/access').navigate('/pages/orders/orders');
+  },
+
+  goDeviceData() {
+    require('../../utils/access').navigate('/pages/device-data/device-data');
   }
 }, 'my-service'));

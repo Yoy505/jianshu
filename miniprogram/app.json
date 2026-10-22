@@ -25,7 +25,8 @@
     "pages/orders/orders",
     "pages/order-detail/order-detail",
     "pages/benefits/benefits",
-    "pages/my-service/my-service"
+    "pages/my-service/my-service",
+    "pages/device-data/device-data"
   ],
   "window": {
     "navigationBarBackgroundColor": "#FFFFFF",

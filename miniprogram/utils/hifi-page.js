@@ -8,7 +8,7 @@ const TITLES = {
   chat: '咨询会话', 'drug-hall': '药品数字展厅', 'drug-detail': '药品资料',
   favorites: '药品收藏', 'profile-edit': '健康档案', certify: '专业人员入驻', legal: '用户协议',
   'package-detail': '服务包详情', 'order-confirm': '确认订单', 'order-result': '支付结果',
-  orders: '我的订单', 'order-detail': '订单详情', benefits: '我的权益', 'my-service': '我的服务'
+  orders: '我的订单', 'order-detail': '订单详情', benefits: '我的权益', 'my-service': '我的服务', 'device-data': '设备数据'
 };
 const TABS = ['index', 'steward', 'mall', 'my'];
 const SCENE_COPY = [

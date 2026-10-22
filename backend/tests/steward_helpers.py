@@ -6,6 +6,7 @@
 """
 
 import uuid
+from datetime import datetime, timezone
 
 import httpx
 import pytest_asyncio
@@ -154,11 +155,18 @@ async def get_my_instance(client: httpx.AsyncClient) -> dict:
     return items[-1]  # 最新实例（同一测试内多次造数时取新的一份）
 
 
-async def full_setup(client: httpx.AsyncClient, *, phone: str = USER1["phone"], with_release: bool = True) -> dict:
+async def full_setup(
+    client: httpx.AsyncClient,
+    *,
+    phone: str = USER1["phone"],
+    with_release: bool = True,
+    with_device: bool = True,
+) -> dict:
     """从零走到「门禁全过、可激活」状态，返回上下文。
 
     步骤对应新门禁：条款发布（S1）→ 三岗指派（管家≠替补）→ 医师签发计划（A1）
-    → 试点放行（S2）→ 双授权（带版本确认）→ 三项人工凭据。
+    → 试点放行（S2）→ 双授权（带版本确认）→ 收货人工凭据 → 设备绑定与有效数据
+    （切片 C 起自动判定，经合成适配器注入）。
     """
     a = await admin_headers(client, "admin")
     pkg = await make_package(client, a, name="全域健康管家 · 45 天睡眠健康包")
@@ -218,17 +226,22 @@ async def full_setup(client: httpx.AsyncClient, *, phone: str = USER1["phone"], 
         )
         assert resp.status_code == 200, resp.text
 
-    for check_type in ("delivery", "device_paired", "first_valid_data"):
-        resp = await client.post(
-            f"{API}/admin/steward/instances/{instance['id']}/prep-checks/{check_type}/pass",
-            json={"evidence": f"测试凭据：{check_type} 已完成（快递单/配对记录/数据校验）"},
-            headers=a,
-        )
-        assert resp.status_code == 200, resp.text
+    resp = await client.post(
+        f"{API}/admin/steward/instances/{instance['id']}/prep-checks/delivery/pass",
+        json={"evidence": "测试凭据：收货完成（快递单已签收）"},
+        headers=a,
+    )
+    assert resp.status_code == 200, resp.text
+
+    if with_device:
+        from tests.device_helpers import ensure_device_facts
+
+        await ensure_device_facts(client, a)
 
     resp = await client.get(f"{API}/mp/steward/instances/{instance['id']}", headers=u)
     missing = [c["check_type"] for c in resp.json()["prep_checks"] if c["status"] != "passed"]
-    assert missing == [], f"门禁应全部通过，仍缺 {missing}"
+    if with_device:
+        assert missing == [], f"门禁应全部通过，仍缺 {missing}"
     return {
         "admin": a,
         "user": u,
@@ -239,7 +252,6 @@ async def full_setup(client: httpx.AsyncClient, *, phone: str = USER1["phone"], 
         "care_plan": care_plan,
         "release": release,
     }
-
 
 @pytest_asyncio.fixture
 async def file_db_steward(tmp_path):
@@ -255,6 +267,9 @@ async def file_db_steward(tmp_path):
     from app.models import (
         PREP_CHECK_META,
         AdminUser,
+        DeviceBinding,
+        DeviceMetric,
+        DeviceVendor,
         EntitlementSource,
         MpEntitlement,
         MpOrder,
@@ -337,6 +352,24 @@ async def file_db_steward(tmp_path):
                     ),
                 )
             )
+        synth_vendor = DeviceVendor(code=f"synth{uuid.uuid4().hex[:4]}", name="并发合成厂商")
+        session.add(synth_vendor)
+        await session.flush()
+        device_binding = DeviceBinding(
+            user_id=1, vendor_id=synth_vendor.id, device_model="WRIST-CONC", device_sn="SN-CONC-1"
+        )
+        session.add(device_binding)
+        await session.flush()
+        from datetime import date as date_cls
+
+        session.add(
+            DeviceMetric(
+                binding_id=device_binding.id, user_id=1, metric_type="sleep_duration",
+                value=400, unit="min", business_date=date_cls.today(), dedup_key="conc-1:sleep_duration",
+                vendor_record_id="conc-1", vendor_updated_at=datetime.now(timezone.utc),
+                quality="valid",
+            )
+        )
         session.add_all([
             MpUserConsent(user_id=1, purpose="steward_service", version="v1", text="并发条款"),
             MpUserConsent(user_id=1, purpose="steward_device_data", version="v1", text="并发条款"),
