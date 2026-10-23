@@ -257,7 +257,9 @@ async def test_pause_compensation_boundaries(client, monkeypatch, seconds, expec
     """A2 边界口径（固定时钟精确验证）：23:59:59 与恰 24h 不补时；24h+1s 起、25h 全额补时。"""
     from app.services import steward_service as svc
 
-    fixed_now = datetime(2026, 10, 22, 12, 0, 0, tzinfo=timezone.utc)
+    # 锚点取真实时间 +1 分钟：须不早于试点放行 effective_from 的库端真实时钟
+    # （server_default=func.now()），写死日期会在次日使激活判定失效（时钟定时炸弹）
+    fixed_now = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=1)
     monkeypatch.setattr(svc, "now_utc", lambda: fixed_now)
 
     ctx = await full_setup(client)
