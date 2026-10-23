@@ -392,7 +392,10 @@ Page(require('../../utils/hifi-page')({
   },
 
   goBenefits() {
-    require('../../utils/access').navigate('/pages/benefits/benefits');
+    // 续期入口：带上原实例 id 供后续显式续期关联；跳转本身不代表续购完成
+    const inst = this.data.instance;
+    const suffix = inst && inst.id ? ('?renew_from=' + inst.id) : '';
+    require('../../utils/access').navigate('/pages/benefits/benefits' + suffix);
   },
 
   goOrders() {

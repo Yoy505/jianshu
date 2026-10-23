@@ -14,6 +14,12 @@ import MpDrugs from '@/pages/MpDrugs'
 import MpProviders from '@/pages/MpProviders'
 import MpServices from '@/pages/MpServices'
 import OccupationalSubmissions from '@/pages/OccupationalSubmissions'
+import StewardWorkbench from '@/pages/StewardWorkbench'
+import StewardInstances from '@/pages/StewardInstances'
+import StewardOutreach from '@/pages/StewardOutreach'
+import StewardProfessional from '@/pages/StewardProfessional'
+import StewardDevices from '@/pages/StewardDevices'
+import StewardPhone from '@/pages/StewardPhone'
 import VolunteerApplications from '@/pages/VolunteerApplications'
 import { useAuthStore } from '@/stores/auth'
 
@@ -50,6 +56,12 @@ export default function App() {
         <Route path="mp/commerce/orders" element={<CommerceOrders />} />
         <Route path="mp/commerce/batches" element={<CommerceBatches />} />
         <Route path="mp/commerce/points" element={<CommercePoints />} />
+        <Route path="mp/steward" element={<StewardWorkbench />} />
+        <Route path="mp/steward/instances" element={<StewardInstances />} />
+        <Route path="mp/steward/outreach" element={<StewardOutreach />} />
+        <Route path="mp/steward/professional" element={<StewardProfessional />} />
+        <Route path="mp/steward/devices" element={<StewardDevices />} />
+        <Route path="mp/steward/phone" element={<StewardPhone />} />
         <Route path="audit-logs" element={<AuditLogs />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

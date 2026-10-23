@@ -22,6 +22,7 @@
       </view>
       <view class="st-load-tip" wx:if="{{loading}}">正在加载…</view><button class="st-load-retry" wx:elif="{{error}}" bindtap="retryMore">{{error}} · 点击重试</button><view class="st-load-tip" wx:elif="{{finished}}">没有更多了</view>
     </block>
+    <button class="st-load-retry" style="margin-top: 16rpx;" bindtap="goMyService">我的服务（45 天履约）</button>
     <view class="st-disclaimer">健康管理与信息服务，不替代诊疗</view>
   </view>
 </view>

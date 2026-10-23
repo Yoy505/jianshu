@@ -59,8 +59,8 @@ export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  return <Badge variant={STATUS_VARIANTS[status] ?? 'secondary'}>{statusLabel(status)}</Badge>
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
+  return <Badge variant={STATUS_VARIANTS[status] ?? 'secondary'}>{label ?? statusLabel(status)}</Badge>
 }
 
 /* ---------- 健康域：服务类型标签（线上=蓝 / 上门=绿 / 三方=amber） ---------- */

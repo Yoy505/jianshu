@@ -1,20 +1,25 @@
 import {
+  Activity,
   Building2,
+  ClipboardList,
   CalendarCheck,
   Coins,
   HeartHandshake,
   ChevronLeft,
   FileText,
+  HeartPulse,
   LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
   Package,
+  PhoneCall,
   Pill,
   Receipt,
   ScrollText,
   Stethoscope,
   Store,
+  Watch,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
@@ -57,6 +62,17 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/mp/commerce/orders', label: '订单与退款', icon: Receipt, permission: 'commerce.order.read' },
       { to: '/mp/commerce/batches', label: '单位采购与权益', icon: Building2, permission: 'commerce.batch.manage' },
       { to: '/mp/commerce/points', label: '积分账本', icon: Coins, permission: 'commerce.points.adjust' },
+    ],
+  },
+  {
+    label: '服务履约',
+    items: [
+      { to: '/mp/steward', label: '履约工作台', icon: Activity, permission: 'steward.read' },
+      { to: '/mp/steward/instances', label: '服务实例', icon: HeartPulse, permission: 'steward.read' },
+      { to: '/mp/steward/outreach', label: '触达待办', icon: Activity, permission: 'outreach.read' },
+      { to: '/mp/steward/professional', label: '专业工单', icon: ClipboardList, permission: 'steward.read' },
+      { to: '/mp/steward/devices', label: '设备数据', icon: Watch, permission: 'device.read' },
+      { to: '/mp/steward/phone', label: '电话通路', icon: PhoneCall, permission: 'phone.read' },
     ],
   },
   {

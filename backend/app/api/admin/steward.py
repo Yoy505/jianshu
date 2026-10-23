@@ -934,3 +934,105 @@ async def record_followup(
         data_quality_note=record.data_quality_note, next_action=record.next_action,
         created_at=record.created_at,
     )
+
+
+# ───────────────────── 今日工作台聚合（切片 F） ─────────────────────
+
+
+@router.get("/workbench")
+async def workbench(
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """今日工作台聚合：实例分布、触达待办、超时专业工单、电话工单、设备同步失败、
+    放行与条款缺口。只读汇总，明细进各列表页。"""
+    from datetime import timedelta
+
+    from app.models import (
+        DeviceSyncLog,
+        OutreachIntent,
+        PhoneCallOrder,
+        StewardProfessionalOrder,
+        StewardPilotRelease,
+        StewardServiceInstance,
+    )
+    from app.services import steward_service
+
+    today = steward_service.sh_today()
+    instance_rows = (
+        await db.execute(
+            select(StewardServiceInstance.status, func.count()).group_by(StewardServiceInstance.status)
+        )
+    ).all()
+    outreach_rows = (
+        await db.execute(
+            select(OutreachIntent.status, func.count())
+            .where(OutreachIntent.service_date == today)
+            .group_by(OutreachIntent.status)
+        )
+    ).all()
+    overdue_prof = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(StewardProfessionalOrder)
+                .where(
+                    StewardProfessionalOrder.status.in_(["pending", "in_progress"]),
+                    StewardProfessionalOrder.due_at.is_not(None),
+                    StewardProfessionalOrder.due_at < steward_service.now_utc(),
+                )
+            )
+        ).scalar()
+        or 0
+    )
+    high_open = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(StewardProfessionalOrder)
+                .where(
+                    StewardProfessionalOrder.priority == "high",
+                    StewardProfessionalOrder.status.in_(["pending", "in_progress"]),
+                    StewardProfessionalOrder.transferred_at.is_(None),
+                )
+            )
+        ).scalar()
+        or 0
+    )
+    phone_rows = (
+        await db.execute(
+            select(PhoneCallOrder.status, func.count()).group_by(PhoneCallOrder.status)
+        )
+    ).all()
+    device_failures = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(DeviceSyncLog)
+                .where(
+                    DeviceSyncLog.status.in_(["failed", "blocked"]),
+                    DeviceSyncLog.started_at >= steward_service.now_utc() - timedelta(days=1),
+                )
+            )
+        ).scalar()
+        or 0
+    )
+    active_releases = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(StewardPilotRelease)
+                .where(StewardPilotRelease.revoked_at.is_(None))
+            )
+        ).scalar()
+        or 0
+    )
+    return {
+        "date": today.isoformat(),
+        "instances": {status: int(count) for status, count in instance_rows},
+        "outreach_today": {status: int(count) for status, count in outreach_rows},
+        "professional": {"overdue": overdue_prof, "high_priority_open": high_open},
+        "phone": {status: int(count) for status, count in phone_rows},
+        "device_sync_failures_24h": device_failures,
+        "pilot_releases_active": active_releases,
+    }

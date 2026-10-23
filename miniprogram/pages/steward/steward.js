@@ -147,6 +147,10 @@ Page({
     this.fetch(this.data.page + 1);
   },
 
+  goMyService() {
+    require('../../utils/access').navigate('/pages/my-service/my-service');
+  },
+
   retryMore() {
     if (!getApp().ensureLogin('/pages/steward/steward')) return; this.fetch(this.data.page + 1); },
 
@@ -185,3 +189,5 @@ Page({
     });
   }
 });
+
+// 工作二切片 F：管家页顶部「我的服务」履约入口（页面导出后二次注入不可行，改由 wxml 内联跳转）

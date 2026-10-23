@@ -19,9 +19,21 @@ export type Permission =
   | 'commerce.points.adjust'
   | 'commerce.batch.manage'
   | 'commerce.batch.confirm'
+  | 'steward.read'
+  | 'steward.manage'
+  | 'outreach.read'
+  | 'outreach.manage'
+  | 'device.read'
+  | 'device.manage'
+  | 'phone.read'
+  | 'phone.manage'
 
 const EDITOR_PERMISSIONS: Permission[] = [
   'mp.manage',
+  'steward.read',
+  'outreach.read',
+  'device.read',
+  'phone.read',
   'occupational.read',
   'occupational.initial_review',
   'commerce.product.manage',
@@ -42,6 +54,14 @@ const ADMIN_PERMISSIONS: Permission[] = [
   'commerce.points.adjust',
   'commerce.batch.manage',
   'commerce.batch.confirm',
+  'steward.read',
+  'steward.manage',
+  'outreach.read',
+  'outreach.manage',
+  'device.read',
+  'device.manage',
+  'phone.read',
+  'phone.manage',
 ]
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
