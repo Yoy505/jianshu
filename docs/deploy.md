@@ -91,3 +91,12 @@ server {
 `STORAGE_DRIVER=oss` 目前仍会抛出 `NotImplementedError`，不能仅凭配置切换到 OSS。若计划使用 OSS，须先实现上传、权限、回读和失败处理并完成环境验收。
 
 征文 xlsx 导出写入 `EXPORT_DIR`（默认 `./private_exports`），不得设置在公开 `UPLOAD_DIR` 内。API 与 Celery 进程必须共享该目录；后台通过带 `essay.export` 权限的 `/admin/essays/exports/{filename}` 下载。历史 `/uploads/exports` 在 FastAPI 已拒绝，但若 Nginx/CDN 曾直接映射上传目录，还须在代理层禁用该路径并清理既有导出文件。
+
+
+## 工作二（服务履约）部署补充（2026-10-22）
+
+- **迁移链**：`d4a7b1c2e3f5`（工作一）→ `e5c9a3f7b1d8` → `f8d2b6a9c4e1` → `a2c8e4f1b7d3` → `b6d3f8a2c9e4` → `c7e1a5b9d3f2` → `d4f7b2c8e6a1`（电话域 + 授权 purpose 放宽）。部署执行 `alembic upgrade head`；不可逆项与回退说明见各迁移文件头与《GLM交付记录-工作二》各批次「部署与回退」。
+- **Beat 周期任务**：`steward-lifecycle-sweep`（每 5 分钟，实例到期/作废）、`outreach-sweep`（每 5 分钟，触达生成与停止）、`device-sync-sweep`（每 15 分钟，无适配器时如实 blocked）、`professional-sweep`（每 15 分钟，工单超时升级）、`phone-call-sweep`（每 5 分钟，单飞调度）。worker/beat 需重启加载。
+- **配置**：全部 `STEWARD_*` 项见 `backend/.env.example`（条款已表驱动；CCC 密钥仅生产注入）。
+- **监控点位（告警阈值由运维依据定，不自造医疗阈值）**：Celery 失败/积压、`device_sync_logs` 中 failed/blocked 增长、`outreach_intents` failed 堆积、`steward_professional_orders` 超时未结与高优先级未结（阻断结案）、`phone_call_orders` pending_config 长期滞留（CCC 未接）、`steward_pilot_releases` 全部撤销（激活全阻断）。人工入口：各后台工作台页面与接口。
+- **外部阻断态（预期现象，非故障）**：无设备适配器 → 设备同步逐条 blocked 待配置；无 CCC → 电话工单审核后待配置；通道未决策 → 触达仅人工处理；均不伪造接通/送达。
