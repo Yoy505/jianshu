@@ -65,8 +65,14 @@ async def file_db(tmp_path):
         session.add(version)
         await session.flush()
         package.current_version_id = version.id
-        from app.models import MpPointsAccount
+        from app.models import MpPointsAccount, MpSaleRelease
 
+        session.add(
+            MpSaleRelease(
+                package_id=package.id, version_id=version.id, env="all",
+                basis="并发测试放行", released_by_admin_id=admin.id,
+            )
+        )
         session.add(MpPointsAccount(user_id=1, balance=300))
         await session.commit()
 
@@ -76,7 +82,7 @@ async def file_db(tmp_path):
 
     app_main.app.dependency_overrides[get_db] = override_get_db
     app_main.app.dependency_overrides[get_redis] = lambda: FakeRedis()
-    yield {"factory": factory, "package_id": package.id, "admin_id": admin.id}
+    yield {"factory": factory, "package_id": package.id, "version_id": version.id, "admin_id": admin.id}
     app_main.app.dependency_overrides.clear()
     await engine.dispose()
 
@@ -89,6 +95,7 @@ async def test_concurrent_same_client_order_single_redeem(file_db):
     payload = {
         "client_order_id": key,
         "package_id": file_db["package_id"],
+        "version_id": file_db["version_id"],
         "pay_type": "points",
         "agree_terms": True,
     }

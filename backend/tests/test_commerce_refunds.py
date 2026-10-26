@@ -29,6 +29,8 @@ async def _paid_points_order(client, admin) -> dict:
         json={
             "client_order_id": str(uuid.uuid4()),
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
+            "version_id": made["version_id"],
             "pay_type": "points",
             "agree_terms": True,
         },
@@ -122,6 +124,8 @@ async def test_wxpay_refund_with_mock(client, wxpay_env):
         json={
             "client_order_id": str(uuid.uuid4()),
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
+            "version_id": made["version_id"],
             "pay_type": "wxpay",
             "agree_terms": True,
         },
@@ -184,6 +188,8 @@ async def test_refund_rejects_wrong_state(client, wxpay_env):
         json={
             "client_order_id": str(uuid.uuid4()),
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
+            "version_id": made["version_id"],
             "pay_type": "wxpay",
             "agree_terms": True,
         },

@@ -149,6 +149,9 @@ module.exports = {
   getEntitlement(id) {
     return request({ url: '/mp/entitlements/' + id, silent: true });
   },
+  entitlementEvents(id) {
+    return request({ url: '/mp/entitlements/' + id + '/events', silent: true });
+  },
   claimEntitlement(id) {
     return request({ url: '/mp/entitlements/' + id + '/claim', method: 'POST' });
   },

@@ -43,7 +43,22 @@ interface PackageItem {
   created_at: string
   updated_at: string
 }
-interface PackageDetail extends PackageItem { versions: PackageVersion[] }
+interface Release {
+  id: number
+  version_id: number
+  version_no: number
+  env: string
+  basis: string
+  released_by: string | null
+  released_at: string
+  revoked_at: string | null
+  revoked_by: string | null
+  revoke_reason: string | null
+}
+interface PackageDetail extends PackageItem {
+  versions: PackageVersion[]
+  releases: Release[]
+}
 interface Page<T> { items: T[]; total: number; page: number; page_size: number }
 
 function yuan(cents: number) {
@@ -54,6 +69,7 @@ export default function CommercePackages() {
   const admin = useAuthStore((s) => s.admin)
   const queryClient = useQueryClient()
   const canManage = can(admin?.role, 'commerce.product.manage')
+  const canRelease = can(admin?.role, 'commerce.sale.release')
 
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
@@ -127,6 +143,35 @@ export default function CommercePackages() {
       if (detail?.blockers?.length) {
         toast.error(`暂不可上架：${detail.blockers.join('、')}`)
       }
+    },
+  })
+
+  const releaseMutation = useMutation({
+    mutationFn: async (payload: { versionId: number; env: string; basis: string }) => {
+      if (selectedId === null) throw new Error('未选择服务包')
+      const { data } = await api.post(`/admin/mp/packages/${selectedId}/releases`, {
+        version_id: payload.versionId,
+        env: payload.env,
+        basis: payload.basis,
+      })
+      return data
+    },
+    onSuccess: async () => {
+      toast.success('已放行；C 端即可购买该版本')
+      await queryClient.invalidateQueries({ queryKey: ['commerce-package', selectedId] })
+    },
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: async (payload: { releaseId: number; reason: string }) => {
+      const { data } = await api.post(`/admin/mp/releases/${payload.releaseId}/revoke`, {
+        reason: payload.reason,
+      })
+      return data
+    },
+    onSuccess: async () => {
+      toast.success('放行已撤销；该版本立即回到不可售')
+      await queryClient.invalidateQueries({ queryKey: ['commerce-package', selectedId] })
     },
   })
 
@@ -260,6 +305,13 @@ export default function CommercePackages() {
                   </Button>
                 )}
               </div>
+
+              {canRelease && <ReleasePanel
+                detail={detail}
+                submitting={releaseMutation.isPending || revokeMutation.isPending}
+                onRelease={(versionId, env, basis) => releaseMutation.mutate({ versionId, env, basis })}
+                onRevoke={(releaseId, reason) => revokeMutation.mutate({ releaseId, reason })}
+              />}
 
               <section>
                 <h3 className="mb-2 font-semibold">版本历史</h3>
@@ -401,5 +453,78 @@ function VersionForm({ submitting, onSubmit }: {
         {submitting && <Loader2 className="size-4 animate-spin" />} 创建版本
       </Button>
     </form>
+  )
+}
+
+
+function ReleasePanel({ detail, submitting, onRelease, onRevoke }: {
+  detail: PackageDetail
+  submitting: boolean
+  onRelease: (versionId: number, env: string, basis: string) => void
+  onRevoke: (releaseId: number, reason: string) => void
+}) {
+  const current = detail.current_version
+  const active = detail.releases.find(
+    (r) => !r.revoked_at && current && r.version_id === current.id,
+  )
+  const [env, setEnv] = useState('all')
+  const [basis, setBasis] = useState('')
+  return (
+    <section className="rounded-lg border border-[#e2e9e4] p-3">
+      <h3 className="font-semibold">开售放行（默认不放行）</h3>
+      <p className="mt-1 text-[12px] text-[#8a978e]">
+        放行后该版本在所选环境可购（微信与积分一致判定）；撤销立即回到不可售。依据须写明业务确认来源。
+      </p>
+      {active ? (
+        <div className="mt-2 text-[13px]">
+          <p className="text-[#217a54]">
+            当前版本已放行：{active.env} · {active.released_by} · {formatDateTime(active.released_at)}
+          </p>
+          <p className="mt-1 text-[#66756d]">依据：{active.basis}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            disabled={submitting}
+            onClick={() => onRevoke(active.id, '运营决定暂停销售')}
+          >
+            撤销放行
+          </Button>
+        </div>
+      ) : current ? (
+        <div className="mt-2 space-y-2">
+          <div className="grid grid-cols-[7rem_1fr] gap-2">
+            <select value={env} onChange={(e) => setEnv(e.target.value)}
+              className="h-9 rounded-md border border-[#d5ded8] bg-white px-2 text-[13px]">
+              <option value="all">全环境</option>
+              <option value="dev">dev</option>
+              <option value="test">test</option>
+              <option value="staging">staging</option>
+              <option value="prod">prod</option>
+            </select>
+            <Input value={basis} onChange={(e) => setBasis(e.target.value)} maxLength={500}
+              placeholder="放行依据（如：售价/退款规则/履约团队确认单号）" />
+          </div>
+          <Button size="sm" disabled={submitting || !basis.trim() || !current}
+            onClick={() => onRelease(current!.id, env, basis.trim())}>
+            放行 v{current.version_no}
+          </Button>
+        </div>
+      ) : (
+        <p className="mt-2 text-[13px] text-[#8a978e]">先创建版本并上架后再放行。</p>
+      )}
+      {detail.releases.length > 0 && (
+        <details className="mt-2 text-[12px] text-[#66756d]">
+          <summary className="cursor-pointer text-[#4d7c61]">放行历史（{detail.releases.length}）</summary>
+          <ul className="mt-1 space-y-1">
+            {detail.releases.map((r) => (
+              <li key={r.id}>
+                v{r.version_no} · {r.env} · {r.revoked_at ? `已撤销（${r.revoke_reason ?? ''}）` : '生效中'} · {r.released_by} · {formatDateTime(r.released_at)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
   )
 }

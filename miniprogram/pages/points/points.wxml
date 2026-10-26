@@ -1,0 +1,55 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <view class="card balance-card">
+      <view wx:if="{{balanceLoading}}" class="t-p">正在确认积分余额…</view>
+      <view wx:elif="{{balanceError}}">
+        <view class="t-h3">{{balanceError}}</view>
+        <view class="t-p">余额以服务端账本为准，暂时无法确认时不作展示。</view>
+        <button class="secondary" bindtap="retryBalance">重新获取</button>
+      </view>
+      <block wx:else>
+        <view class="t-h3">当前余额</view>
+        <view class="balance-num">{{balance}}</view>
+        <view class="t-p">积分只在兑换服务包、平台调整或退款返还时变化，全部变动可在下方流水核对。</view>
+      </block>
+    </view>
+
+    <block wx:if="{{loading && !list.length}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+    <view wx:elif="{{error && !list.length}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">流水加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+    <view wx:elif="{{!list.length}}" class="empty-card">
+      <text class="ph ph-coin-vertical"></text>
+      <view class="t-h2">暂无积分流水</view>
+      <view class="t-p">兑换或调整发生后这里会逐条记录</view>
+    </view>
+    <block wx:else>
+      <view class="card entry-card" wx:for="{{list}}" wx:key="id">
+        <view class="row between">
+          <view class="t-h3 grow">{{item.bizLabel}}</view>
+          <view class="delta {{item.plus ? 'plus' : 'minus'}}">{{item.deltaLabel}}</view>
+        </view>
+        <view class="kv"><text class="t-span">变动后余额</text><text class="t-b">{{item.balanceAfter}}</text></view>
+        <view class="kv" wx:if="{{item.orderId}}"><text class="t-span">关联订单</text><text class="t-b">#{{item.orderId}}</text></view>
+        <view class="kv" wx:if="{{item.note}}"><text class="t-span">说明</text><text class="t-b">{{item.note}}</text></view>
+        <view class="kv"><text class="t-span">时间</text><text class="t-b">{{item.time}}</text></view>
+      </view>
+      <view class="hf-more" wx:if="{{!finished}}">上拉加载更多</view>
+      <view class="hf-more" wx:if="{{finished}}">共 {{total}} 条</view>
+    </block>
+  </view>
+</view>
+</block>

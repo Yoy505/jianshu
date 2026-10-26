@@ -23,10 +23,13 @@ def user_headers(user_id: int = 1) -> dict:
     return {"Authorization": f"Bearer {create_token(user_id, SCOPE_USER, 'access')}"}
 
 
+ROLE_PASSWORDS = {"admin": "admin123", "editor": "editor123", "finance": "finance12345"}
+
+
 async def admin_headers(client: httpx.AsyncClient, role: str = "admin") -> dict:
     resp = await client.post(
         f"{API}/admin/auth/login",
-        json={"username": role, "password": "admin123" if role == "admin" else "editor123"},
+        json={"username": role, "password": ROLE_PASSWORDS[role]},
     )
     assert resp.status_code == 200, resp.text
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
@@ -69,6 +72,13 @@ async def make_package(
             headers=headers,
         )
         assert resp.status_code == 200, resp.text
+        # R8：默认完成开售放行（env=all）；release=False 可显式测试未放行路径
+        resp = await client.post(
+            f"{API}/admin/mp/packages/{package_id}/releases",
+            json={"version_id": version_id, "env": "all", "basis": "测试放行依据"},
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
     return {"package_id": package_id, "version_id": version_id}
 
 

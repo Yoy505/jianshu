@@ -46,6 +46,7 @@ Page(require('../../utils/hifi-page')({
         payType: d.purchasable && d.purchasable.wxpay ? 'wxpay' : (pointsEnough ? 'points' : ''),
         pkg: {
           id: d.id,
+          versionId: d.version_id,
           name: d.name,
           price: format.price(d.price_cents),
           priceCents: d.price_cents,
@@ -96,6 +97,7 @@ Page(require('../../utils/hifi-page')({
       .createOrder({
         client_order_id: this._clientOrderId,
         package_id: pkg.id,
+        version_id: pkg.versionId,
         pay_type: this.data.payType,
         agree_terms: true
       })
@@ -130,8 +132,19 @@ Page(require('../../utils/hifi-page')({
             wx.redirectTo({ url: '/pages/order-result/order-result?id=' + order.id });
           });
       })
-      .catch(() => {
+      .catch((err) => {
         this.setData({ submitting: false });
+        const detail = err && err.detail ? String(err.detail) : '';
+        if (detail.indexOf('重新确认') > -1 || detail.indexOf('已更新') > -1) {
+          // 版本已变化：作废旧幂等单号，重新拉取详情要求用户再次确认
+          this._clientOrderId = '';
+          wx.showModal({
+            title: '服务包已更新',
+            content: '价格或条款已调整，请返回重新查看并确认新版内容。',
+            showCancel: false,
+            success: () => this.fetch()
+          });
+        }
       });
   }
 }, 'order-confirm'));

@@ -67,6 +67,7 @@ class PackageDetailOut(PackageSummaryOut):
 class OrderCreateIn(BaseModel):
     client_order_id: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9\-_]+$")
     package_id: int
+    version_id: int  # 用户实际确认的版本；与当前上架版本不一致返回 409 要求重新确认
     pay_type: PayType
     agree_terms: bool
 
@@ -153,6 +154,7 @@ class ConsentOut(BaseModel):
     purpose: str
     version: str
     text: str
+    source: str = "order_confirm"
     granted_at: UTCDateTime
     revoked_at: UTCDateTime | None
 
@@ -285,6 +287,37 @@ class AdminPackageOut(BaseModel):
 
 class AdminPackageDetailOut(AdminPackageOut):
     versions: list[VersionOut]
+    releases: list["ReleaseOut"]
+
+
+# ───────────────────────── 后台 · 开售放行（R8） ─────────────────────────
+
+
+ReleaseEnv = Literal["dev", "test", "staging", "prod", "all"]
+
+
+class ReleaseCreateIn(BaseModel):
+    version_id: int
+    env: ReleaseEnv
+    basis: str = Field(min_length=1, max_length=500)
+
+
+class ReleaseRevokeIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ReleaseOut(BaseModel):
+    id: int
+    package_id: int
+    version_id: int
+    version_no: int
+    env: str
+    basis: str
+    released_by: str | None
+    released_at: UTCDateTime
+    revoked_at: UTCDateTime | None
+    revoked_by: str | None
+    revoke_reason: str | None
 
 
 # ───────────────────────── 后台 · 订单 / 退款 / 积分 ─────────────────────────

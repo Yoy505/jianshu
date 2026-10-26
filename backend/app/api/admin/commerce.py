@@ -5,7 +5,10 @@
 业务失败回滚则审计一并丢弃）。写操作均需对应 commerce.* 权限点（docs/api.md 矩阵）。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import hashlib
+import secrets
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -19,13 +22,17 @@ from app.core.permissions import (
     COMMERCE_ORDER_REFUND,
     COMMERCE_POINTS_ADJUST,
     COMMERCE_PRODUCT_MANAGE,
+    COMMERCE_SALE_RELEASE,
     require_permission,
 )
 from app.core.security import hash_password
+from app.core.storage_paths import configured_storage_path
 from app.models import (
     AdminUser,
     EntitlementSource,
     EntitlementStatus,
+    MpEntitlementEvent,
+    MpSaleRelease,
     MpBatchRow,
     MpEntitlement,
     MpOrder,
@@ -68,6 +75,9 @@ from app.schemas.commerce import (
     PaymentEventOut,
     PaymentOut,
     PointsAdjustIn,
+    ReleaseCreateIn,
+    ReleaseOut,
+    ReleaseRevokeIn,
     RefundCreateIn,
     RefundOut,
     RefundResolveIn,
@@ -104,6 +114,33 @@ async def _version_out(db: AsyncSession, version: MpPackageVersion) -> VersionOu
     )
 
 
+async def _release_out(db: AsyncSession, release: MpSaleRelease) -> ReleaseOut:
+    released_by = (
+        await db.execute(
+            select(AdminUser.name).where(AdminUser.id == release.released_by_admin_id)
+        )
+    ).scalar_one_or_none()
+    revoked_by = (
+        await db.execute(
+            select(AdminUser.name).where(AdminUser.id == release.revoked_by_admin_id)
+        )
+    ).scalar_one_or_none()
+    version = await db.get(MpPackageVersion, release.version_id)
+    return ReleaseOut(
+        id=release.id,
+        package_id=release.package_id,
+        version_id=release.version_id,
+        version_no=version.version_no if version else 0,
+        env=release.env,
+        basis=release.basis,
+        released_by=released_by,
+        released_at=release.released_at,
+        revoked_at=release.revoked_at,
+        revoked_by=revoked_by,
+        revoke_reason=release.revoke_reason,
+    )
+
+
 async def _package_out(
     db: AsyncSession, package: MpPackage, *, with_versions: bool = False
 ) -> AdminPackageOut | AdminPackageDetailOut:
@@ -133,9 +170,18 @@ async def _package_out(
             .order_by(MpPackageVersion.version_no.desc())
         )
     ).scalars().all()
+    releases = (
+        await db.execute(
+            select(MpSaleRelease)
+            .where(MpSaleRelease.package_id == package.id)
+            .order_by(MpSaleRelease.id.desc())
+            .limit(50)
+        )
+    ).scalars().all()
     return AdminPackageDetailOut(
         **base.model_dump(),
         versions=[await _version_out(db, v) for v in versions],
+        releases=[await _release_out(db, r) for r in releases],
     )
 
 
@@ -485,6 +531,103 @@ async def admin_shelf_package(
     return await _package_out(db, package)
 
 
+# ───────────────────────── 开售放行（R8，仅管理员） ─────────────────────────
+
+
+@router.post("/packages/{package_id}/releases", response_model=ReleaseOut, status_code=201)
+async def admin_create_release(
+    package_id: int,
+    body: ReleaseCreateIn,
+    request: Request,
+    admin: AdminUser = Depends(require_permission(COMMERCE_SALE_RELEASE)),
+    db: AsyncSession = Depends(get_db),
+) -> ReleaseOut:
+    package = await db.get(MpPackage, package_id)
+    if package is None:
+        raise HTTPException(status_code=404, detail="服务包不存在")
+    version = await db.get(MpPackageVersion, body.version_id)
+    if version is None or version.package_id != package.id:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    # 同包同版本同环境已有未撤销放行 → 409（先撤销才能重放）
+    active = (
+        await db.execute(
+            select(MpSaleRelease)
+            .where(
+                MpSaleRelease.package_id == package.id,
+                MpSaleRelease.version_id == version.id,
+                MpSaleRelease.env == body.env,
+                MpSaleRelease.revoked_at.is_(None),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if active is not None:
+        raise HTTPException(status_code=409, detail="该版本在该环境已有生效中的放行记录")
+    release = MpSaleRelease(
+        package_id=package.id,
+        version_id=version.id,
+        env=body.env,
+        basis=body.basis,
+        released_by_admin_id=admin.id,
+    )
+    db.add(release)
+    await audit(
+        db,
+        action="commerce.package.release",
+        resource_type="package",
+        resource_id=package.id,
+        detail={"version_id": version.id, "env": body.env, "basis": body.basis},
+        actor_id=admin.id,
+        actor_name=admin.name,
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(release)
+    return await _release_out(db, release)
+
+
+@router.post("/releases/{release_id}/revoke", response_model=ReleaseOut)
+async def admin_revoke_release(
+    release_id: int,
+    body: ReleaseRevokeIn,
+    request: Request,
+    admin: AdminUser = Depends(require_permission(COMMERCE_SALE_RELEASE)),
+    db: AsyncSession = Depends(get_db),
+) -> ReleaseOut:
+    from sqlalchemy import update
+
+    release = await db.get(MpSaleRelease, release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="放行记录不存在")
+    if release.revoked_at is not None:
+        raise HTTPException(status_code=409, detail="该放行记录已撤销")
+    result = await db.execute(
+        update(MpSaleRelease)
+        .where(MpSaleRelease.id == release.id, MpSaleRelease.revoked_at.is_(None))
+        .values(
+            revoked_at=func.now(),
+            revoked_by_admin_id=admin.id,
+            revoke_reason=body.reason,
+        )
+    )
+    if result.rowcount != 1:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="该放行记录已撤销")
+    await audit(
+        db,
+        action="commerce.package.release_revoke",
+        resource_type="package",
+        resource_id=release.package_id,
+        detail={"release_id": release.id, "reason": body.reason},
+        actor_id=admin.id,
+        actor_name=admin.name,
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(release)
+    return await _release_out(db, release)
+
+
 # ───────────────────────── 订单 / 对账 / 退款 ─────────────────────────
 
 
@@ -627,7 +770,12 @@ async def admin_sync_order(
         trade_state=str(data.get("trade_state") or ""),
         amount_total=(data.get("amount") or {}).get("total"),
         event_type="query_sync",
+        currency=(data.get("amount") or {}).get("currency"),
     )
+    if result in ("invalid_success_fields", "invalid_state", "transaction_reused"):
+        raise HTTPException(status_code=422, detail="微信返回的成功结果字段不完整或不匹配，未入账")
+    if result == "amount_mismatch":
+        raise HTTPException(status_code=409, detail="微信金额与订单不一致，未入账")
     await audit(
         db,
         action="commerce.order.sync",
@@ -705,6 +853,31 @@ async def admin_list_refunds(
         page=page,
         page_size=page_size,
     )
+
+
+@router.post("/refunds/{refund_id}/query", response_model=AdminRefundOut)
+async def admin_query_refund(
+    refund_id: int,
+    request: Request,
+    admin: AdminUser = Depends(require_permission(COMMERCE_ORDER_REFUND)),
+    db: AsyncSession = Depends(get_db),
+) -> AdminRefundOut:
+    """按退款单号向微信查证真实状态并回写结论（超时/结果未知的恢复路径）。"""
+    refund = await db.get(MpRefund, refund_id)
+    if refund is None:
+        raise HTTPException(status_code=404, detail="退款记录不存在")
+    await audit(
+        db,
+        action="commerce.refund.query",
+        resource_type="refund",
+        resource_id=refund.id,
+        detail={"refund_no": refund.refund_no},
+        actor_id=admin.id,
+        actor_name=admin.name,
+        request=request,
+    )
+    refund = await svc.query_refund_status(db, refund=refund, queried_by_admin_id=admin.id)
+    return await _refund_out(db, refund, admin_view=True)
 
 
 @router.post("/refunds/{refund_id}/resolve", response_model=AdminRefundOut)
@@ -924,6 +1097,112 @@ async def admin_preview_batch(
     return BatchPreviewOut(batch=batch_out, rows=_batch_rows_out(rows), summary=summary)
 
 
+@router.post("/batches/preview-file", response_model=BatchPreviewOut, status_code=201)
+async def admin_preview_batch_file(
+    request: Request,
+    org_id: int = Form(...),
+    package_id: int = Form(...),
+    version_id: int = Form(...),
+    quantity: int = Form(...),
+    file: UploadFile = File(...),
+    admin: AdminUser = Depends(require_permission(COMMERCE_BATCH_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+) -> BatchPreviewOut:
+    """真实文件导入（I2）：原件私存并按字节计算摘要，服务端解析后走同一预览校验。
+
+    仅支持 UTF-8 文本（CSV/TXT），单文件 ≤ COMMERCE_BATCH_FILE_MAX_BYTES、
+    行数 ≤ COMMERCE_BATCH_MAX_ROWS；确认仍只消费服务端已预览数据。
+    """
+    from app.core.config import settings as app_settings
+
+    content = await file.read(app_settings.COMMERCE_BATCH_FILE_MAX_BYTES + 1)
+    if len(content) > app_settings.COMMERCE_BATCH_FILE_MAX_BYTES:
+        raise HTTPException(
+            status_code=413, detail=f"名单文件超过上限 {app_settings.COMMERCE_BATCH_FILE_MAX_BYTES // 1024} KiB"
+        )
+    rows = svc.parse_batch_file(content, max_rows=app_settings.COMMERCE_BATCH_MAX_ROWS)
+    digest = hashlib.sha256(content).hexdigest()
+    original_name = (file.filename or "名单.txt")[:255]
+
+    # 原件写入私有目录（含手机号，不入公开 uploads）
+    batch_dir = configured_storage_path(app_settings.COMMERCE_BATCH_DIR)
+    batch_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    stored = f"{secrets.token_hex(16)}.txt"
+    (batch_dir / stored).write_bytes(content)
+
+    await audit(
+        db,
+        action="commerce.batch.preview",
+        resource_type="batch",
+        detail={
+            "org_id": org_id,
+            "package_id": package_id,
+            "version_id": version_id,
+            "quantity": quantity,
+            "file_name": original_name,
+            "file_sha256": digest,
+            "row_count": len(rows),
+            "import": "file",
+        },
+        actor_id=admin.id,
+        actor_name=admin.name,
+        request=request,
+    )
+    batch, batch_rows, summary = await svc.preview_batch(
+        db,
+        uploaded_by_id=admin.id,
+        org_id=org_id,
+        package_id=package_id,
+        version_id=version_id,
+        quantity=quantity,
+        file_name=original_name,
+        raw_rows=rows,
+        file_digest=digest,
+        stored_filename=stored,
+    )
+    batch_out = await _batch_out(db, batch, rows=batch_rows)
+    return BatchPreviewOut(batch=batch_out, rows=_batch_rows_out(batch_rows), summary=summary)
+
+
+@router.get("/batches/{batch_id}/file")
+async def admin_batch_file(
+    batch_id: int,
+    request: Request,
+    admin: AdminUser = Depends(require_permission(COMMERCE_BATCH_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """下载名单原件（含手机号）：鉴权 + 审计 + 禁缓存。"""
+    from fastapi.responses import Response as RawResponse
+
+    from app.core.config import settings as app_settings
+
+    batch = await _admin_batch(db, batch_id)
+    if not batch.stored_filename:
+        raise HTTPException(status_code=404, detail="该批次没有保存原件（JSON 预览无原件）")
+    path = configured_storage_path(app_settings.COMMERCE_BATCH_DIR) / batch.stored_filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="名单原件不存在")
+    await audit(
+        db,
+        action="commerce.batch.file_download",
+        resource_type="batch",
+        resource_id=batch.id,
+        detail={"batch_no": batch.batch_no},
+        actor_id=admin.id,
+        actor_name=admin.name,
+        request=request,
+    )
+    await db.commit()
+    return RawResponse(
+        content=path.read_bytes(),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="batch-{batch.batch_no}.txt"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.get("/batches", response_model=Page[BatchOut])
 async def admin_list_batches(
     org_id: int | None = Query(default=None),
@@ -1070,6 +1349,36 @@ async def admin_list_entitlements(
     )
 
 
+@router.get("/entitlements/{ent_id}/events")
+async def admin_entitlement_events(
+    ent_id: int,
+    admin: AdminUser = Depends(require_permission(COMMERCE_BATCH_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    ent = await db.get(MpEntitlement, ent_id)
+    if ent is None:
+        raise HTTPException(status_code=404, detail="权益不存在")
+    rows = (
+        await db.execute(
+            select(MpEntitlementEvent)
+            .where(MpEntitlementEvent.entitlement_id == ent.id)
+            .order_by(MpEntitlementEvent.id.desc())
+            .limit(100)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "detail": e.detail,
+            "actor_type": e.actor_type,
+            "actor_id": e.actor_id,
+            "created_at": e.created_at,
+        }
+        for e in rows
+    ]
+
+
 @router.post("/entitlements/{ent_id}/void", response_model=AdminEntitlementOut)
 async def admin_void_entitlement(
     ent_id: int,
@@ -1095,6 +1404,15 @@ async def admin_void_entitlement(
     if result.rowcount != 1:
         await db.rollback()
         raise HTTPException(status_code=409, detail="该权益当前状态不可作废")
+    db.add(
+        MpEntitlementEvent(
+            entitlement_id=ent.id,
+            event_type="voided",
+            detail={"reason": body.reason},
+            actor_type="admin",
+            actor_id=admin.id,
+        )
+    )
     await audit(
         db,
         action="commerce.entitlement.void",
@@ -1105,7 +1423,11 @@ async def admin_void_entitlement(
         actor_name=admin.name,
         request=request,
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="该单位此版本已有此号码的权益（并发改派）")
     await db.refresh(ent)
     return await _admin_entitlement_out(db, ent)
 
@@ -1150,6 +1472,15 @@ async def admin_reassign_entitlement(
         raise HTTPException(status_code=409, detail="该单位此版本已有此号码的权益")
     old_phone = ent.phone
     ent.phone = phone
+    db.add(
+        MpEntitlementEvent(
+            entitlement_id=ent.id,
+            event_type="reassigned",
+            detail={"reason": body.reason, "phone_to": mask_phone(phone)},
+            actor_type="admin",
+            actor_id=admin.id,
+        )
+    )
     await audit(
         db,
         action="commerce.entitlement.reassign",
@@ -1160,6 +1491,10 @@ async def admin_reassign_entitlement(
         actor_name=admin.name,
         request=request,
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="该单位此版本已有此号码的权益（并发改派）")
     await db.refresh(ent)
     return await _admin_entitlement_out(db, ent)

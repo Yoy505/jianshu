@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Button } from '../components/ui/button';
 import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -316,9 +317,9 @@ export default function OccupationalSubmitPage() {
                 </p>
               )}
               <div className="oh-receipt-actions">
-                <button type="button" className="oh-button oh-button-secondary" onClick={startNewSubmission}>
+                <Button type="button" variant="secondary" className="oh-button oh-button-secondary" onClick={startNewSubmission}>
                   {receipt || progressStatus ? '提交新作品' : '返回投稿表单'}
-                </button>
+                </Button>
                 <Link className="oh-receipt-detail-link" to={`/receipt?no=${encodeURIComponent(shownReceiptNo)}`}>
                   查看详情
                 </Link>
@@ -454,9 +455,9 @@ export default function OccupationalSubmitPage() {
                     <div><span style={{ width: `${progress}%` }} /></div>
                   </div>
                 )}
-                <button className="oh-button oh-button-primary oh-submit-button" type="submit" disabled={!isOpen || submitting}>
+                <Button className="oh-button oh-button-primary oh-submit-button" type="submit" disabled={!isOpen || submitting}>
                   {submitting ? '正在提交，请勿关闭页面' : '确认提交作品'}
-                </button>
+                </Button>
                 <p className="oh-submit-hint">仅在服务器生成回执号后，投稿才视为成功。</p>
               </form>
 

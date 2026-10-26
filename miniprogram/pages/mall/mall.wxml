@@ -24,6 +24,14 @@
         <view class="t-span"></view>
         <view class="t-span"></view>
       </view>
+      <view class="pkg-state" wx:elif="{{packagesError}}">
+        <text class="ph ph-cloud-slash"></text>
+        <view>
+          <view class="t-h3">服务包目录加载失败</view>
+          <view class="t-p">{{packagesError}}，请重试</view>
+          <button class="pkg-retry" bindtap="retryPackages">重新加载</button>
+        </view>
+      </view>
       <view class="pkg-state" wx:elif="{{!packages.length}}">
         <text class="ph ph-package"></text>
         <view>

@@ -25,6 +25,8 @@ OCCUPATIONAL_INITIAL_REVIEW = "occupational.initial_review"
 OCCUPATIONAL_FINAL_REVIEW = "occupational.final_review"
 VOLUNTEER_READ = "volunteer.read"
 # 服务包交易（工作一，2026-10-21）：商品维护与查询对编辑开放；动钱、发权益、调积分仅管理员
+# finance 岗位（I1，2026-10-22）：退款/积分/订单账务，不接触商品维护、批次发放与内容域
+COMMERCE_SALE_RELEASE = "commerce.sale.release"
 COMMERCE_PRODUCT_MANAGE = "commerce.product.manage"
 COMMERCE_ORDER_READ = "commerce.order.read"
 COMMERCE_ORDER_REFUND = "commerce.order.refund"
@@ -64,6 +66,7 @@ _ALL = {
     COMMERCE_POINTS_ADJUST,
     COMMERCE_BATCH_MANAGE,
     COMMERCE_BATCH_CONFIRM,
+    COMMERCE_SALE_RELEASE,
     STEWARD_READ,
     STEWARD_MANAGE,
     OUTREACH_READ,
@@ -76,6 +79,12 @@ _ALL = {
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "admin": set(_ALL),
+    # 财务：交易账务（订单查询/退款/积分调整），无健康正文、内容与发放权限
+    "finance": {
+        COMMERCE_ORDER_READ,
+        COMMERCE_ORDER_REFUND,
+        COMMERCE_POINTS_ADJUST,
+    },
     # 编辑：内容运营（征文审核 + 健康域运营 + 职业健康形式初审 + 服务包商品维护/查询/名单预览），
     # 不碰账号封禁、删活动、审计、职业健康终审、退款、积分调整、批次确认发放
     "editor": {

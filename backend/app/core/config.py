@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     DRUG_LEAFLET_DIR: str = "./private_drug_leaflets"
     DRUG_LEAFLET_INTAKE_DIR: str = "./private_drug_leaflet_intake"
     DRUG_REGULATORY_SOURCE_DIR: str = "./private_drug_regulatory_sources"
+    COMMERCE_BATCH_DIR: str = "./private_commerce_batches"  # 单位名单原件；不得位于公开 UPLOAD_DIR 内
+    COMMERCE_BATCH_FILE_MAX_BYTES: int = 2 * 1024 * 1024  # 名单原件上限 2 MiB
+    COMMERCE_BATCH_MAX_ROWS: int = 10000
     OCCUPATIONAL_SUBMISSIONS_ENABLED: bool = False
     VOLUNTEER_APPLICATIONS_ENABLED: bool = False
     FFPROBE_BIN: str = "ffprobe"
@@ -98,6 +101,9 @@ class Settings(BaseSettings):
         regulatory_dir = configured_storage_path(self.DRUG_REGULATORY_SOURCE_DIR)
         if regulatory_dir == upload_dir or regulatory_dir.is_relative_to(upload_dir):
             raise ValueError("药品监管来源私有目录不能位于公开 UPLOAD_DIR 内")
+        batch_dir = configured_storage_path(self.COMMERCE_BATCH_DIR)
+        if batch_dir == upload_dir or batch_dir.is_relative_to(upload_dir):
+            raise ValueError("单位名单私有目录不能位于公开 UPLOAD_DIR 内")
         if self.APP_ENV in {"dev", "test"}:
             return self
 

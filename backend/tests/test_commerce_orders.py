@@ -105,6 +105,7 @@ async def test_order_idempotency_and_wxpay_unconfigured(client):
         json={
             "client_order_id": key,
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "wxpay",
             "agree_terms": True,
         },
@@ -119,6 +120,7 @@ async def test_order_idempotency_and_wxpay_unconfigured(client):
         json={
             "client_order_id": str(uuid.uuid4()),
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "points",
             "agree_terms": False,
         },
@@ -139,6 +141,7 @@ async def test_points_order_full_loop(client):
         json={
             "client_order_id": str(uuid.uuid4()),
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "points",
             "agree_terms": True,
         },
@@ -168,6 +171,7 @@ async def test_points_order_full_loop(client):
         json={
             "client_order_id": key,
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "points",
             "agree_terms": True,
         },
@@ -185,6 +189,7 @@ async def test_points_order_full_loop(client):
         json={
             "client_order_id": key,
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "points",
             "agree_terms": True,
         },
@@ -199,6 +204,7 @@ async def test_points_order_full_loop(client):
         json={
             "client_order_id": key,
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "wxpay",
             "agree_terms": True,
         },
@@ -253,6 +259,7 @@ async def test_cross_user_isolation(client):
         json={
             "client_order_id": str(uuid.uuid4()),
             "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "points",
             "agree_terms": True,
         },

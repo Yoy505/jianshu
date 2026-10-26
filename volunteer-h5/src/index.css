@@ -1,0 +1,6 @@
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* 仅引入 Tailwind 主题与工具类，刻意不引入 preflight/reset：
+   站点视觉由 volunteer.css 的 vol-* 体系负责，避免技术栈统一破坏既有表单与品牌样式。 */

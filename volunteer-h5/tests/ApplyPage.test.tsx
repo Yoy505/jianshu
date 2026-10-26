@@ -1,17 +1,27 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
 import { RECEIPT_KEY } from '../src/application';
+import { useApplicationStore } from '../src/stores/application';
 
 const meta = { enabled: true, consent_text: '我同意仅为报名与活动联系使用填报信息。' };
 const receipt = { id: 7, receipt_no: 'VOL-0123456789ABCDEF', submitted_at: '2026-10-19T00:00:00Z' };
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 function setup(fetcher = vi.fn().mockImplementation(() => Promise.resolve(json(meta)))) {
   vi.stubGlobal('fetch', fetcher);
+  useApplicationStore.getState().resetAll(); // store 为模块级单例：逐用例重置，保持原每挂载隔离语义
   const user = userEvent.setup();
-  const view = render(<MemoryRouter initialEntries={['/apply']}><App /></MemoryRouter>);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/apply']}><App /></MemoryRouter>
+    </QueryClientProvider>,
+  );
   return { fetcher, user, ...view };
 }
 async function fill(user: ReturnType<typeof userEvent.setup>) {
@@ -105,7 +115,8 @@ describe('registration experience', () => {
     await fill(view.user);
     fireEvent.submit(view.container.querySelector('form')!);
     fireEvent.submit(view.container.querySelector('form')!);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    // 提交经 Query mutation 异步派发：等待首个提交的 fetch 落地后，第二次提交应已被锁拦下
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
     expect((screen.getByRole('button', { name: '正在提交…' }) as HTMLButtonElement).disabled).toBe(true);
     await act(async () => complete(json(receipt, 201)));
     expect(await screen.findByText(receipt.receipt_no)).toBeTruthy();

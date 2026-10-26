@@ -1,0 +1,53 @@
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
+
+  <view class="pad">
+    <block wx:if="{{loading && !list.length}}">
+      <view class="skeleton"><view class="t-span"></view><view class="t-span"></view><view class="t-span"></view></view>
+    </block>
+    <view wx:elif="{{error && !list.length}}" class="empty-card">
+      <text class="ph ph-cloud-slash"></text>
+      <view class="t-h2">授权记录加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="hfRetry">重新加载</button>
+    </view>
+    <view wx:elif="{{!list.length}}" class="empty-card">
+      <text class="ph ph-shield-check"></text>
+      <view class="t-h2">暂无授权记录</view>
+      <view class="t-p">购买服务包时确认的协议会在此留档</view>
+    </view>
+    <block wx:else>
+      <view class="card consent-card" wx:for="{{list}}" wx:key="id">
+        <view class="row between" bindtap="toggle" data-id="{{item.id}}">
+          <view class="grow">
+            <view class="t-h3">{{item.purposeLabel}}（{{item.version}}）</view>
+            <view class="t-p">{{item.sourceLabel}} · {{item.grantedAt}}</view>
+          </view>
+          <text class="badge {{item.revoked ? '' : 'teal'}}">{{item.revoked ? '已撤回' : '生效中'}}</text>
+        </view>
+        <block wx:if="{{expandedId === item.id}}">
+          <view class="t-p consent-text">{{item.text}}</view>
+          <view class="t-p small" wx:if="{{item.revokedAt}}">撤回时间：{{item.revokedAt}}</view>
+          <button wx:if="{{!item.revoked}}" class="secondary revoke-btn" bindtap="revoke" data-id="{{item.id}}">撤回该授权</button>
+        </block>
+      </view>
+      <view class="hf-more" wx:if="{{!finished}}">上拉加载更多</view>
+      <view class="hf-more" wx:if="{{finished}}">共 {{total}} 条</view>
+    </block>
+
+    <view class="quiet">
+      <text class="ph ph-lock-key"></text>
+      <view class="grow">
+        <view class="t-h3">关于撤回</view>
+        <view class="t-p">撤回不会自动退款或撤销权益；平台按记录停止相应用途的处理。其他用途的授权不受影响。</view>
+      </view>
+    </view>
+  </view>
+</view>
+</block>

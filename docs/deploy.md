@@ -27,7 +27,7 @@
 
 ```bash
 cd backend
-python3.13 -m venv .venv && source .venv/bin/activate
+python3.15 -m venv .venv && source .venv/bin/activate  # Python 3.15.1（官方最新稳定版，backend/.python-version 声明确切版本）；依赖按 backend/requirements.lock 精确安装
 pip install -r requirements.txt
 cp .env.example .env   # 设置 APP_ENV=prod、RDS/Redis 地址、随机 JWT_SECRET、真实 WX_APPID/SECRET
 # JWT_SECRET 请用密钥管理服务或 openssl rand -base64 48 生成，不能沿用示例值
@@ -92,6 +92,26 @@ server {
 
 征文 xlsx 导出写入 `EXPORT_DIR`（默认 `./private_exports`），不得设置在公开 `UPLOAD_DIR` 内。API 与 Celery 进程必须共享该目录；后台通过带 `essay.export` 权限的 `/admin/essays/exports/{filename}` 下载。历史 `/uploads/exports` 在 FastAPI 已拒绝，但若 Nginx/CDN 曾直接映射上传目录，还须在代理层禁用该路径并清理既有导出文件。
 
+## 服务包交易（工作一，2026-10-22 补充）
+
+- **迁移顺序**：`alembic upgrade head`（本批新增 `e5b8c2d4f6a1` 权益跨批次防重与事件、`f6c9d3e5a7b2` 开售放行与授权来源）；回滚按逆序 `downgrade`，不影响既有域。
+- **微信支付回调**：`WXPAY_NOTIFY_URL` 建议 `https://mp.singlin.cn/api/v1/pay/wxpay/notify`，Nginx 无需特殊配置（POST JSON，签名在应用层校验）。商户号、APIv3 密钥、证书序列号、商户私钥文件、平台证书文件六项齐全才开放支付；未配置时支付能力按 503 关闭，**积分兑换不受影响但仍受开售放行约束**。
+- **退款异常处理入口**：后台「订单与退款 → 退款/异常队列」。微信明确拒绝的退款单为 `failed`（订单 `refund_failed`，可直接重新发起）；网络超时类为 `processing`，用「查证微信状态」按钮（`POST /admin/mp/refunds/{id}/query`）以微信结果自动收账；人工退款登记成功结论必须附线下凭据。线上退款单不允许人工直接判成功。
+- **开售放行**：商品默认不可售。管理员在「服务包商品 → 详情 → 开售放行」按版本/环境放行（必填依据），撤销立即回到不可售；`finance` 岗位仅有订单/退款/积分权限。
+- **单位名单原件**：存于 `COMMERCE_BATCH_DIR`（私有目录，含手机号），经 `GET /admin/mp/batches/{id}/file` 鉴权下载并审计；请纳入备份与保留期策略。
+- **监控建议**：关注 `mp_payment_events` 中 `notify_rejected`/`transaction_reused` 增量与 `mp_refunds` 中 `processing` 停留时长（超 24h 人工介入）。
+
+## 技术栈统一（2026-10-22 补充）
+
+- **Python**：后端统一为官方最新稳定版 **3.15.1**（`backend/.python-version`；`.venv-py315` 为默认 venv，旧 `.venv`(3.12.8) 保留回退）。依赖复现：`backend/requirements.lock`（生产 57 包）/ `requirements-test.lock`（全量 63 包），均来自 3.15.1 实测解析；`make venv-check` 校验 venv 版本一致性。
+- **无 Docker 的本机集成验证**（T4 实测路径）：源码编译 Redis 7.2.12（`~/src-build/redis-7.2.12/src/redis-server --port 6399 --save '' --appendonly no`）与 PostgreSQL 16.9（`initdb` + `pg_ctl -o "-p 54329"`，`./configure --without-icu --without-readline --without-openssl`）到用户目录；`createdb jianshu_int_test` 后：
+  ```bash
+  export JIANSHU_PG_TEST_URL='postgresql+asyncpg://<user>@127.0.0.1:54329/jianshu_int_test'
+  export JIANSHU_REDIS_TEST_URL='redis://127.0.0.1:6399/15'
+  make test-integration   # 11 例：PG 迁移循环/并发/跨批次唯一/回调入账 + Redis 命令/限流/恢复 + Celery 跨进程
+  ```
+  入口自带防误连保护（PG 仅本机 host 且库名含 test/int；Redis db≥10；键前缀隔离清理）。
+- **迁移**：新增 `a7d0e4f6b8c3`（PG 集成发现 `mp_user_consents` 缺 created_at/updated_at 的模型/迁移漂移，SQLite create_all 路径曾掩盖）；生产升级照常 `alembic upgrade head`。
 
 ## 工作二（服务履约）部署补充（2026-10-22）
 

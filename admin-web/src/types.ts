@@ -2,7 +2,7 @@
 
 /* ---------- 认证 ---------- */
 
-export type AdminRole = 'admin' | 'editor'
+export type AdminRole = 'admin' | 'editor' | 'finance'
 
 export interface Admin {
   id: number

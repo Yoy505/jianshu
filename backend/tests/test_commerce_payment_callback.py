@@ -23,12 +23,13 @@ from app.services import wxpay_service
 from tests.commerce_helpers import API, admin_headers, build_notify, make_package, user_headers, wxpay_env
 
 
-async def _create_wxpay_order(client, package_id: int) -> dict:
+async def _create_wxpay_order(client, made: dict) -> dict:
     resp = await client.post(
         f"{API}/mp/orders",
         json={
             "client_order_id": str(uuid.uuid4()),
-            "package_id": package_id,
+            "package_id": made["package_id"],
+            "version_id": made["version_id"],
             "pay_type": "wxpay",
             "agree_terms": True,
         },
@@ -52,7 +53,7 @@ async def test_notify_accepted_then_replay(client, wxpay_env):
     """验签通过 → paid + 恰一份权益；重放同一回调 → SUCCESS 且权益仍一份。"""
     admin = await admin_headers(client)
     made = await make_package(client, admin, price_cents=12800)
-    order = await _create_wxpay_order(client, made["package_id"])
+    order = await _create_wxpay_order(client, made)
 
     payload = _success_payload(order["order_no"], 12800, "wx_tx_notify_001")
     body, headers = build_notify(wxpay_env, payload)
@@ -97,7 +98,7 @@ async def test_notify_accepted_then_replay(client, wxpay_env):
 async def test_notify_bad_signature_rejected(client, wxpay_env):
     admin = await admin_headers(client)
     made = await make_package(client, admin, price_cents=6600)
-    order = await _create_wxpay_order(client, made["package_id"])
+    order = await _create_wxpay_order(client, made)
 
     body, headers = build_notify(wxpay_env, _success_payload(order["order_no"], 6600))
     headers["Wechatpay-Signature"] = base64.b64encode(b"0" * 256).decode()  # 破坏签名
@@ -119,7 +120,7 @@ async def test_notify_bad_signature_rejected(client, wxpay_env):
 async def test_notify_amount_mismatch_and_unknown_order(client, wxpay_env):
     admin = await admin_headers(client)
     made = await make_package(client, admin, price_cents=8800)
-    order = await _create_wxpay_order(client, made["package_id"])
+    order = await _create_wxpay_order(client, made)
 
     # 金额不符 → 409，不入账
     body, headers = build_notify(wxpay_env, _success_payload(order["order_no"], 1))
@@ -143,7 +144,7 @@ async def test_notify_trade_state_closed(client, wxpay_env):
     """trade_state=CLOSED：登记支付失败，订单保持待支付。"""
     admin = await admin_headers(client)
     made = await make_package(client, admin, price_cents=3300)
-    order = await _create_wxpay_order(client, made["package_id"])
+    order = await _create_wxpay_order(client, made)
 
     payload = {
         "out_trade_no": order["order_no"],
@@ -181,7 +182,7 @@ async def test_prepay_with_mocked_wechat(client, wxpay_env):
         return httpx.Response(200, json={"prepay_id": "wx_prepay_mock_1"})
 
     wxpay_service.set_http_transport_for_tests(httpx.MockTransport(handler))
-    order = await _create_wxpay_order(client, made["package_id"])
+    order = await _create_wxpay_order(client, made)
     resp = await client.post(f"{API}/mp/orders/{order['id']}/prepay", headers=user_headers())
     assert resp.status_code == 200, resp.text
     params = resp.json()
@@ -195,7 +196,7 @@ async def test_admin_sync_order_via_query(client, wxpay_env):
     """对账查单：mock 微信查单返回 SUCCESS，回调丢失时由 sync 入账。"""
     admin = await admin_headers(client)
     made = await make_package(client, admin, price_cents=7700)
-    order = await _create_wxpay_order(client, made["package_id"])
+    order = await _create_wxpay_order(client, made)
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert "/v3/pay/transactions/out-trade-no/" in request.url.path

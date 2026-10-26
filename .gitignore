@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-py*/
 venv/
 *.egg-info/
 .pytest_cache/
@@ -49,6 +50,9 @@ backend/dev.db.before-*.db
 
 # 职业健康投稿私有文件（运行时产物）
 backend/private_occupational_submissions/
+
+# 批次导入私有文件（含手机号，运行时产物，不入库）
+backend/private_commerce_batches/
 
 # 本地私有备忘（真实 IP/主体信息，公开仓库已脱敏）
 docs/private/

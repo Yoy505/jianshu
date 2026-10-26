@@ -9,6 +9,7 @@ from app.db.base import Base, TimestampMixin
 class AdminRole(str, enum.Enum):
     ADMIN = "admin"
     EDITOR = "editor"
+    FINANCE = "finance"
 
 
 class AdminUser(TimestampMixin, Base):

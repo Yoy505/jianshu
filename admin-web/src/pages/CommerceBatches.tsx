@@ -133,6 +133,27 @@ export default function CommerceBatches() {
     },
   })
 
+  const previewFileMutation = useMutation({
+    mutationFn: async (payload: { file: File; orgId: number; packageId: number; versionId: number; quantity: number }) => {
+      const form = new FormData()
+      form.append('file', payload.file)
+      form.append('org_id', String(payload.orgId))
+      form.append('package_id', String(payload.packageId))
+      form.append('version_id', String(payload.versionId))
+      form.append('quantity', String(payload.quantity))
+      const { data } = await api.post('/admin/mp/batches/preview-file', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return data as { batch: BatchItem; rows: BatchRow[] }
+    },
+    onSuccess: async (data) => {
+      toast.success('原件已私存并完成预览；确认后才会发放权益')
+      setPreviewOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['commerce-batches'] })
+      setBatchId(data.batch.id)
+    },
+  })
+
   const confirmMutation = useMutation({
     mutationFn: async (id: number) => {
       const { data } = await api.post<BatchItem>(`/admin/mp/batches/${id}/confirm`)
@@ -375,8 +396,9 @@ export default function CommerceBatches() {
           <BatchPreviewForm
             orgs={orgs}
             packages={packagesQuery.data ?? []}
-            submitting={previewMutation.isPending}
+            submitting={previewMutation.isPending || previewFileMutation.isPending}
             onSubmit={(payload) => previewMutation.mutate(payload)}
+            onUploadFile={(payload) => previewFileMutation.mutate(payload)}
           />
         </DialogContent>
       </Dialog>
@@ -558,11 +580,12 @@ function OrgCreateForm({ submitting, onSubmit }: {
   )
 }
 
-function BatchPreviewForm({ orgs, packages, submitting, onSubmit }: {
+function BatchPreviewForm({ orgs, packages, submitting, onSubmit, onUploadFile }: {
   orgs: OrgItem[]
   packages: PackageListItem[]
   submitting: boolean
   onSubmit: (payload: Record<string, unknown>) => void
+  onUploadFile?: (payload: { file: File; orgId: number; packageId: number; versionId: number; quantity: number }) => void
 }) {
   const [orgId, setOrgId] = useState('')
   const [packageId, setPackageId] = useState('')
@@ -570,6 +593,7 @@ function BatchPreviewForm({ orgs, packages, submitting, onSubmit }: {
   const [quantity, setQuantity] = useState('10')
   const [fileName, setFileName] = useState('')
   const [rowsText, setRowsText] = useState('')
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [error, setError] = useState('')
 
   const pkg = packages.find((p) => String(p.id) === packageId)
@@ -592,11 +616,18 @@ function BatchPreviewForm({ orgs, packages, submitting, onSubmit }: {
         return
       }
       setError('')
-      onSubmit({
+      const meta = {
         org_id: Number(orgId),
         package_id: Number(packageId),
         version_id: Number(versionId),
         quantity: Number(quantity) || 1,
+      }
+      if (onUploadFile && uploadFile) {
+        onUploadFile({ file: uploadFile, orgId: meta.org_id, packageId: meta.package_id, versionId: meta.version_id, quantity: meta.quantity })
+        return
+      }
+      onSubmit({
+        ...meta,
         file_name: fileName.trim() || '名单.txt',
         rows,
       })
@@ -638,8 +669,21 @@ function BatchPreviewForm({ orgs, packages, submitting, onSubmit }: {
         <Label htmlFor="batch-file">名单文件名（记录留痕）</Label>
         <Input id="batch-file" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="如 2026-10 名单.csv" maxLength={255} />
       </div>
+      {onUploadFile && (
+        <div className="space-y-1.5">
+          <Label htmlFor="batch-file">名单原件（推荐：CSV/TXT，UTF-8，≤2 MiB；原件私存并按字节计算摘要）</Label>
+          <input
+            id="batch-file"
+            type="file"
+            accept=".csv,.txt,text/csv,text/plain"
+            className="w-full text-[13px]"
+            onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+          />
+          {uploadFile && <p className="text-[12px] text-[#217a54]">已选择：{uploadFile.name}（{Math.ceil(uploadFile.size / 1024)} KiB）</p>}
+        </div>
+      )}
       <div className="space-y-1.5">
-        <Label htmlFor="batch-rows">受益人手机号（每行一个，自动去 +86 前缀；服务端将计算文件摘要）</Label>
+        <Label htmlFor="batch-rows">{uploadFile ? '（已选择原件，可留空；如填写则以粘贴内容为准）' : '受益人手机号（每行一个，自动去 +86 前缀；服务端将计算规范化摘要）'}</Label>
         <Textarea id="batch-rows" rows={8} value={rowsText} onChange={(e) => setRowsText(e.target.value)} placeholder={'13800000001\n13900000002'} required />
       </div>
       {error && <p className="text-[13px] text-[#a1665c]">{error}</p>}

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Button } from '../components/ui/button';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { queryOccupationalReceipt, type OccupationalReceiptStatus } from '../lib/occupational';
@@ -148,9 +149,9 @@ export default function OccupationalReceiptPage() {
                   placeholder="OCC-XXXXXXXXXXXXXXXX" autoComplete="off" autoCapitalize="characters"
                   spellCheck={false} aria-describedby={error ? "receipt-format receipt-error" : "receipt-format"} aria-invalid={Boolean(error) && !RECEIPT_RE.test(input)} />
                 <p id="receipt-format" className="oh-tracking-format">OCC- 后接 16 位数字或 A–F 字母，按回执原样输入即可。</p>
-                <button className="oh-tracking-submit" type="submit" disabled={loading}>{loading ? '正在查询…' : '查询进度'}</button>
+                <Button className="oh-tracking-submit" type="submit" disabled={loading}>{loading ? '正在查询…' : '查询进度'}</Button>
               </form>
-              {recentReceipt && !result && <button className="oh-tracking-recent" type="button" onClick={useRecentReceipt} disabled={loading}>使用本设备上次投稿的回执号</button>}
+              {recentReceipt && !result && <Button className="oh-tracking-recent" variant="ghost" type="button" onClick={useRecentReceipt} disabled={loading}>使用本设备上次投稿的回执号</Button>}
               {error && <p id="receipt-error" className="oh-form-error" role="alert">{error}</p>}
             </section>
 

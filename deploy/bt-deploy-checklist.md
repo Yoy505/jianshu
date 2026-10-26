@@ -41,7 +41,7 @@ ufw allow 80,443/tcp && ufw allow 22/tcp && ufw enable
 mkdir -p /www/wwwroot/singlin && cd /www/wwwroot/singlin
 # 后端
 git clone <仓库地址> app && cd app/backend
-python3.12 -m venv .venv && source .venv/bin/activate
+python3.15 -m venv .venv && source .venv/bin/activate  # 3.15.1，见 backend/.python-version
 pip install -r requirements.txt
 cp .env.example .env && vim .env
 #   APP_ENV=prod  DATABASE_URL=postgresql+asyncpg://jianshu:***@127.0.0.1:5432/jianshu

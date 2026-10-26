@@ -1,0 +1,5 @@
+@import "../../styles/hifi.wxss";
+
+.consent-card .grow{flex:1;min-width:0}
+.consent-text{white-space:pre-line;background:#f6faf7;border-radius:2.051282052vw;padding:3.076923077vw;margin-top:2.564102565vw;max-height:60vw;overflow-y:auto}
+.revoke-btn{display:inline-flex;margin-top:2.564102565vw}

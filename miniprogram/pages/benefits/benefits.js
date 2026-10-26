@@ -19,6 +19,7 @@ Page(require('../../utils/hifi-page')({
     tabs: TABS,
     active: '',
     balance: 0,
+    balanceState: 'loading',
     loading: true,
     error: '',
     list: [],
@@ -32,7 +33,15 @@ Page(require('../../utils/hifi-page')({
 
   onShow() {
     this.reload();
-    api.getPoints().then((p) => this.setData({ balance: p.balance || 0 })).catch(() => {});
+    this.loadBalance();
+  },
+
+  loadBalance() {
+    this.setData({ balanceState: 'loading' });
+    api
+      .getPoints()
+      .then((p) => this.setData({ balanceState: 'ok', balance: p.balance || 0 }))
+      .catch(() => this.setData({ balanceState: 'error' }));
   },
 
   onPullDownRefresh() {
@@ -94,7 +103,26 @@ Page(require('../../utils/hifi-page')({
 
   toggle(e) {
     const id = e.currentTarget.dataset.id;
-    this.setData({ expandedId: this.data.expandedId === id ? 0 : id });
+    const next = this.data.expandedId === id ? 0 : id;
+    this.setData({ expandedId: next, historyList: [] });
+    if (next) {
+      api
+        .entitlementEvents(next)
+        .then((events) => {
+          const labels = {
+            issued: '发放', claimed: '本人领取', rejected: '本人拒绝',
+            reclaimed: '再次领取', reassigned: '名单改号', voided: '作废'
+          };
+          this.setData({
+            historyList: (events || []).map((ev) => ({
+              id: ev.id,
+              label: labels[ev.event_type] || ev.event_type,
+              time: format.full(ev.created_at)
+            }))
+          });
+        })
+        .catch(() => this.setData({ historyList: [] }));
+    }
   },
 
   claim(e) {

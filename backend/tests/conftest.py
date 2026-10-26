@@ -3,12 +3,14 @@
 import os
 import time
 
-# 必须在导入 app 之前显式设置 test，避免安全默认环境拒绝示例密钥，且不连接真实 Postgres
+# 必须在导入 app 之前显式设置 test，避免安全默认环境拒绝示例密钥。
+# 连接串用 setdefault：tests/integration 的真实 PG/Redis 集成入口可在外层
+# 注入 JIANSHU_PG_TEST_URL / JIANSHU_REDIS_TEST_URL，不会被这里的 SQLite 覆盖。
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite://"
-os.environ["REDIS_URL"] = "redis://localhost:6379/9"
-os.environ["CELERY_BROKER_URL"] = "redis://localhost:6379/9"
-os.environ["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/9"
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/9")
+os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/9")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/9")
 
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
@@ -93,6 +95,12 @@ async def _seed_test_data(session) -> None:
         password_hash=hash_password("editor123"),
         role="editor",
     )
+    finance = AdminUser(
+        username="finance",
+        name="财务岗",
+        password_hash=hash_password("finance12345"),
+        role="finance",
+    )
     user = User(nickname="测试用户", phone="13800000001", status="active")
     contest = Contest(
         title="测试征文",
@@ -103,7 +111,7 @@ async def _seed_test_data(session) -> None:
         start_at=now - timedelta(days=5),
         end_at=now + timedelta(days=5),
     )
-    session.add_all([admin, editor, user, contest])
+    session.add_all([admin, editor, finance, user, contest])
     await session.flush()
     session.add(
         Essay(

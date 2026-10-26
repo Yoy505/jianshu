@@ -44,6 +44,7 @@ Page(require('../../utils/hifi-page')({
     active: '',
     packages: [],
     packagesLoading: true,
+    packagesError: '',
     list: [],
     page: 1,
     pageSize: 10,
@@ -59,13 +60,23 @@ Page(require('../../utils/hifi-page')({
   },
 
   fetchPackages() {
-    this.setData({ packagesLoading: true });
+    this.setData({ packagesLoading: true, packagesError: '' });
     api
       .listPackages({ page: 1, page_size: 20 })
       .then((res) => {
         this.setData({ packagesLoading: false, packages: (res.items || []).map(pkgVM) });
       })
-      .catch(() => this.setData({ packagesLoading: false, packages: [] }));
+      .catch(() =>
+        this.setData({
+          packagesLoading: false,
+          packages: [],
+          packagesError: '服务包目录暂时无法加载'
+        })
+      );
+  },
+
+  retryPackages() {
+    this.fetchPackages();
   },
 
   goPackage(e) {

@@ -17,8 +17,8 @@ Base URL：`http://<host>:8000/api/v1`
 
 所有 `/admin/*` 写接口经权限点校验，无权限返回 `403 {"detail": "无权限执行该操作"}`。
 
-| 权限点 | admin（管理员） | editor（编辑） |
-|---|---|---|
+| 权限点 | admin（管理员） | editor（编辑） | finance（财务） |
+|---|---|---|---|
 | 仪表盘 / 各列表只读 | ✓ | ✓ |
 | `essay.review` `essay.feature` `essay.offline` `essay.export` | ✓ | ✓ |
 | `contest.manage`（创建/编辑/状态） | ✓ | ✓ |
@@ -30,12 +30,15 @@ Base URL：`http://<host>:8000/api/v1`
 | `occupational.initial_review`（职业健康投稿形式初审：领取/释放/通过/驳回） | ✓ | ✓ |
 | `occupational.final_review`（职业健康投稿终审；与初审不得同一账号） | ✓ | ✗ |
 | `volunteer.read`（杏临千行志愿者报名查看与状态管理） | ✓ | ✗ |
-| `commerce.product.manage`（服务包与版本维护、上下架，2026-10-21 起） | ✓ | ✓ |
-| `commerce.order.read`（订单、支付事件、退款队列查询） | ✓ | ✓ |
-| `commerce.order.refund`（发起退款、登记退款结论、主动对账） | ✓ | ✗ |
-| `commerce.points.adjust`（积分人工调整） | ✓ | ✗ |
-| `commerce.batch.manage`（采购单位维护、单位查看账号、名单预览） | ✓ | ✓ |
-| `commerce.batch.confirm`（批次确认发放 / 取消、权益作废 / 改号） | ✓ | ✗ |
+| `commerce.product.manage`（服务包与版本维护、上下架，2026-10-21 起） | ✓ | ✓ | ✗ |
+| `commerce.order.read`（订单、支付事件、退款队列查询） | ✓ | ✓ | ✓ |
+| `commerce.order.refund`（发起退款、查证退款、登记退款结论、主动对账） | ✓ | ✗ | ✓ |
+| `commerce.points.adjust`（积分人工调整） | ✓ | ✗ | ✓ |
+| `commerce.batch.manage`（采购单位维护、单位查看账号、名单预览与原件下载） | ✓ | ✓ | ✗ |
+| `commerce.batch.confirm`（批次确认发放 / 取消、权益作废 / 改号） | ✓ | ✗ | ✗ |
+| `commerce.sale.release`（开售放行 / 撤销，2026-10-22 起） | ✓ | ✗ | ✗ |
+
+2026-10-22 起 `finance` 岗位（I1）加入矩阵：仅交易账务（订单查询 / 退款 / 积分调整），无内容域、商品维护、批次发放与放行权限；各列表只读能力仍随任一有效后台 token 提供。
 | `steward.read`（服务履约实例、日历、时间线、人员名单查询，2026-10-22 起） | ✓ | ✓ |
 | `steward.manage`（门禁录入、指派、暂停/恢复/结案、任务登记、人员管理） | ✓ | ✗ |
 | `outreach.read`（触达待办、详情、尝试记录查询，2026-10-22 切片 B 起） | ✓ | ✓ |
@@ -493,10 +496,11 @@ access token，无效/过期或连接期间用户被封禁，服务端关闭连�
 | Payment.status | `created`(已预下单) / `success`(支付成功) / `failed`(支付失败或关闭) |
 | PaymentEvent.event_type | `notify_accepted`(回调验签通过并入账) / `notify_replay`(重复回调，幂等忽略) / `notify_rejected`(验签 / 金额 / 未知单被拒) / `query_sync`(主动查单对账) |
 | Refund.channel | `wxpay`(调用微信退款接口) / `manual`(线下人工退款，仅登记) |
-| Refund.status | `pending`(已申请) / `processing`(微信受理中) / `success` / `failed` |
+| Refund.status | `pending`(已申请，人工渠道) / `processing`(微信受理中或网络超时结果未知，待查证) / `success` / `failed`(明确失败，可重新发起) |
 | PointsEntry.biz_type | `admin_adjust`(后台调整) / `redeem`(兑换扣减) / `refund_revert`(退款返还) |
 | Batch.status | `preview`(已预览待确认) / `confirmed`(已确认并发放) / `cancelled`(已取消) |
 | BatchRow.status | `valid` / `duplicate`(与同批次或同单位同版本已有权益重复) / `format_error`(非大陆手机号) / `over_limit`(超出采购数量) |
+| EntitlementEvent.event_type | `issued`(发放) / `claimed`(本人领取) / `rejected`(本人拒绝) / `reclaimed`(拒绝后再领取) / `reassigned`(后台改号) / `voided`(作废，含退款联动) —— 只追加，供工作二消费（2026-10-22 起） |
 | Entitlement.source_type | `order`(本人购买 / 兑换) / `batch`(单位分配) |
 | Entitlement.status | `pending`(待本人认领，仅 batch) / `active`(已生效) / `rejected`(本人拒绝) / `void`(后台作废) |
 | Consent.purpose | `package_purchase`(服务包购买协议与售后规则) |
@@ -538,13 +542,13 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 |---|---|---|
 | GET | `/mp/commerce/capabilities` | 需登录；`{wxpay_enabled, points_enabled:true, wxpay_reason?}`。`wxpay_enabled` 仅当商户号、APIv3 密钥、证书序列号、私钥、平台证书与回调地址全部配置时为 true |
 | GET | `/mp/packages?page=&page_size=` | 仅 `on_shelf` 且指向有效版本的服务包，按 `sort, id`；无检索条件的第一页游客可见（同 2026-10-19 游客规则），翻页需登录 |
-| GET | `/mp/packages/{id}` | 需登录；非 `on_shelf` 返回 404。`purchasable.reasons` 列出不可购买原因（支付通道未开通 / 未设置积分价 / 积分不足等），客户端按此禁用按钮，不自行推断 |
+| GET | `/mp/packages/{id}` | 需登录；非 `on_shelf` 返回 404。`purchasable.reasons` 列出不可购买原因（未完成开售放行 / 支付通道未开通 / 未设置积分价等），客户端按此禁用按钮，不自行推断。放行规则（R8，2026-10-22）：存在未撤销且环境匹配（当前环境或 `all`）的放行记录才可购；微信与积分下单在服务端按同一记录判定 |
 
 ## 二）C 端 · 订单 `/mp/orders`
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/mp/orders` | 需登录；`{client_order_id(UUID), package_id, pay_type, agree_terms:true}`。`agree_terms≠true` 422；商品不可售 409；`wxpay` 未配置 503；`points` 余额不足 409 `{"detail":"积分余额不足"}`。**幂等**：同用户同 `client_order_id` 且同 `package_id/pay_type` 返回原订单 200；参数不同 409。`points` 单在同一事务内：锁账户行 → 校验余额 → 写 `redeem` 流水 → 订单 `paid` → 发一份 `active` 权益 → 写 `package_purchase` 授权快照。`wxpay` 单创建为 `pending_payment`，`expires_at = now + 30 分钟` |
+| POST | `/mp/orders` | 需登录；`{client_order_id(UUID), package_id, version_id, pay_type, agree_terms:true}`（2026-10-22 起 `version_id` 必填，为用户实际确认的版本）。`agree_terms≠true` 422；`version_id` 与当前上架版本不一致 409 `服务包已更新（当前为 vN），请重新确认后下单`；未完成开售放行 409（微信与积分一致）；商品不可售 409；`wxpay` 未配置 503；`points` 余额不足 409 `{"detail":"积分余额不足"}`。**幂等**：同用户同 `client_order_id` 且同 `package_id/pay_type` 返回原订单 200；参数不同 409。`points` 单在同一事务内：锁账户行 → 校验余额 → 写 `redeem` 流水 → 订单 `paid` → 发一份 `active` 权益 → 写 `package_purchase` 授权快照。`wxpay` 单创建为 `pending_payment`，`expires_at = now + 30 分钟` |
 | GET | `/mp/orders?status=&page=&page_size=` | 需登录；仅本人，`created_at` 倒序。读取时已过期的 `pending_payment` 懒更新为 `closed` |
 | GET | `/mp/orders/{id}` | 需登录；非本人 404 |
 | POST | `/mp/orders/{id}/prepay` | 需登录；仅本人 `pending_payment` 且未过期（否则 409）；调用微信 JSAPI 下单，返回 `wx.requestPayment` 参数 `{timeStamp, nonceStr, package:"prepay_id=…", signType:"RSA", paySign}`；每次调用新建一条 `created` 支付记录；未配置 503，微信侧失败 502 |
@@ -567,6 +571,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 |---|---|---|
 | GET | `/mp/entitlements?status=&page=&page_size=` | 需登录；返回 `user_id` 为本人的权益 + `phone` 与本人核验手机号一致的 `pending`/`rejected` 待认领权益；本人无核验手机号时只返回前者 |
 | GET | `/mp/entitlements/{id}` | 需登录；不属于本人（含手机号不匹配）404 |
+| GET | `/mp/entitlements/{id}/events` | 需登录（2026-10-22 起）；本人权益的操作历史（发放/领取/拒绝/再领取/改号/作废，`created_at` 倒序，≤50 条），跨用户 404 |
 | POST | `/mp/entitlements/{id}/claim` | 需登录；仅 `batch` 来源且 `phone` 与本人手机号一致、状态 `pending`/`rejected` → `active`，写入 `user_id`、`activated_at`、`valid_until`；重复请求返回同一权益 200；`active` 再领也返回 200 同结果；他人或不存在 404 |
 | POST | `/mp/entitlements/{id}/reject` | 需登录；`pending` → `rejected`；已 `active` 返回 409；重复拒绝 200 |
 
@@ -579,18 +584,21 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | GET | `/mp/consents?purpose=` | 需登录；本人授权记录（含已撤回），`granted_at` 倒序 |
 | POST | `/mp/consents/{id}/revoke` | 需登录；写 `revoked_at`，重复撤回 200；撤回不影响既有订单与权益状态，仅记录意愿供后续处理 |
 
-授权记录由下单时自动写入（`purpose=package_purchase`，`version=版本号`，`text=当时售后规则全文快照`）。
+授权记录由下单时自动写入（`purpose=package_purchase`，`version=版本号`，`text=当时售后规则全文快照`，`source=order_confirm`（2026-10-22 起记录授权来源）；下单必须携带用户确认的 `version_id`，与当前上架版本不一致返回 409 要求重新确认）。小程序「授权管理」页可查看全部记录并撤回。
 
 ## 六）微信支付回调 `/pay/wxpay/notify`
 
-`POST /api/v1/pay/wxpay/notify`，无需业务 token。处理顺序：
+`POST /api/v1/pay/wxpay/notify`，无需业务 token。处理顺序（2026-10-22 起 R1/R2 收紧）：
 
 1. 未配置平台证书 / APIv3 密钥 → `503`，写 `notify_rejected` 事件（不含请求体明文）。
-2. 校验 `Wechatpay-Timestamp`（±5 分钟）、`Wechatpay-Nonce`、`Wechatpay-Signature`（RSA-SHA256 over `timestamp\nnonce\nbody\n`）；失败 → `401 {"code":"FAIL","message":"签名校验失败"}` + `notify_rejected` 审计。
-3. AES-256-GCM 解密 `resource`，取 `out_trade_no`、`transaction_id`、`trade_state`、`amount.total`。
-4. 按 `out_trade_no` 锁订单：不存在 → `404` + 审计；金额 ≠ `total_cents` → `409` + 审计；订单已 `paid` 且 `transaction_id` 相同 → `200 {"code":"SUCCESS"}` + `notify_replay`（**不重复发权益**）。
-5. `trade_state=SUCCESS` 且订单 `pending_payment`/`closed`（支付成功晚于本地超时关闭也入账）→ 条件更新为 `paid`，支付记录 `success`，发一份 `active` 权益（`UNIQUE(order_id)` 兜底），写 `notify_accepted`。
-6. 其他 `trade_state`（`CLOSED/REVOKED/PAYERROR`）→ 支付记录 `failed`，订单不变，`200`。
+2. 校验 `Wechatpay-Timestamp`（±5 分钟）、`Wechatpay-Nonce`、`Wechatpay-Signature`（RSA-SHA256 over `timestamp\nnonce\nbody\n`）；失败 → `401` + `notify_rejected` 审计。
+3. 解析 JSON 并 AES-256-GCM 解密 `resource`；非 JSON、`resource` 非对象或认证标签失败 → `400`（不产生 500）。
+4. **成功结果字段完整且匹配（R1）**：`trade_state=SUCCESS` 时 `amount.total` 必须为正整数分、`amount.currency=CNY`、`transaction_id` 非空且 ≤64 位 `[A-Za-z0-9-_]`；任一缺失/类型错误/币种不符 → `422` + `invalid_success_fields` 事件，订单与权益不变。金额 ≠ `total_cents` → `409`；`transaction_id` 已被其他订单使用 → `409` + `transaction_reused` 事件。
+5. 按 `out_trade_no` 锁订单：不存在 → `404` + 审计；订单已 `paid` → `200 {"code":"SUCCESS"}` + `notify_replay`（**不重复发权益**）。
+6. 入账（R2）：条件更新为 `paid` 后，支付记录**只落一条** `success` 并绑定该交易号——多轮预下单时最新一条 `created` 记 `success`、其余置 `failed(superseded)` 且不带交易号；无预下单记录则补插一条 `success`。随后发一份 `active` 权益（`UNIQUE(order_id)` 兜底，写 `issued` 权益事件）并记 `notify_accepted`。`pending_payment`/`closed`（支付成功晚于本地超时关闭）均可入账。
+7. 其他 `trade_state`（`CLOSED/REVOKED/PAYERROR`）→ 最新预下单记录置 `failed`，订单不变，`200`。
+
+主动查单 `POST /admin/mp/orders/{id}/sync` 走同一入账判定与字段校验；拒绝结果返回 422/409 而非入账。
 
 响应体按微信约定 `{"code":"SUCCESS","message":"成功"}` / `{"code":"FAIL","message":"…"}`。
 
@@ -618,6 +626,8 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | PATCH | `/admin/mp/packages/{id}` | `{name?, subtitle?, cover_url?, sort?}`；不改状态与版本 |
 | POST | `/admin/mp/packages/{id}/versions` | `{price_cents(>0), points_cost?(>0), validity_days(1–3650), benefits:[{name(1–50), desc?(≤200)}](1–20 项), service_desc(1–5000), terms(1–5000)}` → 201 新版本（`version_no` 自增）；**版本一经创建不可修改**，调价即建新版本 |
 | POST | `/admin/mp/packages/{id}/shelf` | `{on_shelf:true, version_id}` → `on_shelf` 并设 `current_version_id`；版本不属于该商品 404；配置不完整 409 `{"detail":"…", "blockers":[…]}`。`{on_shelf:false}` → `off_shelf`（已售订单与权益不受影响） |
+| POST | `/admin/mp/packages/{id}/releases` | `commerce.sale.release`（仅 admin，2026-10-22 起）；`{version_id, env:dev\|test\|staging\|prod\|all, basis(1–500)}` → 201 放行记录（负责人、依据、时间）；同版本同环境已有生效记录 409。放行后该版本在匹配环境（当前环境或 all）可购，微信与积分一致判定 |
+| POST | `/admin/mp/releases/{id}/revoke` | `commerce.sale.release`；`{reason(1–500)}` → 撤销放行（留痕 `revoked_at/by/原因`），该版本立即回到不可售；重复撤销 409 |
 
 ### 订单、对账与退款
 
@@ -626,9 +636,10 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | GET | `/admin/mp/orders?status=&pay_type=&q=&page=&page_size=` | `commerce.order.read`；q 匹配订单号 / 用户昵称 / 手机号后四位 |
 | GET | `/admin/mp/orders/{id}` | `commerce.order.read`；含 payments / events / refunds / entitlement |
 | POST | `/admin/mp/orders/{id}/sync` | `commerce.order.refund`；主动调用微信查单接口对账（回调丢失补偿），结果写 `query_sync` 事件；`SUCCESS` 且本地未入账则按回调同一逻辑入账；未配置 503 |
-| POST | `/admin/mp/orders/{id}/refund` | `commerce.order.refund`；`{channel, amount_cents?, reason(1–200)}`；仅 `paid`/`refund_failed` 可发起；`amount_cents` 默认全额，累计不得超订单金额（409）。`wxpay`：调用退款接口 → `processing`，失败 → `failed` + 订单 `refund_failed`；`manual`：`pending`，由人工线下完成后登记结论。订单置 `refund_pending`；积分单仅允许 `manual`，结论成功时写 `refund_revert` 返还流水 |
+| POST | `/admin/mp/orders/{id}/refund` | `commerce.order.refund`；`{channel, amount_cents?, reason(1–200)}`；仅 `paid`/`refund_failed` 可发起。**仅允许全额退款**（R5，2026-10-22）：部分金额 409「部分退款规则尚未确认，当前仅支持全额退款…」，规则经业务确认后另行放开。退款意图先落库再调外部（R4）：先建 `pending` 退款单（稳定单号）并提交，再调微信；同订单存在 `pending`/`processing` 退款单时同参数幂等返回原单、异参数 409。`wxpay`：微信受理 → `processing`；**明确拒绝 → `failed` + 订单 `refund_failed`（可重新发起，R3）**；**网络超时/断连 → 保持 `processing`（结果未知，按单号查证，不当失败）**。`manual`：`pending`。订单置 `refund_pending`；积分单仅允许 `manual`，结论成功时写 `refund_revert` 返还流水 |
 | GET | `/admin/mp/refunds?status=&page=&page_size=` | `commerce.order.read`；人工处理队列（`pending`/`processing`/`failed` 优先） |
-| POST | `/admin/mp/refunds/{id}/resolve` | `commerce.order.refund`；`{status:"success"\|"failed", note?(≤200)}`；`success` → 订单 `refunded`、`order` 来源权益置 `void`（原因「订单已退款」）、积分单返还；`failed` → 订单 `refund_failed`。记录处理人、理由、前后状态 |
+| POST | `/admin/mp/refunds/{id}/query` | `commerce.order.refund`（2026-10-22 起）；按退款单号向微信查证并回写：微信 `SUCCESS` → `success`（自动联动订单/权益/积分，结论来源 `wxpay_query`）；`CLOSED/ABNORMAL` → `failed` + 订单 `refund_failed`；`PROCESSING` → 保持并记查证时间。查证超时 504、微信错误 502。用于超时/断连后的恢复，同一退款意图不重复退钱 |
+| POST | `/admin/mp/refunds/{id}/resolve` | `commerce.order.refund`；`{status:"success"\|"failed", note?(≤200)}`。**线上（wxpay）退款单不得人工直接判成功**（409，须先 `query` 以微信结果为准）；`manual` 单成功须附线下凭据（note）。`success` → 订单 `refunded`、`order` 来源权益置 `void` 恰一次（`voided` 权益事件含退款单号）、积分单返还恰一次（`UNIQUE(biz_type, order_id)` 兜底）；`failed` → 订单 `refund_failed` 可重新发起。记录处理人、理由、结论来源与前后状态 |
 
 ### 积分
 
@@ -644,10 +655,12 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | GET | `/admin/mp/orgs?q=&page=&page_size=` | `commerce.batch.manage` |
 | POST | `/admin/mp/orgs` | `commerce.batch.manage`；`{name(1–100 唯一), contact_name?(≤50), contact_phone?(≤20), note?(≤500)}` → 201；重名 409 |
 | POST | `/admin/mp/orgs/{id}/accounts` | `commerce.batch.manage`；`{username(4–32，字母数字下划线，唯一), password(≥10)}` → 201 单位查看账号；不返回口令 |
-| POST | `/admin/mp/batches/preview` | `commerce.batch.manage`；`{org_id, package_id, version_id, quantity(1–10000), file_name(≤255), rows:[string](1–10000)}`。服务端逐行规范化（去空白、去 `+86`）后判定 `format_error` / `duplicate`（本批内重复、或该单位同版本已有非 `void` 权益）/ `over_limit`（有效行序号 > quantity）；创建 `preview` 批次并返回 `{batch, rows:[{row_no, phone(掩码), status, error_detail}], summary:{total, valid, duplicate, format_error, over_limit}}`；`file_sha256` 为服务端对规范化行内容计算，`uploaded_by` 为当前账号 |
+| POST | `/admin/mp/batches/preview` | `commerce.batch.manage`；`{org_id, package_id, version_id, quantity(1–10000), file_name(≤255), rows:[string](1–10000)}`。服务端逐行规范化（去空白、去 `+86`）后判定 `format_error` / `duplicate`（本批内重复、或该单位同版本已有非 `void` 权益）/ `over_limit`（有效行序号 > quantity）；创建 `preview` 批次并返回 `{batch, rows, summary}`。无原件时 `file_sha256` = 规范化数据摘要；`uploaded_by` 为当前账号 |
+| POST | `/admin/mp/batches/preview-file` | `commerce.batch.manage`（2026-10-22 起，I2 真实文件导入）；multipart `file` + `org_id/package_id/version_id/quantity`。仅收 UTF-8 文本 CSV/TXT（「手机号/phone」表头自动跳过，每行取首列，兼容逗号/制表符/分号），≤2 MiB、≤10000 行；超限 413/422、编码错误 422。**原件写入私有目录（含手机号，不入公开 uploads），`file_sha256` = 原文件字节摘要**，另存规范化摘要 `normalized_sha256`；解析与校验在服务端完成，确认只消费已预览数据 |
 | GET | `/admin/mp/batches?org_id=&status=&page=&page_size=` | `commerce.batch.manage` |
 | GET | `/admin/mp/batches/{id}` | `commerce.batch.manage`；含行明细（手机号掩码）与汇总 |
-| POST | `/admin/mp/batches/{id}/confirm` | `commerce.batch.confirm`；仅 `preview` → `confirmed`；为每个 `valid` 行创建一条 `pending` 权益（`UNIQUE(batch_row_id)`）；记录 `confirmed_by/confirmed_at`；重复确认 409；版本已不是该商品版本不影响（按批次绑定版本发放） |
+| GET | `/admin/mp/batches/{id}/file` | `commerce.batch.manage`；下载名单原件（鉴权 + 审计 `commerce.batch.file_download` + `Cache-Control: no-store`）；JSON 预览批次无原件 404 |
+| POST | `/admin/mp/batches/{id}/confirm` | `commerce.batch.confirm`；仅 `preview` → `confirmed`；确认事务内复查跨批次重复（同单位×版本×手机号非 `void` 权益，R6 2026-10-22），数据库由 `uq_mp_entitlements_batch_phone`（PG 部分唯一索引 / SQLite 触发器）兜底；任一行冲突整批 409「与其他批次存在重复手机号…」，不静默少发。为每个 `valid` 行创建一条 `pending` 权益（`UNIQUE(batch_row_id)`，写 `issued` 权益事件）；记录 `confirmed_by/confirmed_at`；重复确认 409；版本已不是该商品版本不影响（按批次绑定版本发放） |
 | POST | `/admin/mp/batches/{id}/cancel` | `commerce.batch.confirm`；仅 `preview` → `cancelled` |
 
 ### 权益异常处理
@@ -655,6 +668,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/admin/mp/entitlements?status=&source_type=&q=&page=&page_size=` | `commerce.batch.manage`；q 匹配手机号后四位 / 订单号 / 批次号 |
+| GET | `/admin/mp/entitlements/{id}/events` | `commerce.batch.manage`（2026-10-22 起）；该权益全部变更事件（含 actor 与 detail），供对账与工作二核对 |
 | POST | `/admin/mp/entitlements/{id}/void` | `commerce.batch.confirm`；`{reason(1–200)}`；`pending`/`active` → `void`；已 `void` 409 |
 | POST | `/admin/mp/entitlements/{id}/reassign` | `commerce.batch.confirm`；`{phone, reason(1–200)}`；仅 `batch` 来源且 `pending`/`rejected`（错号修正）；新号格式错误 422；同单位同版本已有非 `void` 权益 409 |
 
@@ -664,6 +678,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 |---|---|
 | `WXPAY_MCHID` `WXPAY_API_V3_KEY`(32 位) `WXPAY_CERT_SERIAL_NO` `WXPAY_PRIVATE_KEY_PATH` `WXPAY_PLATFORM_CERT_PATH` `WXPAY_NOTIFY_URL` | `capabilities.wxpay_enabled=false`；`wxpay` 下单 / 预支付 / 查单 / 退款 503「支付通道未开通」；回调 503 并审计。私钥与平台证书只从文件读取，不入库不入日志 |
 | 服务包未录入版本 / 价格 / 权益 / 售后 | 后台 `blockers` 列出；不能上架；C 端不可见 |
+| `COMMERCE_BATCH_DIR`（默认 `./private_commerce_batches`）、`COMMERCE_BATCH_FILE_MAX_BYTES`(2 MiB)、`COMMERCE_BATCH_MAX_ROWS`(10000) | 名单原件私存目录与导入上限；目录不得位于公开 `UPLOAD_DIR` 内（启动校验拒绝） |
 
 ## 审计 action（第四部分新增）
 

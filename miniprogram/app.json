@@ -26,6 +26,8 @@
     "pages/order-detail/order-detail",
     "pages/benefits/benefits",
     "pages/my-service/my-service",
+    "pages/points/points",
+    "pages/consents/consents",
     "pages/device-data/device-data"
   ],
   "window": {

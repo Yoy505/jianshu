@@ -37,7 +37,11 @@ NOTIFY_TIMESTAMP_TOLERANCE = 300  # 秒
 
 
 class WxPayError(Exception):
-    """微信支付接口返回非成功（errcode/HTTP 非 2xx），message 面向日志不含密钥。"""
+    """微信支付接口返回明确非成功（errcode/HTTP 非 2xx），message 面向日志不含密钥。"""
+
+
+class WxPayTimeout(Exception):
+    """网络超时/断连：外部结果未知，不得当作失败处理，须按单号查证后恢复。"""
 
 
 @dataclass(frozen=True)
@@ -160,7 +164,10 @@ async def _request(
     async with httpx.AsyncClient(
         base_url=WXPAY_BASE, timeout=15.0, transport=_http_transport
     ) as client:
-        resp = await client.request(method, url_path, content=body or None, headers=headers)
+        try:
+            resp = await client.request(method, url_path, content=body or None, headers=headers)
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            raise WxPayTimeout(f"NETWORK:{type(exc).__name__}") from exc
     try:
         data = resp.json()
     except ValueError:
@@ -238,6 +245,13 @@ async def create_refund(
         "amount": {"refund": refund_cents, "total": total_cents, "currency": "CNY"},
     }
     return await _request(cfg, "POST", "/v3/refund/domestic/refunds", payload)
+
+
+async def query_refund(cfg: WxPayConfig, out_refund_no: str) -> dict[str, Any]:
+    """按商户退款单号查询真实退款状态（超时/断连后的查证与恢复路径）。"""
+    return await _request(
+        cfg, "GET", f"/v3/refund/domestic/refunds/{out_refund_no}"
+    )
 
 
 def verify_notify_signature(

@@ -19,6 +19,7 @@ export type Permission =
   | 'commerce.points.adjust'
   | 'commerce.batch.manage'
   | 'commerce.batch.confirm'
+  | 'commerce.sale.release'
   | 'steward.read'
   | 'steward.manage'
   | 'outreach.read'
@@ -54,6 +55,7 @@ const ADMIN_PERMISSIONS: Permission[] = [
   'commerce.points.adjust',
   'commerce.batch.manage',
   'commerce.batch.confirm',
+  'commerce.sale.release',
   'steward.read',
   'steward.manage',
   'outreach.read',
@@ -64,9 +66,17 @@ const ADMIN_PERMISSIONS: Permission[] = [
   'phone.manage',
 ]
 
+/* 财务（I1）：交易账务（订单/退款/积分），无内容、商品维护与发放权限 */
+const FINANCE_PERMISSIONS: Permission[] = [
+  'commerce.order.read',
+  'commerce.order.refund',
+  'commerce.points.adjust',
+]
+
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   admin: ADMIN_PERMISSIONS,
   editor: EDITOR_PERMISSIONS,
+  finance: FINANCE_PERMISSIONS,
 }
 
 export function can(role: string | undefined | null, permission: Permission): boolean {

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes } from 'react';
 import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Copy } from 'lucide-react';
 import { API_BASE, fetchVolunteerMeta, OFFLINE_OPTIONS, TRACKS, type VolunteerMeta } from './content';
-import { applicationPayload, INITIAL_FORM, parseReceipt, RECEIPT_KEY, saveReceipt, validateForm, type FieldErrors, type FormState } from './application';
-import type { ApplicationState } from './useApplication';
+import { applicationPayload, parseReceipt, saveReceipt, validateForm, type FieldErrors, type FormState } from './application';
+import { useApplicationStore } from './stores/application';
+import { Button } from './components/ui/button';
 
-type Channel = { status: 'loading' | 'error' } | { status: 'open' | 'closed'; meta: VolunteerMeta };
+type ChannelStatus = 'loading' | 'error' | 'open' | 'closed';
 type Field = keyof FormState;
 const fieldId = (key: Field) => `field-${key}`;
 const errorId = (key: Field) => `error-${key}`;
@@ -27,33 +29,48 @@ function TextField({ label, field, error, ...props }: InputHTMLAttributes<HTMLIn
   </div>;
 }
 
-export default function ApplyPage({ application }: { application: ApplicationState }) {
-  const { form, setForm, receipt, setReceipt, submitting, setSubmitting, submissionLock,
-    submitError, setSubmitError, storageFailed, setStorageFailed } = application;
-  const [channel, setChannel] = useState<Channel>({ status: 'loading' });
-  const [retry, setRetry] = useState(0);
+export default function ApplyPage() {
+  const { form, setForm, resetForm, receipt, setReceipt, clearReceipt, submitting, setSubmitting,
+    submitError, setSubmitError, storageFailed, setStorageFailed, locked, setLocked } = useApplicationStore();
+  const queryClient = useQueryClient();
   const [errors, setErrors] = useState<FieldErrors>({});
   const [copyMessage, setCopyMessage] = useState('');
   const [focusTarget, setFocusTarget] = useState<Field | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const isOpen = channel.status === 'open';
-  const consentText = 'meta' in channel ? channel.meta.consent_text : '';
 
+  // 报名通道元数据：Query 统一加载/错误/重试（重新检查 = refetch）
+  const metaQuery = useQuery({
+    queryKey: ['volunteer-meta'],
+    // 保留原实现的 10s 超时中止（停滞请求转可重试状态），并与 Query 信号联动
+    queryFn: async ({ signal }) => {
+      const timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), 10000);
+      const forwardAbort = () => timeout.abort();
+      signal?.addEventListener('abort', forwardAbort);
+      try {
+        return await fetchVolunteerMeta(timeout.signal);
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', forwardAbort);
+      }
+    },
+    // 同意文案每次进入报名页必须重新核验（文案变化要重置勾选），故不做长缓存
+    staleTime: 0,
+  });
+  const meta = metaQuery.data;
+  const channelStatus: ChannelStatus = metaQuery.isPending
+    ? 'loading'
+    : metaQuery.isError || !meta ? 'error' : (meta.enabled ? 'open' : 'closed');
+  const isOpen = channelStatus === 'open';
+  const consentText = meta?.consent_text ?? '';
+  const channel: { status: ChannelStatus; meta?: VolunteerMeta } = { status: channelStatus, meta };
+
+  // 同意文案变化时重置勾选（与原实现一致：防止对旧文案的同意冒充新文案确认）
   useEffect(() => {
-    document.title = '志愿者在线报名 · 杏临千行';
-    const controller = new AbortController();
-    let active = true;
-    const timer = window.setTimeout(() => controller.abort(), 10000);
-    setChannel({ status: 'loading' });
-    void fetchVolunteerMeta(controller.signal).then((meta) => {
-      if (!active) return;
-      setChannel({ status: meta.enabled ? 'open' : 'closed', meta });
-      setForm((previous) => previous.consentFor !== meta.consent_text
-        ? { ...previous, consent: false, consentFor: '' } : previous);
-    }).catch(() => { if (active) setChannel({ status: 'error' }); })
-      .finally(() => window.clearTimeout(timer));
-    return () => { active = false; window.clearTimeout(timer); controller.abort(); };
-  }, [retry, setForm]);
+    if (!consentText) return;
+    const current = useApplicationStore.getState().form;
+    if (current.consentFor !== consentText) setForm((previous) => ({ ...previous, consent: false, consentFor: '' }));
+  }, [consentText, setForm]);
 
   useEffect(() => { if (receipt) heading.current?.focus(); }, [receipt]);
 
@@ -61,11 +78,32 @@ export default function ApplyPage({ application }: { application: ApplicationSta
     if (focusTarget && !submitting) { focusField(focusTarget); setFocusTarget(null); }
   }, [focusTarget, submitting, errors]);
 
+  // 提交：副作用 mutation，不自动重试；服务端校验/限流/未知结果的处理与原实现逐条一致
+  const submitMutation = useMutation({
+    retry: false,
+    mutationFn: async () => {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 20000);
+      try {
+        const res = await fetch(`${API_BASE}/h5/volunteer-applications`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+          body: JSON.stringify(applicationPayload(form)),
+        });
+        const data = await res.json().catch(() => null);
+        return { status: res.status, data } as { status: number; data: unknown };
+      } finally {
+        window.clearTimeout(timer);
+      }
+    },
+    onMutate: () => { setLocked(true); setSubmitting(true); setSubmitError(null); },
+    onSettled: () => { setLocked(false); setSubmitting(false); },
+  });
+
   function setField<K extends Field>(key: K, value: FormState[K]) {
     const next = { ...form, [key]: value };
     if (key === 'consent') next.consentFor = value ? consentText : '';
     if (key === 'track' && value !== 'other') next.trackNote = '';
-    setForm(next);
+    setForm(() => next);
     const currentErrors = validateForm(next);
     setErrors((previous) => {
       const updated = { ...previous };
@@ -86,62 +124,51 @@ export default function ApplyPage({ application }: { application: ApplicationSta
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submissionLock.current || !isOpen || !consentText) return;
+    if (locked || submitting || !isOpen || !consentText) return;
     const invalid = validateForm(form);
     if (form.consent && form.consentFor !== consentText) invalid.consent = '信息使用说明已更新，请重新阅读并确认。';
     setErrors(invalid);
     const first = Object.keys(invalid)[0] as Field | undefined;
     if (first) { setFocusTarget(first); return; }
-    submissionLock.current = true;
-    setSubmitting(true);
-    setSubmitError(null);
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 20000);
-    try {
-      const res = await fetch(`${API_BASE}/h5/volunteer-applications`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
-        body: JSON.stringify(applicationPayload(form)),
-      });
-      const data = await res.json().catch(() => null);
-      const result = parseReceipt(data);
-      if (res.ok && result) {
-        let saved = false;
-        try { saved = saveReceipt(window.sessionStorage, result); } catch { /* Storage may be unavailable. */ }
-        setStorageFailed(!saved);
-        setReceipt(result);
-        setForm(INITIAL_FORM);
-        setErrors({});
-        return;
-      }
-      const detail = typeof data?.detail === 'string' ? data.detail : '';
-      if (res.status === 503 && detail === '志愿者报名暂未开放') {
-        setChannel({ status: 'closed', meta: channel.meta });
-      }
-      if (res.status === 429) setSubmitError('提交过于频繁，请稍后再试。你填写的信息仍保留在本页。');
-      else if (res.status === 422) {
-        // FastAPI validation errors may be an array instead of a plain message.
-        const fields: Record<string, Field> = { name: 'name', phone: 'phone', city: 'city', birth_year: 'birthYear',
-          occupation: 'occupation', organization: 'organization', track: 'track', track_note: 'trackNote',
-          offline_per_year: 'offlinePerYear', can_station: 'canStation', intro: 'intro', consent: 'consent' };
-        const serverErrors: FieldErrors = {};
-        if (Array.isArray(data?.detail)) for (const item of data.detail) {
-          const key = Array.isArray(item?.loc) ? fields[item.loc[item.loc.length - 1]] : undefined;
-          if (key) serverErrors[key] = '请检查此项内容与格式后重新提交。';
-        }
-        setErrors(serverErrors);
-        const firstServerError = Object.keys(serverErrors)[0] as Field | undefined;
-        if (firstServerError) setFocusTarget(firstServerError);
-        setSubmitError(detail || '部分报名信息未通过校验，请检查标记的内容。');
-      } else if (res.status === 503 && detail) setSubmitError(`${detail}。你填写的信息仍保留在本页。`);
-      else if (res.ok || res.status >= 500) setSubmitError('未能确认提交结果，报名可能已被接收。请勿连续重复提交；保留本页，稍后确认后再操作。');
-      else setSubmitError(detail || `提交未成功（${res.status}），请稍后重试。你填写的信息仍保留在本页。`);
-    } catch {
+    const result = await submitMutation.mutateAsync().catch(() => ({ status: 0, data: null }));
+
+    if (result.status === 0) {
       setSubmitError('连接中断或请求超时，未能确认提交结果，报名可能已被接收。请勿连续重复提交；你填写的信息仍保留在本页。');
-    } finally {
-      window.clearTimeout(timer);
-      submissionLock.current = false;
-      setSubmitting(false);
+      return;
     }
+    const data = result.data as { detail?: unknown } | null;
+    const receiptResult = parseReceipt(data);
+    if (result.status >= 200 && result.status < 300 && receiptResult) {
+      let saved = false;
+      try { saved = saveReceipt(window.sessionStorage, receiptResult); } catch { /* Storage may be unavailable. */ }
+      setStorageFailed(!saved);
+      setReceipt(receiptResult);
+      resetForm();
+      setErrors({});
+      return;
+    }
+    const detail = typeof data?.detail === 'string' ? data.detail : '';
+    if (result.status === 503 && detail === '志愿者报名暂未开放' && meta) {
+      queryClient.setQueryData(['volunteer-meta'], { ...meta, enabled: false });
+    }
+    if (result.status === 429) setSubmitError('提交过于频繁，请稍后再试。你填写的信息仍保留在本页。');
+    else if (result.status === 422) {
+      // FastAPI validation errors may be an array instead of a plain message.
+      const fields: Record<string, Field> = { name: 'name', phone: 'phone', city: 'city', birth_year: 'birthYear',
+        occupation: 'occupation', organization: 'organization', track: 'track', track_note: 'trackNote',
+        offline_per_year: 'offlinePerYear', can_station: 'canStation', intro: 'intro', consent: 'consent' };
+      const serverErrors: FieldErrors = {};
+      if (Array.isArray(data?.detail)) for (const item of data.detail as Array<{ loc?: unknown }>) {
+        const key = Array.isArray(item?.loc) ? fields[(item.loc as string[])[item.loc.length - 1]] : undefined;
+        if (key) serverErrors[key] = '请检查此项内容与格式后重新提交。';
+      }
+      setErrors(serverErrors);
+      const firstServerError = Object.keys(serverErrors)[0] as Field | undefined;
+      if (firstServerError) setFocusTarget(firstServerError);
+      setSubmitError(detail || '部分报名信息未通过校验，请检查标记的内容。');
+    } else if (result.status === 503 && detail) setSubmitError(`${detail}。你填写的信息仍保留在本页。`);
+    else if ((result.status >= 200 && result.status < 300) || result.status >= 500) setSubmitError('未能确认提交结果，报名可能已被接收。请勿连续重复提交；保留本页，稍后确认后再操作。');
+    else setSubmitError(detail || `提交未成功（${result.status}），请稍后重试。你填写的信息仍保留在本页。`);
   }
 
   async function copyReceipt() {
@@ -150,9 +177,7 @@ export default function ApplyPage({ application }: { application: ApplicationSta
     catch { setCopyMessage('暂时无法自动复制，请长按或选中上方回执号复制。'); }
   }
   function startAnother() {
-    try { window.sessionStorage.removeItem(RECEIPT_KEY); } catch { /* Current state can still be cleared. */ }
-    setReceipt(null); setForm(INITIAL_FORM); setErrors({}); setSubmitError(null); setCopyMessage('');
-    setChannel({ status: 'loading' }); setRetry((value) => value + 1);
+    clearReceipt(); resetForm(); setErrors({}); setSubmitError(null); setCopyMessage('');
     heading.current?.focus();
   }
 
@@ -169,19 +194,19 @@ export default function ApplyPage({ application }: { application: ApplicationSta
         <p className="vol-receipt-label">志愿者报名回执号</p>
         <strong className="vol-receipt-number">{receipt.receipt_no}</strong>
         <p className="vol-receipt-time">提交时间：{new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(receipt.submitted_at))}（北京时间）</p>
-        <button type="button" className="vol-button vol-button-secondary" onClick={() => void copyReceipt()}><Copy size={18} aria-hidden="true" />复制回执号</button>
+        <Button type="button" variant="secondary" className="vol-button vol-button-secondary" onClick={() => void copyReceipt()}><Copy size={18} aria-hidden="true" />复制回执号</Button>
         <p className="vol-copy-status" role="status">{copyMessage}</p>
         <p className="vol-receipt-hint">工作人员将通过你填写的手机号联系，请保持电话畅通。报名提交不代表已录用。</p>
         <p className="vol-form-hint">{storageFailed ? '此浏览器无法保存回执，请现在复制回执号或截图留存。' : '此回执暂存在当前浏览器会话中，24小时内可刷新恢复。请及时复制或截图留存。'}</p>
         <div className="vol-receipt-actions">
           <Link className="vol-button vol-button-primary" to="/">返回招募首页</Link>
-          <button type="button" className="vol-button vol-button-secondary" onClick={startAnother}>再帮一位伙伴报名</button>
+          <Button type="button" variant="secondary" className="vol-button vol-button-secondary" onClick={startAnother}>再帮一位伙伴报名</Button>
         </div>
       </div> : <form className="vol-form" onSubmit={(event) => void handleSubmit(event)} noValidate aria-busy={submitting}>
         <div className="vol-form-status" data-state={channel.status} role="status">
           <span>{channel.status === 'loading' ? '正在确认报名通道状态…' : channel.status === 'open' ? '报名通道已开放'
             : channel.status === 'closed' ? '报名通道暂未开放，开放后可填写并提交。' : '暂时无法确认报名状态，请重新检查。'}</span>
-          {(channel.status === 'error' || channel.status === 'closed') && <button type="button" className="vol-text-button" onClick={() => { setChannel({ status: 'loading' }); setRetry((value) => value + 1); }}>重新检查</button>}
+          {(channel.status === 'error' || channel.status === 'closed') && <button type="button" className="vol-text-button" onClick={() => void metaQuery.refetch()}>重新检查</button>}
         </div>
         {Object.keys(errors).length > 0 && <div className="vol-error-summary" role="alert"><strong>请检查以下信息</strong><ul>
           {Object.entries(errors).map(([key, message]) => <li key={key}><a href={`#${fieldId(key as Field)}`} onClick={(event) => { event.preventDefault(); focusField(key as Field); }}>{message}</a></li>)}

@@ -50,13 +50,15 @@ router = APIRouter()
 
 
 def _package_summary(
-    package: MpPackage, version: MpPackageVersion, *, wxpay_enabled: bool, balance: int
+    package: MpPackage, version: MpPackageVersion, *, wxpay_enabled: bool, balance: int,
+    released: bool = True,
 ) -> PackageSummaryOut:
     flags = svc.purchasable_flags(
         version,
         blockers=svc.version_blockers(version),
         wxpay_enabled=wxpay_enabled,
         balance=balance,
+        released=released,
     )
     return PackageSummaryOut(
         id=package.id,
@@ -203,8 +205,12 @@ async def list_packages(
         )
     ).all()
     enabled = wxpay_service.wxpay_enabled()
+    items = []
+    for p, v in rows:
+        released = await svc.has_active_release(db, p.id, v.id)
+        items.append(_package_summary(p, v, wxpay_enabled=enabled, balance=0, released=released))
     return Page(
-        items=[_package_summary(p, v, wxpay_enabled=enabled, balance=0) for p, v in rows],
+        items=items,
         total=int(total or 0),
         page=page,
         page_size=page_size,
@@ -222,7 +228,11 @@ async def package_detail(
         raise HTTPException(status_code=404, detail="服务包不存在或已下架")
     balance = await svc.get_points_balance(db, user.id)
     return _package_detail(
-        package, version, wxpay_enabled=wxpay_service.wxpay_enabled(), balance=balance
+        package,
+        version,
+        wxpay_enabled=wxpay_service.wxpay_enabled(),
+        balance=balance,
+        released=await svc.has_active_release(db, package.id, version.id),
     )
 
 
@@ -241,6 +251,7 @@ async def create_order(
         user,
         client_order_id=body.client_order_id,
         package_id=body.package_id,
+        version_id=body.version_id,
         pay_type=body.pay_type,
         agree_terms=body.agree_terms,
     )
@@ -438,6 +449,35 @@ async def entitlement_detail(
     return await _entitlement_out(db, ent)
 
 
+@router.get("/entitlements/{ent_id}/events")
+async def entitlement_events(
+    ent_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    from app.models import MpEntitlementEvent
+
+    ent = await _my_entitlement(db, user, ent_id)
+    rows = (
+        await db.execute(
+            select(MpEntitlementEvent)
+            .where(MpEntitlementEvent.entitlement_id == ent.id)
+            .order_by(MpEntitlementEvent.id.desc())
+            .limit(50)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "detail": e.detail,
+            "actor_type": e.actor_type,
+            "created_at": e.created_at,
+        }
+        for e in rows
+    ]
+
+
 @router.post("/entitlements/{ent_id}/claim", response_model=EntitlementOut)
 async def claim(
     ent_id: int,
@@ -495,6 +535,7 @@ async def my_consents(
                 purpose=c.purpose,
                 version=c.version,
                 text=c.text,
+                source=c.source,
                 granted_at=c.granted_at,
                 revoked_at=c.revoked_at,
             )
@@ -527,6 +568,7 @@ async def revoke_consent(
         purpose=consent.purpose,
         version=consent.version,
         text=consent.text,
+        source=consent.source,
         granted_at=consent.granted_at,
         revoked_at=consent.revoked_at,
     )

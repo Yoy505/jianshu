@@ -16,6 +16,7 @@ from sqlalchemy import (
     JSON,
     CheckConstraint,
     DateTime,
+    event,
     ForeignKey,
     Index,
     Integer,
@@ -404,6 +405,9 @@ class MpPurchaseBatch(TimestampMixin, Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    # I2（2026-10-22）：file_sha256=原文件字节摘要（有原件时）；normalized_sha256=规范化号码数据摘要
+    normalized_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stored_filename: Mapped[str | None] = mapped_column(String(68), nullable=True)
     status: Mapped[str] = mapped_column(
         String(12), default=BatchStatus.PREVIEW.value, server_default="preview", nullable=False
     )
@@ -441,7 +445,12 @@ class MpBatchRow(TimestampMixin, Base):
 
 
 class MpEntitlement(TimestampMixin, Base):
-    """权益：与订单或名单行一一对应；认领以手机号匹配本人微信核验号码。"""
+    """权益：与订单或名单行一一对应；认领以手机号匹配本人微信核验号码。
+
+    跨批次防重（R6，2026-10-22）：同单位同版本同手机号至多一份非 void 权益。
+    - PostgreSQL：迁移 e5b8c2d4f6a1 部分唯一索引 uq_mp_entitlements_batch_phone；
+    - SQLite（测试 create_all 路径）：文件末尾 DDL 事件建等价 BEFORE 触发器。
+    """
 
     __tablename__ = "mp_entitlements"
     __table_args__ = (
@@ -450,6 +459,7 @@ class MpEntitlement(TimestampMixin, Base):
         Index("ix_mp_entitlements_user", "user_id", "id"),
         Index("ix_mp_entitlements_phone_status", "phone", "status"),
         Index("ix_mp_entitlements_batch", "batch_id"),
+        Index("ix_mp_entitlements_batch_phone", "org_id", "package_version_id", "phone"),
         CheckConstraint("source_type IN ('order', 'batch')", name="ck_mp_entitlements_source"),
         CheckConstraint(
             "status IN ('pending', 'active', 'rejected', 'void')", name="ck_mp_entitlements_status"
@@ -471,6 +481,9 @@ class MpEntitlement(TimestampMixin, Base):
     )
     batch_row_id: Mapped[int | None] = mapped_column(
         ForeignKey("mp_batch_rows.id", ondelete="RESTRICT"), nullable=True
+    )
+    org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mp_orgs.id", ondelete="RESTRICT"), nullable=True
     )
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
@@ -494,6 +507,43 @@ class MpEntitlement(TimestampMixin, Base):
     voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class MpSaleRelease(TimestampMixin, Base):
+    """开售放行记录（R8）：商品/版本/环境 + 负责人 + 依据 + 撤销留痕。
+
+    默认不放行：无有效（未撤销且环境匹配）放行记录的服务包在 C 端不可购买，
+    微信与积分下单在服务端同一判定，旧页面或直接 API 提交不能绕过。
+    """
+
+    __tablename__ = "mp_sale_releases"
+    __table_args__ = (
+        Index("ix_mp_sale_releases_pkg", "package_id", "version_id"),
+        CheckConstraint(
+            "env IN ('dev', 'test', 'staging', 'prod', 'all')", name="ck_mp_sale_releases_env"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    package_id: Mapped[int] = mapped_column(
+        ForeignKey("mp_packages.id", ondelete="CASCADE"), nullable=False
+    )
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("mp_package_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    env: Mapped[str] = mapped_column(String(10), nullable=False)
+    basis: Mapped[str] = mapped_column(String(500), nullable=False)
+    released_by_admin_id: Mapped[int] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="RESTRICT"), nullable=False
+    )
+    released_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoke_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
 class MpUserConsent(TimestampMixin, Base):
     """购买授权记录：目的 / 版本 / 文本快照 / 授权与撤回时间；撤回不删除记录。"""
 
@@ -512,6 +562,9 @@ class MpUserConsent(TimestampMixin, Base):
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(32), default="order_confirm", server_default="order_confirm", nullable=False
+    )
     order_id: Mapped[int | None] = mapped_column(
         ForeignKey("mp_orders.id", ondelete="SET NULL"), nullable=True
     )
@@ -519,3 +572,105 @@ class MpUserConsent(TimestampMixin, Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ───────────────────────── 权益变更事件（工作二消费接口） ─────────────────────────
+
+ENTITLEMENT_EVENT_TYPES = (
+    "issued",      # 发放（订单支付 / 兑换 / 批次确认）
+    "claimed",     # 本人认领
+    "rejected",    # 本人拒绝
+    "reclaimed",   # 拒绝后再次认领
+    "reassigned",  # 后台改号
+    "voided",      # 作废（人工 / 退款联动）
+)
+
+
+class MpEntitlementEvent(TimestampMixin, Base):
+    """权益变更事件，只追加：工作二据此终止/调整服务实例；detail 不含手机号全号。"""
+
+    __tablename__ = "mp_entitlement_events"
+    __table_args__ = (
+        Index("ix_mp_entitlement_events_ent", "entitlement_id", "id"),
+        CheckConstraint(
+            "event_type IN ('issued', 'claimed', 'rejected', 'reclaimed', 'reassigned', 'voided')",
+            name="ck_mp_entitlement_events_type",
+        ),
+        CheckConstraint(
+            "actor_type IN ('user', 'admin', 'system')",
+            name="ck_mp_entitlement_events_actor",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entitlement_id: Mapped[int] = mapped_column(
+        ForeignKey("mp_entitlements.id", ondelete="CASCADE"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    actor_type: Mapped[str] = mapped_column(String(10), default="system", nullable=False)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+# ───────────────────────── 跨批次防重（SQLite/测试路径） ─────────────────────────
+# PostgreSQL 由迁移 e5b8c2d4f6a1 的部分唯一索引保证；SQLite 不支持
+# postgresql_where，create_all 建表路径用 BEFORE 触发器实现同一不变量。
+
+_ENT_BATCH_PHONE_GUARD_INSERT_SQL = """
+CREATE TRIGGER IF NOT EXISTS mp_entitlements_batch_phone_guard
+BEFORE INSERT ON mp_entitlements
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'duplicate batch entitlement phone')
+    WHERE NEW.source_type = 'batch'
+      AND NEW.status <> 'void'
+      AND NEW.phone IS NOT NULL
+      AND NEW.org_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM mp_entitlements
+        WHERE source_type = 'batch'
+          AND status <> 'void'
+          AND phone = NEW.phone
+          AND org_id = NEW.org_id
+          AND package_version_id = NEW.package_version_id
+          AND id != NEW.id
+      );
+END;
+"""
+
+_ENT_BATCH_PHONE_GUARD_UPDATE_SQL = """
+CREATE TRIGGER IF NOT EXISTS mp_entitlements_batch_phone_guard_update
+BEFORE UPDATE OF org_id, package_version_id, phone, status ON mp_entitlements
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'duplicate batch entitlement phone')
+    WHERE NEW.source_type = 'batch'
+      AND NEW.status <> 'void'
+      AND NEW.phone IS NOT NULL
+      AND NEW.org_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM mp_entitlements
+        WHERE source_type = 'batch'
+          AND status <> 'void'
+          AND phone = NEW.phone
+          AND org_id = NEW.org_id
+          AND package_version_id = NEW.package_version_id
+          AND id != NEW.id
+      );
+END;
+"""
+
+
+@event.listens_for(Base.metadata, "after_create")
+def _create_entitlement_batch_phone_guard(target, connection, **kw):  # pragma: no cover - 建表钩子
+    """SQLite 建表后挂跨批次防重触发器；PostgreSQL 走 Alembic 部分唯一索引。"""
+    if kw.get("table") is not None:
+        return
+    if connection.dialect.name != "sqlite":
+        return
+    from sqlalchemy import inspect as sa_inspect, text
+
+    if not sa_inspect(connection).has_table("mp_entitlements"):
+        return
+    connection.execute(text(_ENT_BATCH_PHONE_GUARD_INSERT_SQL))
+    connection.execute(text(_ENT_BATCH_PHONE_GUARD_UPDATE_SQL))

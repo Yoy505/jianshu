@@ -115,3 +115,5 @@
 .pkg-price-row{display:flex;align-items:center;gap:2.051282052vw;margin-top:2.051282052vw;flex-wrap:wrap}
 .pkg-price{font:700 5.641025641vw Georgia,serif;color:#0f766e}
 .pkg-unit{font-size:2.564102565vw;color:#5c7b6c;margin-right:1.538461539vw}
+
+.pkg-retry{display:inline-flex;align-items:center;min-height:8.205128206vw;margin-top:2.564102565vw;padding:0 3.58974359vw;font-size:2.820512821vw;color:#33775f;border:0.256410257vw solid #c5dccf;border-radius:2.051282052vw;background:#fff}

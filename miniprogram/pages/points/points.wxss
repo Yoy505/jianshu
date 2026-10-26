@@ -1,0 +1,9 @@
+@import "../../styles/hifi.wxss";
+
+.balance-card{text-align:center;padding:7.692307692vw 4.102564103vw}
+.balance-num{font:700 11.28205128vw Georgia,serif;color:#0f766e;margin:2.564102565vw 0}
+.balance-card .secondary{display:inline-flex;margin-top:2.564102565vw}
+.entry-card .grow{flex:1;min-width:0}
+.delta{font:700 4.871794872vw Georgia,serif}
+.delta.plus{color:#217a54}
+.delta.minus{color:#a1665c}

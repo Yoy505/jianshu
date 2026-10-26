@@ -6,6 +6,7 @@
 
 import logging
 
+from cryptography.exceptions import InvalidTag
 from fastapi import APIRouter, Depends, Header, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,8 +59,10 @@ async def wxpay_notify(
 
         envelope = json.loads(body)
         resource = envelope.get("resource") or {}
+        if not isinstance(resource, dict):
+            raise ValueError("resource 不是对象")
         data = wxpay_service.decrypt_resource(cfg, resource)
-    except (ValueError, KeyError, TypeError):
+    except (InvalidTag, ValueError, KeyError, TypeError):
         await audit(
             db,
             action="commerce.payment.notify_rejected",
@@ -76,6 +79,7 @@ async def wxpay_notify(
     trade_state = str(data.get("trade_state") or "")
     amount = data.get("amount") or {}
     amount_total = amount.get("total")
+    currency = amount.get("currency")
 
     result = await svc.process_payment_result(
         db,
@@ -84,6 +88,7 @@ async def wxpay_notify(
         trade_state=trade_state,
         amount_total=amount_total,
         event_type="notify_accepted",
+        currency=currency,
     )
 
     if result in ("accepted", "replay"):
@@ -129,6 +134,28 @@ async def wxpay_notify(
         )
         await db.commit()
         return _fail(409, "金额不符")
+    if result in ("invalid_success_fields", "invalid_state"):
+        await audit(
+            db,
+            action="commerce.payment.notify_rejected",
+            resource_type="payment",
+            detail={"reason": result, "out_trade_no": out_trade_no},
+            actor_type="system",
+            request=request,
+        )
+        await db.commit()
+        return _fail(422, "成功通知字段不完整")
+    if result == "transaction_reused":
+        await audit(
+            db,
+            action="commerce.payment.notify_rejected",
+            resource_type="payment",
+            detail={"reason": "transaction_reused", "out_trade_no": out_trade_no},
+            actor_type="system",
+            request=request,
+        )
+        await db.commit()
+        return _fail(409, "交易号已被其他订单使用")
     # not_success：微信约定的终态/关闭，确认收到即可
     return {"code": "SUCCESS", "message": "成功"}
 

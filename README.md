@@ -4,7 +4,7 @@
 
 | 目录 | 端 | 技术栈 |
 |---|---|---|
-| `backend/` | API 服务 :8000 | FastAPI(async) · SQLAlchemy 2.0(asyncpg) · Alembic · Redis · Celery · JWT · Python 3.13(venv) |
+| `backend/` | API 服务 :8000 | FastAPI(async) · SQLAlchemy 2.0(asyncpg) · Alembic · Redis · Celery · JWT · Python 3.15.1（`backend/.python-version` 声明，venv 见 Makefile） |
 | `miniprogram/` | **杏临汇小程序**（C 端主入口） | 原生微信小程序（rpx 设计系统，健康品牌深青+杏金） |
 | `essay-h5/` | 作者投稿网页 :5174 | Vite 7 · React 19 · Tailwind 4 · TanStack Query（手机与桌面浏览器） |
 | `admin-web/` | 征文管理后台 :5173 | Vite 7 · React 19 · TypeScript · Tailwind 4 · shadcn/ui · Zustand · TanStack Query/Table · recharts |
@@ -34,13 +34,13 @@
 ## 本地快速开始
 
 ```bash
-# 0. 依赖：Python 3.13+、Node 20+、Docker
+# 0. 依赖：Python 3.15.1（官方最新稳定版，确切版本以 backend/.python-version 为准）、Node 20+、Docker（可选，无 Docker 时见下文本机方案）
 
 # 1. 基础设施（PostgreSQL 16 + Redis 7）
 make up
 
 # 2. 后端
-make backend-setup          # venv + pip install
+make backend-setup          # venv(3.15.1) + 按锁文件安装；make venv-check 校验
 cd backend && cp .env.example .env && cd ..
 # 在 backend/.env 中明确改为 APP_ENV=dev，且只使用本地演示数据库；示例默认 staging 会拒绝示例密钥启动
 make seed                   # 仅本地开发/测试：迁移并生成固定口令演示数据；生产严禁运行
@@ -63,13 +63,15 @@ make h5-dev                 # http://localhost:5174 ；/submit 无需旧短信�
 
 # 无 Docker 的本机演示（可选）
 cd backend && python dev_fake_redis.py &        # 极简 Redis 替身（验证码打印在控制台）
-APP_ENV=dev DATABASE_URL="sqlite+aiosqlite:///./dev.db" .venv/bin/uvicorn app.main:app --port 8000
+APP_ENV=dev DATABASE_URL="sqlite+aiosqlite:///./dev.db" .venv-py315/bin/uvicorn app.main:app --port 8000
 ```
 
 ## 测试
 
 ```bash
-cd backend && .venv/bin/python -m pytest  # sqlite 内存库 + FakeRedis，无需外部服务
+cd backend && .venv-py315/bin/python -m pytest  # sqlite 内存库 + FakeRedis，无需外部服务
+# 后端 venv：make backend-setup（默认 .venv-py315 = Python 3.15.1；make venv-check 校验版本）
+# 依赖复现：requirements.lock（生产）/ requirements-test.lock（含测试）为实测解析的精确锁
 ```
 
 ## 生产部署（阿里云）

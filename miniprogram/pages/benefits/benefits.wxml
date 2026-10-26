@@ -62,6 +62,14 @@
               <view class="t-p" wx:if="{{b.desc}}">{{b.desc}}</view>
             </view>
           </view>
+          <view class="history-block" wx:if="{{expandedId === item.id}}">
+            <view class="t-h3">操作历史</view>
+            <view class="kv" wx:for="{{historyList}}" wx:for-item="h" wx:key="id">
+              <text class="t-span">{{h.label}}</text>
+              <text class="t-b">{{h.time}}</text>
+            </view>
+            <view class="t-p small" wx:if="{{!historyList.length}}">暂无历史记录</view>
+          </view>
           <view class="quiet prepare" wx:if="{{item.status === 'active'}}" bindtap="hfGo" data-url="/pages/my-service/my-service">
             <text class="ph ph-heart"></text>
             <view class="grow">
