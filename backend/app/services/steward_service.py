@@ -1886,3 +1886,159 @@ async def update_staff(db: AsyncSession, admin, staff: StewardStaff, payload: di
     await db.commit()
     await db.refresh(staff)
     return staff
+
+
+# ───────────────────────── 岗位数据范围（批次十一 B①） ─────────────────────────
+
+
+async def admin_staff_scope(db: AsyncSession, admin) -> list[int] | None:
+    """后台账号的数据范围：持 steward.manage → None（全局）；否则按账号-人员绑定收窄。
+
+    无绑定且无 manage → 空列表（fail-closed：只读账号未绑定看不到任何业务数据）。
+    """
+    from app.core.permissions import role_has
+    from app.models import StewardStaffAdminLink
+
+    if role_has(admin.role, "steward.manage"):
+        return None
+    rows = (
+        await db.execute(
+            select(StewardStaffAdminLink.staff_id).where(
+                StewardStaffAdminLink.admin_id == admin.id
+            )
+        )
+    ).scalars().all()
+    return list(rows)
+
+
+def _instance_scope_condition(ids: list[int]):
+    from sqlalchemy import or_
+
+    return or_(
+        StewardServiceInstance.butler_id.in_(ids),
+        StewardServiceInstance.backup_butler_id.in_(ids),
+        StewardServiceInstance.physician_id.in_(ids),
+    )
+
+
+def instance_in_scope(instance: StewardServiceInstance, ids: list[int] | None) -> bool:
+    if ids is None:
+        return True
+    return (
+        instance.butler_id in ids
+        or instance.backup_butler_id in ids
+        or instance.physician_id in ids
+    )
+
+
+async def instance_for_admin_scoped(
+    db: AsyncSession, instance_id: int, staff_ids: list[int] | None
+) -> StewardServiceInstance:
+    """岗位范围版的实例读取：越范围与不存在同样 404（不泄露存在性）。"""
+    instance = await instance_for_admin(db, instance_id)
+    if staff_ids is not None and not instance_in_scope(instance, staff_ids):
+        raise HTTPException(status_code=404, detail="服务实例不存在")
+    return instance
+
+
+# ───────────────────────── 随访预约意向（批次十一 B③） ─────────────────────────
+
+
+PERIODS = ("上午", "下午", "晚间")
+
+
+async def submit_schedule_intent(
+    db: AsyncSession,
+    user: User,
+    instance: StewardServiceInstance,
+    task_id: int,
+    preferred_date: date,
+    preferred_period: str,
+    note: str | None,
+) -> "StewardScheduleIntent":
+    """用户为随访任务申报方便时段：意向而非确认预约；重复提交旧 pending 置 superseded。"""
+    from app.models import StewardScheduleIntent, StewardTask
+
+    if preferred_period not in PERIODS:
+        raise HTTPException(status_code=422, detail="preferred_period 需为 上午/下午/晚间")
+    task = await db.get(StewardTask, task_id)
+    if task is None or task.instance_id != instance.id or task.user_id != user.id:
+        raise HTTPException(status_code=404, detail="随访任务不存在")
+    if task.task_type != "follow_up":
+        raise HTTPException(status_code=422, detail="仅随访任务支持提交预约意向")
+    if task.status != "pending":
+        raise HTTPException(status_code=422, detail="任务已完成或取消，无需再约")
+    today = sh_today()
+    end_date = (instance.ends_at or now_utc()).astimezone(SHANGHAI).date() if instance.ends_at else None
+    if preferred_date < today or (end_date is not None and preferred_date > end_date):
+        raise HTTPException(
+            status_code=422, detail="意向日期需在今天与服务期结束之间"
+        )
+
+    old_rows = (
+        (
+            await db.execute(
+                select(StewardScheduleIntent).where(
+                    StewardScheduleIntent.task_id == task_id,
+                    StewardScheduleIntent.status == "pending",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in old_rows:
+        row.status = "superseded"
+    intent = StewardScheduleIntent(
+        task_id=task_id,
+        instance_id=instance.id,
+        user_id=user.id,
+        preferred_date=preferred_date,
+        preferred_period=preferred_period,
+        note=note,
+    )
+    db.add(intent)
+    await add_timeline(
+        db,
+        instance,
+        "schedule_intent",
+        actor_type="user",
+        actor_id=user.id,
+        actor_name=user.nickname or "",
+        detail={
+            "task_id": task_id,
+            "preferred_date": preferred_date.isoformat(),
+            "preferred_period": preferred_period,
+        },
+    )
+    await db.commit()
+    await db.refresh(intent)
+    return intent
+
+
+async def handle_schedule_intent(
+    db: AsyncSession, admin, intent_id: int, note: str | None
+) -> "StewardScheduleIntent":
+    from app.models import StewardScheduleIntent
+
+    intent = await db.get(StewardScheduleIntent, intent_id)
+    if intent is None:
+        raise HTTPException(status_code=404, detail="预约意向不存在")
+    if intent.status != "pending":
+        raise HTTPException(status_code=409, detail="该意向已处理或已作废")
+    intent.status = "handled"
+    intent.handled_by_admin_id = admin.id
+    intent.handled_at = now_utc()
+    intent.handle_note = note
+    await audit(
+        db,
+        action="steward.schedule_intent.handle",
+        resource_type="steward_schedule_intent",
+        resource_id=intent.id,
+        detail={"task_id": intent.task_id, "note": note or ""},
+        actor_id=admin.id,
+        actor_name=admin.name,
+    )
+    await db.commit()
+    await db.refresh(intent)
+    return intent

@@ -455,3 +455,28 @@ class ProfessionalViewOut(BaseModel):
     reports: list[dict]
     followups: list[dict]
     emergency_note: str
+
+
+class ScheduleIntentIn(BaseModel):
+    """C 端随访预约意向提交（意向，非确认预约）。"""
+
+    preferred_date: date
+    preferred_period: Literal["上午", "下午", "晚间"]
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ScheduleIntentHandleIn(BaseModel):
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ScheduleIntentOut(BaseModel):
+    id: int
+    task_id: int
+    instance_id: int
+    preferred_date: date
+    preferred_period: str
+    note: str | None
+    status: str
+    handle_note: str | None
+    handled_at: UTCDateTime | None
+    created_at: UTCDateTime

@@ -184,6 +184,10 @@ module.exports = {
   completeStewardTask(id, taskId, data) {
     return request({ url: '/mp/steward/instances/' + id + '/tasks/' + taskId + '/complete', method: 'POST', data });
   },
+  submitScheduleIntent(id, taskId, data) {
+    return request({ url: '/mp/steward/instances/' + id + '/tasks/' + taskId + '/schedule-intent', method: 'POST', data });
+  },
+
   listStewardTimeline(id) {
     return request({ url: '/mp/steward/instances/' + id + '/timeline', silent: true });
   },

@@ -676,3 +676,40 @@ class StewardFollowupRecord(TimestampMixin, Base):
     recorded_by_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class StewardScheduleIntent(TimestampMixin, Base):
+    """随访预约意向（批次十一）：用户主动申报方便时段——是意向不是确认预约，
+    服务方处理留痕；同任务重复提交旧 pending 置 superseded。"""
+
+    __tablename__ = "steward_schedule_intents"
+    __table_args__ = (
+        Index("ix_steward_schedule_intents_instance", "instance_id", "status"),
+        Index("ix_steward_schedule_intents_status", "status", "id"),
+        CheckConstraint(
+            "status IN ('pending', 'handled', 'superseded')",
+            name="ck_steward_schedule_intents_status",
+        ),
+        CheckConstraint(
+            "preferred_period IN ('上午', '下午', '晚间')",
+            name="ck_steward_schedule_intents_period",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("steward_tasks.id", ondelete="CASCADE"), nullable=False
+    )
+    instance_id: Mapped[int] = mapped_column(
+        ForeignKey("steward_service_instances.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    preferred_date: Mapped[date] = mapped_column(Date, nullable=False)
+    preferred_period: Mapped[str] = mapped_column(String(4), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending", server_default="pending", nullable=False)
+    handled_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    handle_note: Mapped[str | None] = mapped_column(String(200), nullable=True)

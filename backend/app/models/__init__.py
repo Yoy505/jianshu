@@ -55,6 +55,7 @@ from app.models.steward import (
     StewardInstanceStatus,
     StewardPauseRecord,
     StewardPilotRelease,
+    StewardScheduleIntent,
     StewardPrepCheck,
     StewardServiceInstance,
     StewardCareRules,

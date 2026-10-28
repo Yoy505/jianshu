@@ -1,1 +1,3 @@
 @import "../my-service/my-service.wxss";
+
+.trend-canvas { width: 100%; height: 300rpx; margin: 16rpx 0; }

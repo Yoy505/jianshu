@@ -40,6 +40,14 @@ function todayStr() {
 
 Page(require('../../utils/hifi-page')({
   data: {
+    intentOpen: false,
+    intentTaskId: null,
+    intentDate: '',
+    intentPeriodIndex: 0,
+    intentNote: '',
+    intentSubmitting: false,
+    todayStr: '',
+    periods: ['上午', '下午', '晚间'],
     loading: true,
     error: '',
     instances: [],
@@ -121,6 +129,54 @@ Page(require('../../utils/hifi-page')({
       if (this.data.view === 'calendar') this.loadCalendar();
     }).catch((err) => {
       this.setData({ error: err.detail || '服务详情加载失败' });
+    });
+  },
+
+  // B③ 随访预约意向：意向而非确认，服务方处理后留痕
+  openIntent(e) {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const serviceDate = e.currentTarget.dataset.date || todayStr;
+    this.setData({
+      intentOpen: true,
+      intentTaskId: Number(e.currentTarget.dataset.id),
+      intentDate: serviceDate > todayStr ? serviceDate : todayStr,
+      intentPeriodIndex: 0,
+      intentNote: '',
+      todayStr
+    });
+  },
+
+  closeIntent() {
+    this.setData({ intentOpen: false });
+  },
+
+  onIntentDate(e) {
+    this.setData({ intentDate: e.detail.value });
+  },
+
+  onIntentPeriod(e) {
+    this.setData({ intentPeriodIndex: Number(e.detail.value) });
+  },
+
+  onIntentNote(e) {
+    this.setData({ intentNote: e.detail.value });
+  },
+
+  submitIntent() {
+    if (this.data.intentSubmitting) return;
+    this.setData({ intentSubmitting: true });
+    api.submitScheduleIntent(this.data.currentId, this.data.intentTaskId, {
+      preferred_date: this.data.intentDate,
+      preferred_period: this.data.periods[this.data.intentPeriodIndex],
+      note: this.data.intentNote || ''
+    }).then(() => {
+      this.setData({ intentSubmitting: false, intentOpen: false });
+      wx.showToast({ title: '意向已提交', icon: 'success' });
+      this.loadTimeline();
+    }).catch((err) => {
+      this.setData({ intentSubmitting: false });
+      wx.showToast({ title: err.detail || '提交失败', icon: 'none' });
     });
   },
 

@@ -22,6 +22,8 @@ from app.schemas.steward import (
     StewardTaskOut,
     StaffRef,
     TimelineOut,
+    ScheduleIntentIn,
+    ScheduleIntentOut,
     TaskCompleteIn,
     TermsOut,
 )
@@ -217,6 +219,36 @@ async def complete_task(
         db, user, instance, task_id, payload.result, payload.backfill_reason
     )
     return _task_out(task)
+
+
+@router.post(
+    "/instances/{instance_id}/tasks/{task_id}/schedule-intent",
+    response_model=ScheduleIntentOut,
+)
+async def submit_schedule_intent(
+    instance_id: int,
+    task_id: int,
+    payload: ScheduleIntentIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ScheduleIntentOut:
+    """随访预约意向：本人 pending 随访任务可申报方便时段；意向非确认，服务方处理留痕。"""
+    instance = await svc.instance_for_user(db, user, instance_id)
+    intent = await svc.submit_schedule_intent(
+        db, user, instance, task_id, payload.preferred_date, payload.preferred_period, payload.note
+    )
+    return ScheduleIntentOut(
+        id=intent.id,
+        task_id=intent.task_id,
+        instance_id=intent.instance_id,
+        preferred_date=intent.preferred_date,
+        preferred_period=intent.preferred_period,
+        note=intent.note,
+        status=intent.status,
+        handle_note=intent.handle_note,
+        handled_at=intent.handled_at,
+        created_at=intent.created_at,
+    )
 
 
 @router.get("/instances/{instance_id}/professional")

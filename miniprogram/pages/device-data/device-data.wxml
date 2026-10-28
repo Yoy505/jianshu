@@ -28,6 +28,7 @@
           bindtap="onPickMetric" data-key="{{item.key}}">{{item.label}}</button>
       </view>
       <view class="kv"><text class="t-span">最近同步</text><text class="t-b">{{lastSyncText}}</text></view>
+      <canvas wx:if="{{points.length}}" type="2d" id="trendChart" class="trend-canvas"></canvas>
       <block wx:if="{{points.length}}">
         <view class="kv" wx:for="{{points}}" wx:key="date">
           <text class="t-span">{{item.date}}</text>

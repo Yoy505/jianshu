@@ -50,9 +50,80 @@ Page(require('../../utils/hifi-page')({
         trend,
         points,
         lastSyncText: trend.last_synced_at ? format.full(trend.last_synced_at) : '尚未同步'
-      });
+      }, () => this.drawChart());
     }).catch((err) => {
       this.setData({ error: err.detail || '趋势加载失败' });
+    });
+  },
+
+
+  // 趋势折线：缺口日期断开不连；仅作展示，口径以接口 quality_note 为准
+  drawChart() {
+    const points = this.data.points || [];
+    if (!points.length) return;
+    const query = wx.createSelectorQuery().in(this);
+    query.select('#trendChart').fields({ node: true, size: true }).exec((res) => {
+      if (!res || !res[0] || !res[0].node) return;
+      const canvas = res[0].node;
+      const ctx = canvas.getContext('2d');
+      const dpr = (wx.getSystemInfoSync().pixelRatio) || 2;
+      const w = res[0].width;
+      const h = res[0].height;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      const values = points.filter((p) => !p.isGap).map((p) => p.value);
+      if (values.length < 2) return;
+      let min = Math.min.apply(null, values);
+      let max = Math.max.apply(null, values);
+      if (max === min) { max = min + 1; min = min - 1; }
+      const pad = { l: 8, r: 8, t: 18, b: 20 };
+      const innerW = w - pad.l - pad.r;
+      const innerH = h - pad.t - pad.b;
+      const stepX = innerW / Math.max(points.length - 1, 1);
+      const yOf = (v) => pad.t + innerH * (1 - (v - min) / (max - min));
+
+      ctx.strokeStyle = '#E5E7EB';
+      ctx.lineWidth = 0.5;
+      [0, 0.5, 1].forEach((r) => {
+        const y = pad.t + innerH * r;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, y);
+        ctx.lineTo(w - pad.r, y);
+        ctx.stroke();
+      });
+
+      ctx.strokeStyle = '#0F766E';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      let drawing = false;
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        const x = pad.l + stepX * i;
+        if (p.isGap) { drawing = false; return; }
+        const y = yOf(p.value);
+        if (!drawing) { ctx.moveTo(x, y); drawing = true; } else { ctx.lineTo(x, y); }
+      });
+      ctx.stroke();
+      ctx.fillStyle = '#0F766E';
+      points.forEach((p, i) => {
+        if (p.isGap) return;
+        const x = pad.l + stepX * i;
+        ctx.beginPath();
+        ctx.arc(x, yOf(p.value), 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = '#6B7280';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(points[0].date.slice(5), pad.l, h - 6);
+      ctx.textAlign = 'right';
+      ctx.fillText(points[points.length - 1].date.slice(5), w - pad.r, h - 6);
+      ctx.textAlign = 'left';
+      ctx.fillText(String(max), pad.l, 12);
     });
   },
 

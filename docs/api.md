@@ -1190,3 +1190,20 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 ### 审计 action（本节新增）
 
 `phone.script.publish/review` · `phone.contact.create/consent` · `phone.order.create/review/takeover/complete/cancel`（系统：`phone.order.dispatch` · `phone.callback`）。detail 不含完整号码与通话内容。
+
+## 十一）岗位数据范围与随访预约意向（批次十一，2026-10-28 起）
+
+### 岗位数据范围（后台读路径收窄）
+
+规则：后台账号**持 `steward.manage`** → 全局可见（既有行为不变）；**仅 `steward.read`** → 按 `steward_staff_admin_links` 绑定收窄：
+
+- 绑定的履约人员（管家/医师）参与的实例（butler/backup_butler/physician 任一命中）可见；专业工单仅医师绑定可见；未绑定任何履约人员的只读账号**看不到业务数据**（空列表/404，fail-closed）。
+- 适用端点：`GET /admin/steward/instances`（列表与详情、calendar、timeline）、`GET /admin/steward/professional/orders`（列表与详情）、`GET /admin/steward/reports`、`GET /admin/steward/followups`、`GET /admin/steward/workbench`（聚合按同一规则收窄；设备同步失败计数为全局基础设施视图，不收窄）。
+- 写路径不变（`steward.manage` 全局；工单完成另校验账号-医师绑定）。
+
+### 随访预约意向（F 补项：意向，不冒充确认）
+
+- 表 `steward_schedule_intents`：`task_id`（随访任务）、`instance_id`、`user_id`、`preferred_date`、`preferred_period`（上午/下午/晚间）、`note`≤200、`status`（pending/handled/superseded）、`handled_by_admin_id`、`handled_at`。同一任务重复提交 → 旧 pending 置 superseded，新意向生效。
+- C 端 `POST /mp/steward/instances/{id}/tasks/{task_id}/schedule-intent`：本人 follow_up 且 status=pending 的任务；日期 ∈ [今天, 实例 ends_at]；成功返回意向并写时间线事件 `schedule_intent`。错误：404（非本人/实例）、422（非随访/已完成/日期越界）。
+- 后台 `GET /admin/steward/schedule-intents?status=`（steward.read，按岗位范围收窄同上）；`POST /admin/steward/schedule-intents/{id}/handle`（steward.manage，body `{"note"≤200}`）→ handled。工作台新增 `schedule_intents_pending` 计数。
+- 审计 action：`steward.schedule_intent.handle`；C 端提交写时间线不写审计（无后台操作者）。

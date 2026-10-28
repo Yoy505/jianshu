@@ -20,6 +20,11 @@ interface Intent {
   result: string | null
 }
 interface StaffRow { id: number; name: string; role: string; status: string }
+interface SchedIntent {
+  id: number; task_id: number; instance_id: number; preferred_date: string
+  preferred_period: string; note: string | null; status: string
+  handle_note: string | null; created_at: string
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending_channel: '待通道配置', pending_manual: '待人工处理', pending_confirm: '待确认',
@@ -69,6 +74,24 @@ export default function StewardOutreach() {
     mutationFn: ({ id, path, body }: { id: number; path: string; body?: Record<string, unknown> }) =>
       call(`/admin/outreach/intents/${id}/${path}`, body),
     onSuccess: async () => { toast.success('已处理'); await invalidate() },
+    onError,
+  })
+  const canStewardRead = can(admin?.role, 'steward.read')
+  const canStewardManage = can(admin?.role, 'steward.manage')
+  const schedQuery = useQuery({
+    queryKey: ['steward-schedule-intents'],
+    queryFn: async () =>
+      (await api.get<SchedIntent[]>('/admin/steward/schedule-intents', { params: { status: 'pending' } })).data,
+    enabled: canStewardRead,
+    refetchInterval: 60_000,
+  })
+  const handleSched = useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string }) =>
+      call(`/admin/steward/schedule-intents/${id}/handle`, { note }),
+    onSuccess: async () => {
+      toast.success('意向已标记处理')
+      await queryClient.invalidateQueries({ queryKey: ['steward-schedule-intents'] })
+    },
     onError,
   })
   const handover = useMutation({
@@ -188,6 +211,45 @@ export default function StewardOutreach() {
           </>
         )}
       </AsyncList>
+
+      {canStewardRead && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            随访预约意向（用户申报的方便时段；意向非确认，处理留痕）
+          </h2>
+          <Table>
+            <TableHeader><TableRow>
+              <TableHead>意向</TableHead><TableHead>实例</TableHead><TableHead>任务</TableHead>
+              <TableHead>日期</TableHead><TableHead>时段</TableHead><TableHead>备注</TableHead>
+              <TableHead>提交时间</TableHead><TableHead className="text-right">操作</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {(schedQuery.data ?? []).map((it) => (
+                <TableRow key={it.id}>
+                  <TableCell>#{it.id}</TableCell>
+                  <TableCell>{it.instance_id}</TableCell>
+                  <TableCell>{it.task_id}</TableCell>
+                  <TableCell>{it.preferred_date}</TableCell>
+                  <TableCell>{it.preferred_period}</TableCell>
+                  <TableCell>{it.note || '—'}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{it.created_at.slice(0, 16).replace('T', ' ')}</TableCell>
+                  <TableCell className="text-right">
+                    {canStewardManage ? (
+                      <Button size="sm" variant="outline" onClick={() => {
+                        const note = window.prompt('处理说明（选填）', '')
+                        if (note !== null) handleSched.mutate({ id: it.id, note })
+                      }}>标记已处理</Button>
+                    ) : <span className="text-xs text-muted-foreground">只读</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!schedQuery.isLoading && !(schedQuery.data ?? []).length && (
+                <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">暂无待处理意向</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </section>
+      )}
     </div>
   )
 }
