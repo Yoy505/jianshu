@@ -174,7 +174,7 @@
             <view class="intent-row">
               <text class="t-span">备注</text>
               <input class="intent-input" value="{{intentNote}}" maxlength="60"
-                placeholder="选填，如"下午 3 点后方便"" bindinput="onIntentNote" />
+                placeholder="选填，如：下午3点后方便" bindinput="onIntentNote" />
             </view>
             <view class="intent-actions">
               <button class="secondary" size="mini" bindtap="closeIntent">取消</button>
@@ -254,6 +254,9 @@
                 <view class="t-p">{{item.typeLabel}} · 第 {{item.service_day}} 天{{item.completed ? ' · 已完成' : ''}}</view>
                 <view class="t-p" wx:if="{{item.result}}">{{item.result}}</view>
               </view>
+              <button wx:if="{{item.task_type === 'follow_up' && !item.completed}}"
+                class="mini" size="mini" bindtap="openIntent" data-id="{{item.id}}"
+                data-date="{{item.service_date}}">约时间</button>
             </view>
           </block>
           <view wx:elif="{{selectedDate}}" class="t-p">这一天没有安排事项。</view>
