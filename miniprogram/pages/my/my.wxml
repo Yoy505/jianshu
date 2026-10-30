@@ -132,7 +132,7 @@
               <input class="sms-input sms-code-line" type="number" maxlength="6" value="{{smsCode}}"
                 placeholder="6 位验证码" bindinput="onSmsCode" disabled="{{smsLoggingIn}}" />
               <button class="sms-login-btn" bindtap="smsLoginTap"
-                loading="{{smsLoggingIn}}" disabled="{{smsLoggingIn}}">验证码登录</button>
+                loading="{{smsLoggingIn}}" disabled="{{smsLoggingIn}}">登录</button>
             </view>
           </block>
           <view class="login-feedback" wx:if="{{loginError}}">{{loginError}}</view>
