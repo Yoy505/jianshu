@@ -18,6 +18,7 @@ Page(require('../../utils/hifi-page')({
     metric: 'sleep_duration',
     metrics: METRICS,
     trend: null,
+    chartReady: false,
     points: [],
     unbinding: false
   },
@@ -46,9 +47,11 @@ Page(require('../../utils/hifi-page')({
       }));
       (trend.gaps || []).forEach((gap) => points.push({ date: gap, value: null, isGap: true }));
       points.sort((a, b) => (a.date < b.date ? -1 : 1));
+      const validValues = points.filter((p) => !p.isGap).map((p) => p.value);
       this.setData({
         trend,
         points,
+        chartReady: validValues.length >= 2,
         lastSyncText: trend.last_synced_at ? format.full(trend.last_synced_at) : '尚未同步'
       }, () => this.drawChart());
     }).catch((err) => {

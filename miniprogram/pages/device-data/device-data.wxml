@@ -1,43 +1,58 @@
-<view class="page">
-  <view class="hero"><view class="hero-title">设备数据</view></view>
+<block wx:if="{{!accessBlocked}}">
+<view class="hf" style="padding-top:{{hfStatus}}px">
+  <view class="hf-nav hf-status">
+    <view class="hf-nav-inner">
+      <button class="hf-back" bindtap="hfBack">返回</button>
+      <view class="hf-nav-title">{{hfTitle}}</view>
+    </view>
+  </view>
 
-  <view wx:if="{{loading}}" class="card"><view class="t-p">加载中……</view></view>
-  <view wx:elif="{{error}}" class="card"><view class="t-p">{{error}}</view>
-    <button class="secondary" bindtap="reload">重试</button></view>
-
-  <block wx:else>
-    <view class="card">
-      <view class="t-h3">设备状态</view>
-      <block wx:if="{{device.binding}}">
-        <view class="kv"><text class="t-span">型号</text><text class="t-b">{{device.binding.device_model}}</text></view>
-        <view class="kv"><text class="t-span">序列号</text><text class="t-b">{{device.binding.device_sn}}</text></view>
-        <view class="kv"><text class="t-span">状态</text><text class="t-b">{{device.binding.status === 'active' ? '绑定中' : '已解绑'}}</text></view>
-        <view class="kv"><text class="t-span">数据授权</text><text class="t-b">{{device.consent_granted ? '已授权' : '未授权（我的服务页可授权）'}}</text></view>
-        <view class="t-p">{{device.sync_note}}</view>
-        <button wx:if="{{device.binding.status === 'active'}}" class="secondary act-btn"
-          bindtap="unbind" loading="{{unbinding}}">解绑设备</button>
-      </block>
-      <view wx:else class="t-p">尚未绑定设备；设备到位后由服务方完成配对与绑定。</view>
+  <view class="pad">
+    <view wx:if="{{loading}}" class="card"><view class="t-p">加载中……</view></view>
+    <view wx:elif="{{error}}" class="empty-card">
+      <view class="t-h2">设备数据加载失败</view>
+      <view class="t-p">{{error}}</view>
+      <button class="secondary" bindtap="reload">重新加载</button>
     </view>
 
-    <view class="card" wx:if="{{device.binding}}">
-      <view class="t-h3">近 14 天趋势</view>
-      <view class="chips">
-        <button wx:for="{{metrics}}" wx:key="key"
-          class="{{metric === item.key ? 'active' : ''}}"
-          bindtap="onPickMetric" data-key="{{item.key}}">{{item.label}}</button>
+    <block wx:else>
+      <view class="card">
+        <view class="t-h3">设备状态</view>
+        <block wx:if="{{device.binding}}">
+          <view class="kv"><text class="t-span">型号</text><text class="t-b">{{device.binding.device_model}}</text></view>
+          <view class="kv"><text class="t-span">序列号</text><text class="t-b">{{device.binding.device_sn}}</text></view>
+          <view class="kv"><text class="t-span">绑定状态</text><text class="t-b">{{device.binding.status === 'active' ? '绑定中' : '已解绑'}}</text></view>
+          <view class="kv"><text class="t-span">数据授权</text><text class="t-b">{{device.consent_granted ? '已授权' : '未授权（我的服务页可授权）'}}</text></view>
+          <view class="t-p quiet-note">{{device.sync_note}}</view>
+          <button wx:if="{{device.binding.status === 'active'}}" class="secondary act-btn"
+            bindtap="unbind" loading="{{unbinding}}">解绑设备（停止同步，历史数据保留）</button>
+        </block>
+        <view wx:else class="t-p">尚未绑定设备；设备到位后由服务方完成配对与绑定。</view>
       </view>
-      <view class="kv"><text class="t-span">最近同步</text><text class="t-b">{{lastSyncText}}</text></view>
-      <canvas wx:if="{{points.length}}" type="2d" id="trendChart" class="trend-canvas"></canvas>
-      <block wx:if="{{points.length}}">
-        <view class="kv" wx:for="{{points}}" wx:key="date">
-          <text class="t-span">{{item.date}}</text>
-          <text class="t-b" wx:if="{{!item.isGap}}">{{item.value}}</text>
-          <text class="t-span" wx:else>当天无数据</text>
-        </view>
-      </block>
-      <view wx:else class="t-p">暂无有效数据；数据同步后展示（缺失日期不填补）。</view>
-      <view class="t-p quiet-note" wx:if="{{trend}}">{{trend.quality_note}}。</view>
-    </view>
-  </block>
+
+      <view class="card" wx:if="{{device.binding}}">
+        <view class="t-h3">近 14 天趋势</view>
+        <scroll-view class="chips" scroll-x enhanced show-scrollbar="{{false}}">
+          <button wx:for="{{metrics}}" wx:key="key"
+            class="{{metric === item.key ? 'active' : ''}}"
+            bindtap="onPickMetric" data-key="{{item.key}}">{{item.label}}</button>
+        </scroll-view>
+        <view class="kv"><text class="t-span">最近同步</text><text class="t-b">{{lastSyncText}}</text></view>
+
+        <canvas wx:if="{{chartReady}}" type="2d" id="trendChart" class="trend-canvas"></canvas>
+        <view wx:elif="{{points.length}}" class="t-p quiet-note">有效数据不足两个日期，暂无法绘制曲线；明细如下。</view>
+
+        <block wx:if="{{points.length}}">
+          <view class="kv" wx:for="{{points}}" wx:key="date">
+            <text class="t-span">{{item.date}}</text>
+            <text class="t-b" wx:if="{{!item.isGap}}">{{item.value}}</text>
+            <text class="t-span" wx:else>当天无数据</text>
+          </view>
+        </block>
+        <view wx:else class="t-p">暂无有效数据；数据同步后展示（缺失日期不填补）。</view>
+        <view class="t-p quiet-note" wx:if="{{trend}}">{{trend.quality_note}}。</view>
+      </view>
+    </block>
+  </view>
 </view>
+</block>
