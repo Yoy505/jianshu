@@ -15,10 +15,12 @@ from typing import Any, Protocol
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models import (
+    PhoneCallbackEvent,
     CONSENT_PURPOSE_STEWARD_CALL_RECORDING,
     CONSENT_PURPOSE_STEWARD_PHONE_OUTREACH,
     PHONE_OPEN_STATUSES,
@@ -62,8 +64,9 @@ class CCCAdapter(Protocol):
     """CCC 适配接口：真实供应商确定后实现并注册（凭据 / 签名 / 回执另验）。"""
 
     async def place_call(self, order: PhoneCallOrder, script: PhoneScript, phone: str) -> dict:
-        """返回 {outcome, detail?}；outcome 见尝试枚举。真实实现由回调收尾，
-        place_call 仅发起（发起回执引用由回调验签后落库）。"""
+        """返回 {outcome, request_id?, detail?}；真实实现由回调收尾。
+        必须将 order.id 与持久化的 order.attempts 发给供应商，回调至少带回 attempt_no
+        或受理返回的 request_id；两者同时提供时必须同时匹配。"""
 
 
 _ADAPTERS: dict[str, CCCAdapter] = {}
@@ -415,6 +418,29 @@ async def stop_orders(db: AsyncSession, where_clause, reason: str) -> int:
 # ───────────────────────── 调度（有限重试） ─────────────────────────
 
 
+async def _locked_order(db: AsyncSession, order_id: int) -> PhoneCallOrder | None:
+    """所有结果写入按工单 → 尝试 → 事件的顺序加锁，并刷新会话旧对象。"""
+    if db.get_bind().dialect.name == "sqlite":
+        # SQLite 没有 FOR UPDATE；先获取写锁，文件库并发测试仍使用相同的串行化边界。
+        await db.execute(update(PhoneCallOrder).where(PhoneCallOrder.id == order_id).values(
+            status=PhoneCallOrder.status))
+    return (await db.execute(select(PhoneCallOrder).where(
+        PhoneCallOrder.id == order_id,
+    ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+
+
+async def _locked_attempt(db: AsyncSession, order_id: int, attempt_no: int) -> PhoneCallAttempt | None:
+    return (await db.execute(select(PhoneCallAttempt).where(
+        PhoneCallAttempt.order_id == order_id, PhoneCallAttempt.attempt_no == attempt_no,
+    ).with_for_update().execution_options(populate_existing=True))).scalar_one_or_none()
+
+
+async def _dispatch_state(db: AsyncSession, order: PhoneCallOrder) -> dict:
+    attempt = await _locked_attempt(db, order.id, int(order.attempts or 0))
+    return {"status": order.status, "attempts": int(order.attempts or 0),
+            "outcome": attempt.outcome if attempt is not None else None}
+
+
 async def dispatch_order(db: AsyncSession, order_id: int) -> dict:
     """单飞调度：条件 UPDATE queued→in_progress；前置重查；适配器拨打；结果落尝试。
     无适配器保持 / 置 pending_config。"""
@@ -444,7 +470,8 @@ async def dispatch_order(db: AsyncSession, order_id: int) -> dict:
     if (order.attempts or 0) >= max_attempts():
         await db.execute(
             update(PhoneCallOrder)
-            .where(PhoneCallOrder.id == order.id)
+            .where(PhoneCallOrder.id == order.id, PhoneCallOrder.status == PhoneOrderStatus.QUEUED.value,
+                   PhoneCallOrder.attempts == order.attempts)
             .values(status=PhoneOrderStatus.FAILED.value)
         )
         await db.commit()
@@ -468,30 +495,80 @@ async def dispatch_order(db: AsyncSession, order_id: int) -> dict:
         return {"status": "pending_config", "detail": NO_CCC_NOTE}
 
     # 单飞：仅一个 worker 能把 queued 置 in_progress
+    new_attempts = int(order.attempts or 0) + 1
     result = await db.execute(
         update(PhoneCallOrder)
         .where(
             PhoneCallOrder.id == order.id,
             PhoneCallOrder.status == PhoneOrderStatus.QUEUED.value,
+            PhoneCallOrder.attempts == new_attempts - 1,
         )
-        .values(status=PhoneOrderStatus.IN_PROGRESS.value)
+        .values(status=PhoneOrderStatus.IN_PROGRESS.value, attempts=new_attempts,
+                external_request_id=None, next_retry_at=None)
     )
     if result.rowcount != 1:
-        return {"status": "in_progress", "detail": "另一执行中（单飞保护）"}
+        await db.refresh(order)
+        return {"status": order.status, "detail": "状态或尝试次数已变化（单飞保护）"}
 
     started = now_utc()
+    attempt = PhoneCallAttempt(
+        order_id=order.id, attempt_no=new_attempts, outcome="accepted", actor="system",
+        simulated=True, started_at=started,
+        detail={"dispatch_pending": True},
+    )
+    db.add(attempt)
+    # 在外部请求前持久化拨打尝试。适配器必须传递 order.id + order.attempts，供应商回调据此关联。
+    await db.commit()
+    await db.refresh(order)
+    if order.status != PhoneOrderStatus.IN_PROGRESS.value or order.attempts != new_attempts:
+        state = await _dispatch_state(db, order)
+        await db.commit()
+        return state
     script = await db.get(PhoneScript, order.script_id)
     phone = await _target_phone(db, order)
     try:
         outcome_data = await adapter.place_call(order, script, phone)
-        outcome = outcome_data.get("outcome", "no_answer")
+        outcome = str(outcome_data.get("outcome", "no_answer"))
         simulated = bool(outcome_data.get("simulated", True))  # 合成适配器默认标记模拟
     except Exception as exc:  # noqa: BLE001 —— 适配器异常按失败尝试处理
         outcome, simulated = "no_answer", True
         outcome_data = {"error": f"{type(exc).__name__}: {exc}"}
+    if outcome not in {"accepted", "no_answer", "busy", "wrong_number", "refused", "needs_human", "completed"}:
+        outcome_data = {"error": "供应商返回未知结果", "outcome": str(outcome)[:32]}
+        outcome = "blocked"
 
-    new_attempts = (order.attempts or 0) + 1
+    order = await _locked_order(db, order_id)
+    attempt = await _locked_attempt(db, order_id, new_attempts)
+    if (order.attempts != new_attempts or attempt.finished_at is not None
+            or order.status != PhoneOrderStatus.IN_PROGRESS.value):
+        await _reconcile_pending_callbacks(db, order)
+        state = await _dispatch_state(db, order)
+        await db.commit()
+        return state
     values: dict[str, Any] = {"attempts": new_attempts}
+    request_id = str(outcome_data.get("request_id") or "")[:128] or None
+    values["external_request_id"] = request_id
+    attempt.external_request_id = request_id
+    attempt.simulated = simulated
+    attempt.detail = outcome_data
+    order.external_request_id = request_id
+    await db.flush()
+    # ACK 与提前回调在同一事务内关联；无需等待供应商重发，崩溃也不会只保存半份结果。
+    await _reconcile_pending_callbacks(db, order)
+    if attempt.finished_at is not None or order.status != PhoneOrderStatus.IN_PROGRESS.value:
+        state = await _dispatch_state(db, order)
+        await db.commit()
+        return state
+    if outcome == "accepted":
+        # 真实 CCC 异步受理：拨打已发起即计一次尝试，保持 in_progress 等待验签回调收尾
+        values["status"] = PhoneOrderStatus.IN_PROGRESS.value
+        await audit(
+            db, action="phone.order.dispatch", resource_type="phone_call_order", resource_id=order.id,
+            detail={"outcome": "accepted", "attempts": new_attempts, "request_id": bool(request_id)},
+            actor_type="system",
+        )
+        await db.commit()
+        return {"status": "in_progress", "outcome": "accepted", "attempts": new_attempts}
     if outcome in ("no_answer", "busy"):
         values["status"] = PhoneOrderStatus.QUEUED.value  # 有限重试
         values["next_retry_at"] = now_utc() + retry_delay()
@@ -510,15 +587,20 @@ async def dispatch_order(db: AsyncSession, order_id: int) -> dict:
         values["status"] = PhoneOrderStatus.COMPLETED.value
     else:
         values["status"] = PhoneOrderStatus.FAILED.value
-    await db.execute(
-        update(PhoneCallOrder).where(PhoneCallOrder.id == order.id).values(**values)
+    saved = await db.execute(
+        update(PhoneCallOrder).where(
+            PhoneCallOrder.id == order.id, PhoneCallOrder.status == PhoneOrderStatus.IN_PROGRESS.value,
+            PhoneCallOrder.attempts == new_attempts,
+        ).values(**values)
     )
-    db.add(
-        PhoneCallAttempt(
-            order_id=order.id, outcome=outcome, actor="system", simulated=simulated,
-            detail=outcome_data, started_at=started, finished_at=now_utc(),
-        )
-    )
+    if saved.rowcount != 1:
+        await db.refresh(order)
+        state = await _dispatch_state(db, order)
+        await db.commit()
+        return state
+    attempt.outcome = outcome
+    attempt.detail = outcome_data
+    attempt.finished_at = now_utc()
     await audit(
         db, action="phone.order.dispatch", resource_type="phone_call_order", resource_id=order.id,
         detail={"outcome": outcome, "attempts": new_attempts, "simulated": simulated},
@@ -588,55 +670,149 @@ def verify_signature(body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+_CALLBACK_OUTCOMES = {
+    "no_answer": PhoneOrderStatus.QUEUED.value,
+    "busy": PhoneOrderStatus.QUEUED.value,
+    "wrong_number": PhoneOrderStatus.WRONG_NUMBER.value,
+    "refused": PhoneOrderStatus.REFUSED.value,
+    "completed": PhoneOrderStatus.COMPLETED.value,
+}
+# 只有拨打中且当前尝试未有结果的工单接受供应商结果；一次尝试仅落一个最终结果。
+_CALLBACK_APPLICABLE = (PhoneOrderStatus.IN_PROGRESS.value,)
+
+
+def _event_reply(order: PhoneCallOrder, event: PhoneCallbackEvent, *, result: str | None = None) -> dict:
+    value = result or event.result
+    return {"order_id": order.id, "status": order.status, "applied": value == "applied",
+            "result": value, "detail": (event.detail or {}).get("reason")}
+
+
+async def _apply_callback_event(db: AsyncSession, order: PhoneCallOrder, event: PhoneCallbackEvent) -> dict:
+    """调用方已锁住工单。待关联事件仅能归属其接收时的那轮尝试，不随重试漂移。"""
+    current_attempt = int(order.attempts or 0)
+    observed = (event.detail or {}).get("observed_attempt_no", current_attempt)
+    attempt = await _locked_attempt(db, order.id, current_attempt)
+
+    async def finish(result: str, reason: str) -> dict:
+        event.result = result
+        event.detail = {"reason": reason, "observed_attempt_no": observed,
+                        "order_status": order.status, "order_attempts": current_attempt}
+        await audit(db, action="phone.callback" if result == "applied" else f"phone.callback.{result}", resource_type="phone_call_order",
+                    resource_id=order.id, detail={"event_id": event.id, "outcome": event.outcome,
+                    "attempt_no": event.attempt_no}, actor_type="system")
+        return _event_reply(order, event)
+
+    if (attempt is None or observed != current_attempt
+            or (event.attempt_no is not None and event.attempt_no != current_attempt)):
+        return await finish("stale", "回调不属于当前持久化拨打尝试，不覆盖")
+    if order.status not in _CALLBACK_APPLICABLE or attempt.finished_at is not None:
+        return await finish("rejected_state", "工单已终态、取消或当前尝试已有结果，保持原状态")
+    request_id = event.external_request_id
+    if request_id is not None and (request_id != order.external_request_id or request_id != attempt.external_request_id):
+        known_old = (await db.execute(select(PhoneCallAttempt.id).where(
+            PhoneCallAttempt.order_id == order.id, PhoneCallAttempt.external_request_id == request_id,
+            PhoneCallAttempt.attempt_no != current_attempt,
+        ).limit(1))).scalar_one_or_none()
+        if (known_old is None and order.status == PhoneOrderStatus.IN_PROGRESS.value
+                and attempt.finished_at is None and attempt.outcome == "accepted"
+                and order.external_request_id is None and attempt.external_request_id is None
+                and (attempt.detail or {}).get("dispatch_pending") is True):
+            return await finish("pending_correlation", "受理响应尚未落库，保留事件等待请求号关联")
+        return await finish("stale", "请求号与当前拨打尝试不符，不覆盖")
+
+    values: dict[str, Any] = {"status": _CALLBACK_OUTCOMES[event.outcome], "next_retry_at": None}
+    if event.receipt_ref:
+        values["receipt_ref"] = event.receipt_ref
+    if event.outcome in ("no_answer", "busy"):
+        values["next_retry_at"] = now_utc() + retry_delay()
+        if current_attempt >= max_attempts():
+            values.update(status=PhoneOrderStatus.FAILED.value, next_retry_at=None)
+    saved = await db.execute(update(PhoneCallOrder).where(
+        PhoneCallOrder.id == order.id, PhoneCallOrder.status.in_(_CALLBACK_APPLICABLE),
+        PhoneCallOrder.attempts == current_attempt,
+    ).values(**values))
+    if saved.rowcount != 1:
+        await db.refresh(order)
+        return await finish("rejected_state", "工单状态已变化，保持原状态")
+    attempt.outcome = event.outcome
+    attempt.simulated = False
+    attempt.receipt_ref = event.receipt_ref
+    attempt.detail = {"callback": True, "event_key": event.event_key[:32], "attempt_no": current_attempt}
+    attempt.finished_at = now_utc()
+    return await finish("applied", "已应用当前尝试的回调结果")
+
+
+async def _reconcile_pending_callbacks(db: AsyncSession, order: PhoneCallOrder) -> None:
+    events = (await db.execute(select(PhoneCallbackEvent).where(
+        PhoneCallbackEvent.order_id == order.id, PhoneCallbackEvent.result == "pending_correlation",
+    ).order_by(PhoneCallbackEvent.id).with_for_update())).scalars().all()
+    for event in events:
+        await _apply_callback_event(db, order, event)
+
+
 async def handle_callback(db: AsyncSession, body: bytes, signature: str | None) -> dict:
-    """CCC 回调：验签（密钥未配置 / 不符 → 403）；幂等（重复回调返回现状）；
-    未知 / 终态单先查原状态，不盲目应用。"""
+    """验签 → 工单行锁 → 持久化事件 → 关联/应用。提前回调可重试，并由受理落库自动收尾。"""
     if not signature or not verify_signature(body, signature):
         raise HTTPException(status_code=403, detail="回调验签失败或未配置密钥，拒收")
     try:
         payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise HTTPException(status_code=422, detail="回调报文格式不正确")
-    order = await db.get(PhoneCallOrder, int(payload.get("order_id") or 0))
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="回调报文须为 JSON 对象")
+    try:
+        order_id = int(payload.get("order_id") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="order_id 不正确")
+    outcome = str(payload.get("outcome", ""))
+    if outcome not in _CALLBACK_OUTCOMES:
+        raise HTTPException(status_code=422, detail="未知回调结果")
+    attempt_no = payload.get("attempt_no")
+    if attempt_no is not None and (isinstance(attempt_no, bool) or not isinstance(attempt_no, int) or attempt_no < 1):
+        raise HTTPException(status_code=422, detail="attempt_no 不正确")
+    order = await _locked_order(db, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="工单不存在（查无原状态）")
-    # 幂等 / 原状态优先：终态或已在目标状态 → 返回现状不重复应用
-    outcome = str(payload.get("outcome", ""))
-    mapped = {
-        "no_answer": PhoneOrderStatus.QUEUED.value,
-        "busy": PhoneOrderStatus.QUEUED.value,
-        "wrong_number": PhoneOrderStatus.WRONG_NUMBER.value,
-        "refused": PhoneOrderStatus.REFUSED.value,
-        "completed": PhoneOrderStatus.COMPLETED.value,
-    }
-    if order.status in ("cancelled", "failed", "completed", "wrong_number", "refused"):
-        return {"order_id": order.id, "status": order.status, "applied": False, "detail": "工单已终态，保持原状态"}
-    if outcome not in mapped:
-        raise HTTPException(status_code=422, detail="未知回调结果")
     receipt_ref = str(payload.get("receipt_ref") or "")[:200] or None
-    values: dict[str, Any] = {"status": mapped[outcome]}
-    if receipt_ref:
-        values["receipt_ref"] = receipt_ref
-    if outcome in ("no_answer", "busy"):
-        new_attempts = (order.attempts or 0) + 1
-        values["attempts"] = new_attempts
-        values["next_retry_at"] = now_utc() + retry_delay()
-        if new_attempts >= max_attempts():
-            values["status"] = PhoneOrderStatus.FAILED.value
-    await db.execute(update(PhoneCallOrder).where(PhoneCallOrder.id == order.id).values(**values))
-    db.add(
-        PhoneCallAttempt(
-            order_id=order.id, outcome=outcome, actor="system", simulated=False,
-            receipt_ref=receipt_ref, detail={"callback": True}, started_at=now_utc(),
-            finished_at=now_utc(),
+    request_id = str(payload.get("request_id") or "")[:128] or None
+    if attempt_no is None and request_id is None:
+        raise HTTPException(status_code=422, detail="回调必须提供 attempt_no 或 request_id 以关联持久化拨打尝试")
+    digest = hashlib.sha256(body).hexdigest()
+    event_key = str(payload.get("event_id") or "")[:128] or digest
+    event = (await db.execute(select(PhoneCallbackEvent).where(
+        PhoneCallbackEvent.order_id == order.id, PhoneCallbackEvent.event_key == event_key,
+    ).with_for_update())).scalar_one_or_none()
+    if event is None:
+        event = PhoneCallbackEvent(
+            order_id=order.id, event_key=event_key, attempt_no=attempt_no, external_request_id=request_id,
+            outcome=outcome, receipt_ref=receipt_ref, payload_sha256=digest, result="pending_correlation",
+            detail={"observed_attempt_no": int(order.attempts or 0)},
         )
-    )
-    await audit(
-        db, action="phone.callback", resource_type="phone_call_order", resource_id=order.id,
-        detail={"outcome": outcome, "receipt": bool(receipt_ref)}, actor_type="system",
-    )
+        db.add(event)
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            order = await _locked_order(db, order_id)
+            event = (await db.execute(select(PhoneCallbackEvent).where(
+                PhoneCallbackEvent.order_id == order_id, PhoneCallbackEvent.event_key == event_key,
+            ).with_for_update())).scalar_one_or_none()
+            if event is None:
+                raise
+    # 插入冲突后也必须核对报文和事件是否已完成，不能将重复事件再次应用。
+    # 去重依据业务标识；JSON 排版、键序或供应商重投附加时间戳不改变事件事实。
+    if (event.outcome, event.attempt_no, event.external_request_id, event.receipt_ref) != (
+        outcome, attempt_no, request_id, receipt_ref
+    ):
+        raise HTTPException(status_code=409, detail="同一回调事件号已对应不同报文")
+    if event.result != "pending_correlation":
+        await audit(db, action="phone.callback.duplicate", resource_type="phone_call_order", resource_id=order.id,
+                    detail={"event_id": event.id, "event_key": event.event_key[:32]}, actor_type="system")
+        out = _event_reply(order, event, result="duplicate")
+    else:
+        out = await _apply_callback_event(db, order, event)
     await db.commit()
-    return {"order_id": order.id, "status": values["status"], "applied": True}
+    return out
 
 
 # ───────────────────────── C 端状态 ─────────────────────────

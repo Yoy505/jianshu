@@ -1,7 +1,8 @@
-"""pytest 公共夹具：SQLite 内存库 + get_db/get_redis 覆盖（不依赖外部 PG/Redis）。"""
+"""HTTP 业务夹具默认 SQLite；--business-db=postgres 显式选择真实 PG；Redis 使用内存桩。"""
 
 import os
 import time
+import uuid
 
 # 必须在导入 app 之前显式设置 test，避免安全默认环境拒绝示例密钥。
 # 连接串用 setdefault：tests/integration 的真实 PG/Redis 集成入口可在外层
@@ -15,7 +16,10 @@ os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/9")
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
 import httpx  # noqa: E402
+import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.engine import make_url  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
@@ -127,37 +131,72 @@ async def _seed_test_data(session) -> None:
     await session.commit()
 
 
+def pytest_addoption(parser):
+    parser.addoption("--business-db", choices=("sqlite", "postgres"), default="sqlite",
+                     help="HTTP business client database; postgres requires JIANSHU_PG_TEST_URL")
+
+
+def pytest_configure(config):
+    if config.getoption("--business-db") == "sqlite" and os.environ["DATABASE_URL"].startswith("postgres"):
+        raise pytest.UsageError("DATABASE_URL 不会选择业务测试夹具；请用 --business-db=postgres 和 JIANSHU_PG_TEST_URL")
+    if config.getoption("--business-db") == "postgres":
+        url = make_url(os.environ.get("JIANSHU_PG_TEST_URL", "sqlite://"))
+        if url.drivername != "postgresql+asyncpg" or url.host not in {"127.0.0.1", "localhost"} or "test" not in (url.database or ""):
+            raise pytest.UsageError("PostgreSQL 业务测试须显式提供本机、库名含 test 的 JIANSHU_PG_TEST_URL")
+
+
+def pytest_report_header(config):
+    return f"HTTP business client database: {config.getoption('--business-db')} (other fixtures may use SQLite)"
+
+
 @pytest_asyncio.fixture
-async def client():
-    engine = create_async_engine(
-        "sqlite+aiosqlite://",
-        poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def client(request):
+    schema = None
+    if request.config.getoption("--business-db") == "postgres":
+        url = os.environ["JIANSHU_PG_TEST_URL"]
+        schema = "business_" + uuid.uuid4().hex
+        engine = create_async_engine(url)
+        async with engine.begin() as conn:
+            await conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+        await engine.dispose()
+        engine = create_async_engine(url, connect_args={"server_settings": {"search_path": schema}})
+        async with engine.connect() as conn:
+            assert engine.dialect.name == "postgresql"
+            assert (await conn.execute(text("SELECT current_schema()"))).scalar_one() == schema
+    else:
+        engine = create_async_engine(
+            "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False},
+        )
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
-    redis_stub = FakeRedis()
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        redis_stub = FakeRedis()
 
-    async def override_get_db():
+        async def override_get_db():
+            async with session_factory() as session:
+                yield session
+
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_redis] = lambda: redis_stub
+
         async with session_factory() as session:
-            yield session
+            await _seed_test_data(session)
 
-    app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_redis] = lambda: redis_stub
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+            # 挂同库会话工厂，供测试做 ORM 级数据准备 / 时间推进（ steward 等域）
+            test_client.session_factory = session_factory  # type: ignore[attr-defined]
+            test_client.database_backend = engine.dialect.name
+            yield test_client
 
-    async with session_factory() as session:
-        await _seed_test_data(session)
-
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
-        # 挂同库会话工厂，供测试做 ORM 级数据准备 / 时间推进（ steward 等域）
-        test_client.session_factory = session_factory  # type: ignore[attr-defined]
-        yield test_client
-
-    app.dependency_overrides.clear()
-    await engine.dispose()
+    finally:
+        app.dependency_overrides.clear()
+        if schema:
+            async with engine.begin() as conn:
+                await conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        await engine.dispose()
 
 
 # 工作二履约域夹具（条款文本配置）注册进全局命名空间

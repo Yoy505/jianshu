@@ -68,6 +68,8 @@ def _package_summary(
         price_cents=version.price_cents,
         points_cost=version.points_cost,
         validity_days=version.validity_days,
+        fulfillment_type=version.fulfillment_type,
+        service_days=version.service_days,
         benefit_count=len(version.benefits or []),
         purchasable=Purchasable(**flags),
     )

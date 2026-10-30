@@ -44,8 +44,15 @@ async def make_package(
     points_cost: int | None = None,
     validity_days: int = 45,
     on_shelf: bool = True,
+    fulfillment_type: str = "steward",
+    service_days: int | None = 45,
+    fulfillment_config: dict | None = None,
 ) -> dict:
-    """经后台 API 建服务包 + 版本（+上架），返回 {package_id, version_id}。"""
+    """经后台 API 建服务包 + 版本（+上架），返回 {package_id, version_id}。
+
+    默认建「进入管家履约 / 45 天」的版本（与历史回填一致）；F03 用例可传
+    fulfillment_type="none" 或其他 service_days。
+    """
     resp = await client.post(
         f"{API}/admin/mp/packages", json={"name": name, "subtitle": "测试服务包"}, headers=headers
     )
@@ -57,7 +64,13 @@ async def make_package(
         "benefits": [{"name": "健康管家服务", "desc": "45 天全域健康管家"}, {"name": "用药咨询"}],
         "service_desc": "服务内容说明：以服务准备页与客服为准。",
         "terms": "售后规则：未激活可全额退款；激活后按实际服务进度协商。",
+        "fulfillment_type": fulfillment_type,
     }
+    if fulfillment_type == "steward":
+        if service_days is not None:
+            body["service_days"] = service_days
+        if fulfillment_config is not None:
+            body["fulfillment_config"] = fulfillment_config
     if points_cost is not None:
         body["points_cost"] = points_cost
     resp = await client.post(

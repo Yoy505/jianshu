@@ -47,6 +47,19 @@ Base URL：`http://<host>:8000/api/v1`
 | `device.manage`（厂商注册、绑定/解绑、触发同步、游标重置、质量复核） | ✓ | ✗ |
 | `phone.read`（电话话术/联系人/工单与尝试记录查询，2026-10-22 切片 E 起） | ✓ | ✓ |
 | `phone.manage`（话术审核、联系人及授权核验、工单审核/接管/完成/停止、回调） | ✓ | ✗ |
+| `steward.scope.all`（健康域跨范围特权：越过"绑定人员有效指派"范围读写健康正文；跨范围读详情写审计 `steward.scope.cross_read`，2026-10-26 F02 起） | ✓ | ✗ | ✗ |
+
+### 健康域访问范围（2026-10-26 F02 起，服务端统一计算）
+
+`steward.* / outreach.* / device.* / phone.*` 四域的健康正文（实例、任务、日历、时间线、触达意图、设备绑定 / 指标 / 同步日志、联系人、电话工单、专业工单、报告、随访、签发计划、工作台汇总）在权限点之外再套**岗位范围**，列表、总数、详情、操作使用同一谓词（`app/services/scope_service.py`），不能用筛选参数或资源 ID 绕过：
+
+| 岗位 | 可见范围 | 范围外 |
+|---|---|---|
+| 负责管家 / 替补管家 / 医师（后台账号绑定到**在职**人员） | 当前实例 `butler / backup_butler / physician` 指派、未结专业工单指派、未终态触达意图受理；任务和计划只记历史责任，不独立授权。用户级资料要求至少有一个可见实例 | 列表不返回（总数同步过滤），详情 / 操作 403 |
+| 特权管理（`steward.scope.all`，当前仅 admin） | 全部 | 读取不在本人指派范围的实例 / 用户详情时写审计 `steward.scope.cross_read`（resource 为实例或用户，detail 含 `reason`；列表与操作类不重复记） |
+| 财务 / 单位 / 无绑定的编辑 | 无 | 列表为空、详情 403 |
+
+失权即时：改派、交接、撤销绑定（`DELETE /admin/steward/staff-links/{id}`）、人员停用（`PATCH /admin/steward/staff/{id}` `status=inactive`）后，同一令牌的下一次请求即按新关系计算。配置类数据（人员名单、条款、放行、规则、绑定列表）不属健康正文，仍按权限点开放。
 
 ### 限流与防重复提交（2026-09-22 起）
 
@@ -511,9 +524,12 @@ access token，无效/过期或连接期间用户被封禁，服务端关闭连�
 ```json
 {"id": 1, "name": "全域健康管家 · 45 天基础包", "subtitle": "……", "cover_url": null,
  "price_cents": 0, "points_cost": null, "validity_days": 45, "benefit_count": 4,
+ "fulfillment_type": "steward", "service_days": 45,
  "purchasable": {"wxpay": false, "points": false, "reasons": ["支付通道未开通"]}}
 ```
 **PackageDetail** = PackageSummary + `{"version_id", "version_no", "benefits": [{"name", "desc"}], "service_desc", "terms", "terms_version"}`。`terms_version` 即当前版本号字符串（如 `"v3"`），下单时作为授权版本快照。
+
+`fulfillment_type`（2026-10-26 F03 起）：`none` 普通商品——权益发放后不生成管家服务实例；`steward` 进入全域健康管家履约，`service_days` 为**实际服务期**（任务日历长度），与 `validity_days`（权益领取 / 激活窗口）独立、可不同。实例在建立时从商品版本快照 `service_days` 与 `fulfillment_config`，历史订单按购买时版本解释，全局 `STEWARD_SERVICE_DAYS` 只在建版本未指定服务期时作为受控默认写入版本。
 
 **Order**
 ```json
@@ -624,7 +640,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | POST | `/admin/mp/packages` | `{name(1–100), subtitle?(≤200), cover_url?, sort?}` → 201 `draft` |
 | GET | `/admin/mp/packages/{id}` | 详情含全部 `versions` |
 | PATCH | `/admin/mp/packages/{id}` | `{name?, subtitle?, cover_url?, sort?}`；不改状态与版本 |
-| POST | `/admin/mp/packages/{id}/versions` | `{price_cents(>0), points_cost?(>0), validity_days(1–3650), benefits:[{name(1–50), desc?(≤200)}](1–20 项), service_desc(1–5000), terms(1–5000)}` → 201 新版本（`version_no` 自增）；**版本一经创建不可修改**，调价即建新版本 |
+| POST | `/admin/mp/packages/{id}/versions` | `{price_cents(>0), points_cost?(>0), validity_days(1–3650), benefits:[{name(1–50), desc?(≤200)}](1–20 项), service_desc(1–5000), terms(1–5000), fulfillment_type?: none\|steward（默认 none）, service_days?(1–365，仅 steward；缺省取 STEWARD_SERVICE_DAYS 写入快照), fulfillment_config?: {template_version?(≤32), followup_days?: [服务日序号，≥1 严格递增且 ≤ service_days]}}` → 201 新版本（`version_no` 自增，响应含 `fulfillment_type / service_days / fulfillment_config`）；`none` 带 service_days 或模板 → 422；随访节点超服务期 / 未递增 → 422；steward 创建时补齐 `template_version` 与 `followup_days`（默认节点按服务期截断），显式 `[]` 表示无随访；后续实例、激活和日历不读取全局随访参数。**版本一经创建不可修改**，调价即建新版本。数据库 CHECK：`fulfillment_type IN ('none','steward')`、steward ⇔ service_days 1–365 |
 | POST | `/admin/mp/packages/{id}/shelf` | `{on_shelf:true, version_id}` → `on_shelf` 并设 `current_version_id`；版本不属于该商品 404；配置不完整 409 `{"detail":"…", "blockers":[…]}`。`{on_shelf:false}` → `off_shelf`（已售订单与权益不受影响） |
 | POST | `/admin/mp/packages/{id}/releases` | `commerce.sale.release`（仅 admin，2026-10-22 起）；`{version_id, env:dev\|test\|staging\|prod\|all, basis(1–500)}` → 201 放行记录（负责人、依据、时间）；同版本同环境已有生效记录 409。放行后该版本在匹配环境（当前环境或 all）可购，微信与积分一致判定 |
 | POST | `/admin/mp/releases/{id}/revoke` | `commerce.sale.release`；`{reason(1–500)}` → 撤销放行（留痕 `revoked_at/by/原因`），该版本立即回到不可售；重复撤销 409 |
@@ -783,7 +799,13 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
   "consent_versions": {"steward_service": "v1", "steward_device_data": "v1"},
   "plan_version": "v1",
   "butler_id": 1, "backup_butler_id": 2, "physician_id": 3,
-  "service_started_at": "...Z", "service_ends_at": "...Z" }
+  "service_started_at": "...Z", "service_ends_at": "...Z",
+  // C3（2026-10-26）：真实计划、签发来源与责任人快照（录入人 / 核验人 / 各人工门禁完成人）
+  "plan_id": 7, "plan_issue_source": "external_verified",
+  "responsibility_snapshot": {
+    "plan": {"id": 7, "issue_source": "external_verified", "physician_id": 3,
+             "created_by_admin_id": 1, "verified_by_admin_id": 1},
+    "manual_checks": {"delivery": {"completed_by_admin_id": 1}} } }
 ```
 
 ## 一）C 端 · 我的服务 `/mp/steward`
@@ -817,19 +839,25 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | POST | `/admin/steward/instances/{id}/assign` | `steward.manage`；`{butler_id?, backup_butler_id?, physician_id?}`；角色不匹配 422；**负责管家与替补不能为同一人**（同时存在时 422）；指派变化写审计 + 时间线 |
 | POST | `/admin/steward/instances/{id}/pause` | `steward.manage`；`{cause, reason(1–200)}`；仅 `active` → `paused`；开启暂停记录。暂停期间服务计时停止：`paused` 实例**不**按 `ends_at` 过期（见「时间与补时口径」） |
 | POST | `/admin/steward/instances/{id}/resume` | `steward.manage`；`{note?}`；结束暂停记录并按规则结算补偿：`physician_advised` → 全额补时；`provider_interruption` 且中断**严格大于** 24h（≥ 24h+1s）→ 全额补时；恰 24h 及不足 24h / `user_request` / `other` → 仅记录不补时。补时 = `ends_at` 顺延精确秒数 + 待办任务按天平移（`shifted_days` 留痕）；平移范围 = **暂停开始日（上海日期）当天及之后**的全部 `pending` 任务（暂停期间滑入过去日期的任务一并顺延补交）；暂停开始日之前已到期的本人任务不平移（用户不记录不顺延，走补录）。全部写时间线 |
-| POST | `/admin/steward/instances/{id}/close` | `steward.manage`；`{closure_report(1–2000 必填)}`；要求 `final_review` 任务已完成且到期，否则 409；存在未结高优先级医师工单时 409（切片 D 落地前查询钩子返回 0，接入后查真表）；→ `closed` |
-| POST | `/admin/steward/tasks/{task_id}/result` | `steward.manage`；`{result(1–500 必填), actual_occurred_at?, backfill_reason?(1–200)}` → `done`；重复 409（结果更正不覆盖，D 域报告版本化时统一）；未来日期任务须同时提供 `actual_occurred_at` + `backfill_reason`（补录留痕），否则 422；写审计 |
-| GET | `/admin/steward/staff?role=&page=` | `steward.read`；履约人员名单 |
+| POST | `/admin/steward/instances/{id}/close` | `steward.manage`；`{closure_report(1–2000 必填)}`；要求到期、期末复评任务完成且无未结高优先级医师工单（已明确转交除外），否则 409。当前账号须绑定当前指派医师，医师在职且资质有效，否则 403；复评须有服务端保存的当前医师签发证据，历史运营录入或旧医师复评须追加 `order_type=final_review, task_id=复评任务ID` 专业工单并由当前医师完成（不覆盖原记录）。同事务结案、创建 v1 报告，保存实际签发账号、医师与时间 |
+| POST | `/admin/steward/tasks/{task_id}/result` | `steward.manage`；`{result(1–500 必填), actual_occurred_at?, backfill_reason?(1–200)}` → `done`；重复 409（结果更正不覆盖，D 域报告版本化时统一）；未来日期任务须同时提供 `actual_occurred_at` + `backfill_reason`（补录留痕），否则 422；写审计。`final_review` 仅绑定当前指派医师且在职、资质有效的账号可完成（否则 403），签发责任证据由服务端写入时间线；普通任务保持运营录入 |
+| GET | `/admin/steward/staff?role=&page=` | `steward.read`；履约人员名单。每项含 C2 资质字段：`service_scope`、`credential_valid`、`credential_source`、`credential_verified_by_admin_id`、`credential_verified_at`、`credential_valid_until`、`credential_revoked_at`、`credential_revoke_reason`（私有材料引用 `credential_ref` 不返回） |
+| POST | `/admin/steward/staff/{id}/credential/verify` | `steward.manage`；`{credential_ref(1–500 私有材料引用), credential_source(1–100), valid_until?, service_scope?(≤200)}` → 记录核验责任人与时间，清除此前撤销；停用人员 422；`valid_until` 不晚于当前 422；审计 `steward.staff.credential_verify` |
+| POST | `/admin/steward/staff/{id}/credential/revoke` | `steward.manage`；`{reason(1–200)}` → 撤销资质（门禁下一次读取重判）；尚无资质 / 已撤销 409 |
+| GET | `/admin/steward/staff/{id}/schedules` | `steward.read`；人员排班（含已取消） |
+| POST | `/admin/steward/staff/{id}/schedules` | `steward.manage`；`{starts_on, ends_on?, note?}` → 201；`ends_on < starts_on` 422；停用人员 422。有效排班 = `active` 且 `starts_on ≤ 当日 ≤ ends_on`（`ends_on` 空为长期） |
+| POST | `/admin/steward/schedules/{id}/cancel` | `steward.manage`；`{reason}` → `cancelled`（留痕）；重复取消 409 |
 | POST | `/admin/steward/staff` | `steward.manage`；`{name(1–50), phone, role, org_name?(1–100), title?(1–50), license_no?(1–50 医师建议必填), note?}` |
-| PATCH | `/admin/steward/staff/{id}` | `steward.manage`；改名 / 停用 `{status: active|inactive}` 等；停用不影响已指派实例（留痕） |
+| PATCH | `/admin/steward/staff/{id}` | `steward.manage`；改名 / 停用 `{status: active|inactive}` 等。停用即失权（F02 范围按在职实时计算）；管家名下有未完成触达待办、医师名下有未结专业工单时 409（须先交接 / 转交，不自动替医师选择接收人，F04）；仍挂在未结实例上的指派留痕（审计 detail `assigned_open_instances`），待运营改派 |
 | GET | `/admin/steward/consent-terms` | `steward.read`；条款版本史（含 retired） |
 | POST | `/admin/steward/consent-terms` | `steward.manage`；发布新版本 `{purpose, version: v\d+, title(1–100), text(1–5000), note?}`：同 purpose 旧版本自动 `retired`，新版本 `active` 并即刻成为授权依据；已有旧版本授权在门禁判定中判「条款已更新，请重新确认」；发布写审计 `steward.terms.publish` |
 | GET | `/admin/steward/pilot-releases?package_id=&page=` | `steward.read`；放行记录列表（含已撤销，凭据全文仅 manage 可见完整 reference） |
 | POST | `/admin/steward/pilot-releases` | `steward.manage`；`{package_id, package_version_id, env, owner_name(1–50), evidence[8 项结构化凭据 {item, source(1–50), reference(1–100), note?}], effective_from?, effective_until?}`。八项凭据 `item` 缺一不可（422）：`contract_attachment` `device_supply` `org_contract` `physician_staffing` `care_plan_rules` `refund_interruption` `duty_ops` `outreach_channel`；凭据必须给出真实来源与编号，不接受「已完成」式描述。发布写审计 |
 | POST | `/admin/steward/pilot-releases/{id}/revoke` | `steward.manage`；`{reason(1–200)}` → 立即失效，激活阻断；写审计 |
-| GET | `/admin/steward/care-plans?user_id=&page=` | `steward.read`；签发计划列表（含撤销史） |
-| POST | `/admin/steward/care-plans` | `steward.manage`；`{user_id, physician_id, version: v\d+, org_name(1–100), content(JSON), valid_until?}`。校验：医师 `active` 且角色 `physician`（422）；同用户同版本唯一（409）。签发后 `physician_plan` 门禁自动判定；若用户已有 preparing 实例且 `physician_id` 一致，写时间线 `care_plan_bound` |
-| POST | `/admin/steward/care-plans/{id}/revoke` | `steward.manage`；`{reason(1–200)}` → 已撤销计划不再满足门禁；已激活实例的 `plan_version` 快照不回改（历史留痕）；写审计 |
+| GET | `/admin/steward/care-plans?user_id=&page=` | `steward.read`（受 F02 用户范围）；签发计划列表（含撤销史）。每项含 `issue_source`、`trusted`、`evidence_source`、`verified_by_admin_id`、`verified_at`、`created_by_admin_id`；私有材料引用 `evidence_ref` 不对外返回 |
+| POST | `/admin/steward/care-plans` | `steward.manage`；`{user_id, physician_id, version: v\d+, org_name(1–100), content(JSON), valid_until?, external_evidence?: {evidence_ref(1–500), evidence_source(1–100), note?}}`。校验：医师 `active` 且角色 `physician`（422）；同用户同版本唯一（409）。**签发来源由服务端判定（C3，2026-10-26）**：当前账号绑定该医师 → `physician_self`；带 `external_evidence` → `external_verified`（当前账号为核验责任人，`verified_by_admin_id/verified_at`）；否则 → `ops_entry`（运营录入，`trusted=false`）。**只有可信来源（physician_self / external_verified）的计划才满足 `physician_plan` 门禁与医学判断类工单的"无签发阻断"**；仅有运营录入计划时门禁缺失原因为"签发计划仅为运营录入…"。若用户已有 preparing 实例且 `physician_id` 一致，写时间线 `care_plan_bound` |
+| POST | `/admin/steward/care-plans/{id}/verify` | `steward.manage`；`{evidence_ref(1–500), evidence_source(1–100), note?}` → 运营录入计划补外部签发材料并核验，来源升级 `external_verified`，核验责任人为当前账号；医师本人签发的计划 409、已撤销 409、签发医师已停用 422；写审计 `steward.careplan.verify` 与时间线 `care_plan_verified` |
+| POST | `/admin/steward/care-plans/{id}/revoke` | `steward.manage`；`{reason(1–200)}` → 已撤销计划不再满足门禁、不能再核验；已激活实例的 `plan_version` 快照不回改（历史留痕）；写审计 |
 
 ## 三）门禁判定规则（服务端唯一权威）
 
@@ -843,7 +871,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | platform_consent | auto | 同上（`steward_service`） |
 | first_valid_data | manual | 运营凭据（首条有效数据校验记录）；切片 C 后自动 |
 | physician_plan | auto | 存在未撤销、未过期的本人签发计划（`steward_care_plans`），且签发医师 = 实例 `physician_id`（未指派医师时判「未指派签约医师」） |
-| staffing_ready | auto | `butler_id`、`backup_butler_id`、`physician_id` 均已指派、人员 `active`，且**负责管家 ≠ 替补管家** |
+| staffing_ready | auto | `butler_id`、`backup_butler_id`、`physician_id` 均已指派、人员 `active`，且**负责管家 ≠ 替补管家**；**C2（2026-10-26 起）**：三岗资质有效（已核验、未撤销、未到期），负责管家与替补在当日（Asia/Shanghai）各有有效排班（医师不要求排班）。缺失原因逐项列出，如「负责管家资质未核验、已撤销或已到期；替补管家当日无有效排班」。人员停用 / 排班取消 / 资质撤销或到期后，下一次门禁读取即重判；已激活实例不回改 |
 | pilot_release（第十项） | auto | 存在未撤销、在有效期、`package_version_id` 与 `env=APP_ENV` 均匹配的放行记录 |
 
 `auto` 项在每次门禁读取（C 端详情 / 激活尝试 / 后台详情）时实时重判并回写快照；`manual` 项只能经后台接口带凭据置 `passed`。激活 = 十项全部 `passed` + 本人确认，二者缺一不可；激活成功在**同一事务**内写激活凭证（门禁快照 / 条款版本 / 计划版本 / 责任人 / 起止时间）。
@@ -1086,13 +1114,13 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET/POST | `/admin/steward/care-rules` | 规则版本列表 / 发布新版本 `{org_name(1–100), version: v\d+, content(JSON), note?}`（同机构旧版自动 retired） |
-| GET/POST | `/admin/steward/staff-links`；DELETE | `/admin/steward/staff-links/{id}` | 账号↔人员绑定管理 `{staff_id, admin_id}`（绑定不改变权限点，仅建立录入身份） |
+| GET/POST | `/admin/steward/staff-links`；DELETE | `/admin/steward/staff-links/{id}` | 账号↔人员绑定管理 `{staff_id, admin_id}`（绑定不改变权限点，仅建立录入身份与 F02 访问范围）。创建：人员不存在 404、后台账号不存在 404（F06 修复后由业务校验保证，不依赖外键）、人员已停用 422、重复 409 |
 | GET/POST | `/admin/steward/professional/orders` | 工单列表（按实例/状态/优先级/类型筛选）/ 创建 `{instance_id, order_type, title(1–100), detail?, priority, physician_id, task_id?, due_at?}`；医学判断类无有效签发计划 → 422 |
 | GET | `/admin/steward/professional/orders/{id}` | 详情含全部事件 |
 | POST | `/admin/steward/professional/orders/{id}/start` · `/{id}/cancel` | `pending→in_progress`；`{reason}` 取消 |
 | POST | `/admin/steward/professional/orders/{id}/transfer` | `{to_physician_id, reason(1–200)}`：接收人须在职医师；留事件与转交事实 |
-| POST | `/admin/steward/professional/orders/{id}/complete` | `{result(1–1000), result_meta?}`：当前账号须绑定指派医师（403 冒充防护）→ `done` |
-| GET/POST | `/admin/steward/reports`；`/admin/steward/reports/{id}` | 报告列表（按实例）/ 结案后更正 `{instance_id, title, content(1–5000), basis?}` → 新版本（须绑定实例签约医师） |
+| POST | `/admin/steward/professional/orders/{id}/complete` | `{result(1–1000), result_meta?}`：可信签发身份链（F04）——当前指派医师存在、角色为医师、**在职且资质已核验、未撤销、未到期**、当前账号绑定该医师，任一不成立 403；条件更新同时锁定"仍指派给该医师且在职"，停用 / 转交与完成并发时 409 → `done`  写入前锁定人员行与账号绑定，锁等待结束后直接按最新行重判资质；形成签发证据前再次检查有效期。 |
+| GET/POST | `/admin/steward/reports`；`/admin/steward/reports/{id}` | 报告列表（按实例，受 F02 范围）/ 结案后更正 `{instance_id, title, content(1–5000), basis?}` → 新版本（与工单完成同一可信签发身份链：实例签约医师在职、资质有效且当前账号绑定，否则 403）  更正同时锁定实例的 `status=closed` 与当前 `physician_id`；核验后改派或等待期间发生变化返回 409；签发先获得实例锁时，后续改派等待本次提交。 |
 | GET/POST | `/admin/steward/followups` | 结构化随访列表（按实例）/ 录制 `{task_id, summary(1–500), data_quality_note?, next_action?}`（任务须为本人实例 `follow_up` 且未录过） |
 
 ### C 端 `/mp/steward/instances/{id}/professional`
@@ -1169,7 +1197,7 @@ C 端只返回本人（`user_id` 匹配或 `phone` 与本人核验手机号匹�
 | POST | `/admin/phone/orders/{id}/takeover` | 转人工：`{note}` → `transferred_human` 并记录接管人 |
 | POST | `/admin/phone/orders/{id}/complete` | 人工结果：`{result(1–500)}`（须已接管）→ `completed` |
 | POST | `/admin/phone/orders/{id}/cancel` | `{reason}` 停止（授权撤回 / 业务取消） |
-| POST | `/admin/phone/callback` | CCC 回调：`X-Phone-Signature`（HMAC-SHA256，密钥 `STEWARD_PHONE_CCC_SECRET`；未配置密钥 → 403 拒收）`{order_id, outcome, receipt_ref?, detail?}`——验签、幂等（重复回调返回现状不重复应用）、超时 / 未知单先查原状态 |
+| POST | `/admin/phone/callback` | `X-Phone-Signature`：HMAC-SHA256，未配置或验签失败 403。报文 `{order_id, outcome, event_id?, receipt_ref?, attempt_no?, request_id?}`；**attempt_no / request_id 至少提供一项**，缺失 422；attempt_no 须为正整数。拨打前持久化尝试号；工单、尝试、回调结果在同一事务内受保护，同一尝试仅接受一个最终结果。受理请求号尚未落库且未识别为旧请求时，回调先保存为 `pending_correlation`（`applied=false`），绑定接收时的尝试号；受理落库自动重判并处理，匹配则 `applied`，不匹配则 `stale`，取消或已有结果则 `rejected_state`。待关联事件重投可继续关联；已处理事件返回 `duplicate`；同事件号的关键信息冲突 409，JSON 键序和附加投递时间戳不影响去重。旧尝试、缺持久化关联、终态均不能推进。`no_answer/busy` 有限重试，回调不增加尝试数。调度与回调谁先提交结果，另一方即读取该结果，不覆写；当前入口仍要求 `phone.manage`，真实 CCC 接入与供应商鉴权尚未验收 |
 
 ### 调度（`phone_call_sweep`，beat 每 5 分钟）
 

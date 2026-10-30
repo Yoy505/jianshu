@@ -45,6 +45,9 @@ DEVICE_MANAGE = "device.manage"
 # 电话通路（工作二切片 E）：查询对编辑开放；话术审核/工单流转/接管/回调仅管理员
 PHONE_READ = "phone.read"
 PHONE_MANAGE = "phone.manage"
+# 健康域跨范围特权（F02，2026-10-26）：持有点者可越过"绑定人员有效指派"范围读取健康正文；
+# 仅 admin 角色。跨范围读取详情会写审计（steward.scope.cross_read）。财务/编辑/单位不持有。
+STEWARD_SCOPE_ALL = "steward.scope.all"
 
 _ALL = {
     ESSAY_REVIEW,
@@ -75,6 +78,7 @@ _ALL = {
     DEVICE_MANAGE,
     PHONE_READ,
     PHONE_MANAGE,
+    STEWARD_SCOPE_ALL,
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {

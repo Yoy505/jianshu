@@ -33,6 +33,7 @@ from app.schemas.device import (
     VendorOut,
 )
 from app.services import device_service as svc
+from app.services import scope_service as scope_svc
 
 router = APIRouter(prefix="/admin/devices", tags=["admin-devices"])
 
@@ -104,7 +105,8 @@ async def list_bindings(
     db: AsyncSession = Depends(get_db),
 ) -> Page[BindingOut]:
     page, page_size = pagination
-    filters = []
+    scope = await scope_svc.load_scope(db, admin)
+    filters = [scope_svc.user_predicate(scope, DeviceBinding.user_id)]
     if user_id:
         filters.append(DeviceBinding.user_id == user_id)
     if status:
@@ -135,16 +137,18 @@ async def create_binding(
     admin=Depends(require_permission("device.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> BindingOut:
+    await scope_svc.require_user_access(db, admin, payload.user_id, audit_cross_scope=False)
     binding = await svc.create_binding(
         db, admin, payload.user_id, payload.vendor_id, payload.device_model, payload.device_sn
     )
     return await _binding_out(db, binding)
 
 
-async def _get_binding(db: AsyncSession, binding_id: int) -> DeviceBinding:
+async def _get_binding(db: AsyncSession, admin, binding_id: int) -> DeviceBinding:
     binding = await db.get(DeviceBinding, binding_id)
     if binding is None:
         raise HTTPException(status_code=404, detail="绑定不存在")
+    await scope_svc.require_user_access(db, admin, binding.user_id, audit_cross_scope=False)
     return binding
 
 
@@ -155,7 +159,7 @@ async def unbind_binding(
     admin=Depends(require_permission("device.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> BindingOut:
-    binding = await _get_binding(db, binding_id)
+    binding = await _get_binding(db, admin, binding_id)
     binding = await svc.unbind(db, admin, binding, payload.reason)
     return await _binding_out(db, binding)
 
@@ -166,6 +170,7 @@ async def trigger_sync(
     admin=Depends(require_permission("device.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> SyncRunOut:
+    await _get_binding(db, admin, binding_id)
     result = await svc.sync_binding(db, binding_id, trigger="manual")
     return SyncRunOut(**result)
 
@@ -177,7 +182,7 @@ async def reset_cursor(
     admin=Depends(require_permission("device.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> BindingOut:
-    binding = await _get_binding(db, binding_id)
+    binding = await _get_binding(db, admin, binding_id)
     await svc.reset_cursor(db, admin, binding, payload.reason, back=payload.back)
     return await _binding_out(db, binding)
 
@@ -191,13 +196,22 @@ async def list_sync_logs(
     db: AsyncSession = Depends(get_db),
 ) -> Page[SyncLogOut]:
     page, page_size = pagination
-    filters = []
+    scope = await scope_svc.load_scope(db, admin)
+    filters = [scope_svc.user_predicate(scope, DeviceBinding.user_id)]
     if binding_id:
         filters.append(DeviceSyncLog.binding_id == binding_id)
     if status:
         filters.append(DeviceSyncLog.status == status)
-    count_stmt = select(func.count()).select_from(DeviceSyncLog)
-    list_stmt = select(DeviceSyncLog).order_by(DeviceSyncLog.id.desc())
+    count_stmt = (
+        select(func.count())
+        .select_from(DeviceSyncLog)
+        .join(DeviceBinding, DeviceBinding.id == DeviceSyncLog.binding_id)
+    )
+    list_stmt = (
+        select(DeviceSyncLog)
+        .join(DeviceBinding, DeviceBinding.id == DeviceSyncLog.binding_id)
+        .order_by(DeviceSyncLog.id.desc())
+    )
     if filters:
         count_stmt = count_stmt.where(*filters)
         list_stmt = list_stmt.where(*filters)
@@ -229,7 +243,8 @@ async def list_metrics(
     from datetime import date as date_cls
 
     page, page_size = pagination
-    filters = []
+    scope = await scope_svc.load_scope(db, admin)
+    filters = [scope_svc.user_predicate(scope, DeviceMetric.user_id)]
     if binding_id:
         filters.append(DeviceMetric.binding_id == binding_id)
     if quality:
@@ -268,6 +283,7 @@ async def review_metric(
     metric = await db.get(DeviceMetric, metric_id)
     if metric is None:
         raise HTTPException(status_code=404, detail="数据点不存在")
+    await scope_svc.require_user_access(db, admin, metric.user_id, audit_cross_scope=False)
     metric = await svc.review_metric(db, admin, metric, payload.reason)
     return MetricOut(
         id=metric.id, binding_id=metric.binding_id, user_id=metric.user_id,

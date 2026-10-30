@@ -604,7 +604,8 @@ async def _seed_mp_demo(
                 consult_id=consult.id, sender=sender, content=content, created_at=created_at
             )
         )
-    consult.last_message_at = demo_messages[-1][2]
+    # 该历史字段为 TIMESTAMP WITHOUT TIME ZONE，约定存 UTC；asyncpg 不接受 aware 值。
+    consult.last_message_at = demo_messages[-1][2].astimezone(timezone.utc).replace(tzinfo=None)
 
 
 if __name__ == "__main__":

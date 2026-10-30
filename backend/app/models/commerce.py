@@ -147,7 +147,14 @@ class MpPackage(TimestampMixin, Base):
 
 
 class MpPackageVersion(TimestampMixin, Base):
-    """服务包版本：一经创建不可修改，调价 / 改权益即建新版本；订单与权益绑定版本。"""
+    """服务包版本：一经创建不可修改，调价 / 改权益即建新版本；订单与权益绑定版本。
+
+    履约配置（F03，2026-10-26）：`fulfillment_type` 决定权益是否进入管家履约——`none`
+    为普通商品（只发权益，不建服务实例）；`steward` 进入全域健康管家履约，`service_days`
+    为实际服务期（与权益 `validity_days` 独立，二者可不同），`fulfillment_config` 保存
+    服务模板版本与任务配置快照。历史订单按购买时版本解释，全局 STEWARD_SERVICE_DAYS 仅在
+    建版本时作为受控默认值写入，不再于建实例时读取。
+    """
 
     __tablename__ = "mp_package_versions"
     __table_args__ = (
@@ -158,6 +165,14 @@ class MpPackageVersion(TimestampMixin, Base):
         ),
         CheckConstraint(
             "validity_days >= 1 AND validity_days <= 3650", name="ck_mp_package_versions_validity"
+        ),
+        CheckConstraint(
+            "fulfillment_type IN ('none', 'steward')", name="ck_mp_package_versions_fulfillment_type"
+        ),
+        CheckConstraint(
+            "(fulfillment_type = 'steward' AND service_days >= 1 AND service_days <= 365) "
+            "OR (fulfillment_type <> 'steward' AND service_days IS NULL)",
+            name="ck_mp_package_versions_service_days",
         ),
     )
 
@@ -172,6 +187,11 @@ class MpPackageVersion(TimestampMixin, Base):
     benefits: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     service_desc: Mapped[str] = mapped_column(Text, nullable=False)
     terms: Mapped[str] = mapped_column(Text, nullable=False)
+    fulfillment_type: Mapped[str] = mapped_column(
+        String(16), default="none", server_default="none", nullable=False
+    )
+    service_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fulfillment_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
     )

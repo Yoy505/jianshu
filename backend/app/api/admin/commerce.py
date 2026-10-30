@@ -14,6 +14,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_admin, get_db, pagination_params
 from app.core.permissions import (
     COMMERCE_BATCH_CONFIRM,
@@ -109,6 +110,9 @@ async def _version_out(db: AsyncSession, version: MpPackageVersion) -> VersionOu
         benefits=version.benefits or [],
         service_desc=version.service_desc,
         terms=version.terms,
+        fulfillment_type=version.fulfillment_type,
+        service_days=version.service_days,
+        fulfillment_config=version.fulfillment_config,
         created_by=creator,
         created_at=version.created_at,
     )
@@ -458,6 +462,21 @@ async def admin_create_version(
             )
         )
     ).scalar()
+    # F03：steward 商品未指定服务期时，以全局 STEWARD_SERVICE_DAYS 作受控默认写入版本快照；
+    # 建实例时只读版本，不再读全局参数
+    service_days = None
+    fulfillment_config = None
+    if body.fulfillment_type == "steward":
+        from app.services.steward_service import snapshot_fulfillment_config
+
+        service_days = body.service_days or settings.STEWARD_SERVICE_DAYS
+        if body.fulfillment_config and body.fulfillment_config.followup_days:
+            if max(body.fulfillment_config.followup_days) > service_days:
+                raise HTTPException(status_code=422, detail="随访节点不能超过服务期")
+        fulfillment_config = snapshot_fulfillment_config(
+            body.fulfillment_config.model_dump(exclude_none=True) if body.fulfillment_config else None,
+            service_days,
+        )
     version = MpPackageVersion(
         package_id=package.id,
         version_no=int(max_no or 0) + 1,
@@ -467,6 +486,9 @@ async def admin_create_version(
         benefits=[b.model_dump() for b in body.benefits],
         service_desc=body.service_desc,
         terms=body.terms,
+        fulfillment_type=body.fulfillment_type,
+        service_days=service_days,
+        fulfillment_config=fulfillment_config,
         created_by_admin_id=admin.id,
     )
     db.add(version)
@@ -475,7 +497,10 @@ async def admin_create_version(
         action="commerce.package.version_create",
         resource_type="package",
         resource_id=package.id,
-        detail={"version_no": version.version_no, "price_cents": body.price_cents},
+        detail={
+            "version_no": version.version_no, "price_cents": body.price_cents,
+            "fulfillment_type": body.fulfillment_type, "service_days": service_days,
+        },
         actor_id=admin.id,
         actor_name=admin.name,
         request=request,

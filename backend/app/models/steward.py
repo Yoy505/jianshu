@@ -11,7 +11,7 @@
 """
 
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -165,6 +165,53 @@ class StewardStaff(TimestampMixin, Base):
     license_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="active", server_default="active", nullable=False)
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # C2 资质核验：审核材料私有引用、来源、核验人 / 时间 / 有效期、撤销；服务范围
+    service_scope: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    credential_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)  # 私有材料引用，不公开
+    credential_source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    credential_verified_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+    credential_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    credential_valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    credential_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    credential_revoke_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    def credential_valid(self, now: datetime) -> bool:
+        """资质有效 = 已核验 且 未撤销 且（无有效期或未到期）。"""
+        if self.credential_verified_at is None or self.credential_revoked_at is not None:
+            return False
+        if self.credential_valid_until is None:
+            return True
+        until = self.credential_valid_until
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return until >= now
+
+
+class StewardStaffSchedule(TimestampMixin, Base):
+    """人员排班（C2）：某人员在 [starts_on, ends_on] 期间可承担服务；取消留痕。
+    激活门禁要求负责管家与替补在激活当日各有有效排班；人员停用 / 排班取消 / 资质到期后下一次
+    门禁读取即重判。"""
+
+    __tablename__ = "steward_staff_schedules"
+    __table_args__ = (
+        Index("ix_steward_staff_schedules_staff", "staff_id", "starts_on"),
+        CheckConstraint("status IN ('active', 'cancelled')", name="ck_steward_staff_schedules_status"),
+        CheckConstraint("ends_on IS NULL OR ends_on >= starts_on", name="ck_steward_staff_schedules_range"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    staff_id: Mapped[int] = mapped_column(ForeignKey("steward_staff.id", ondelete="CASCADE"), nullable=False)
+    starts_on: Mapped[date] = mapped_column(Date, nullable=False)
+    ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="active", server_default="active", nullable=False)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class StewardServiceInstance(TimestampMixin, Base):
@@ -217,6 +264,8 @@ class StewardServiceInstance(TimestampMixin, Base):
     compensated_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     calendar_generated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     plan_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # 建实例时从商品版本快照的履约配置（模板版本 / 随访节点等），历史实例按快照解释（F03）
+    fulfillment_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     butler_id: Mapped[int | None] = mapped_column(
         ForeignKey("steward_staff.id", ondelete="RESTRICT"), nullable=True
     )
@@ -443,6 +492,12 @@ class StewardPilotRelease(TimestampMixin, Base):
     )
 
 
+PLAN_SOURCE_OPS = "ops_entry"
+PLAN_SOURCE_PHYSICIAN = "physician_self"
+PLAN_SOURCE_EXTERNAL = "external_verified"
+TRUSTED_PLAN_SOURCES = (PLAN_SOURCE_PHYSICIAN, PLAN_SOURCE_EXTERNAL)
+
+
 class StewardCarePlan(TimestampMixin, Base):
     """医师签发的个人计划（A1 最小结构；切片 D 扩展为完整版本化签发与适用范围）。
     physician_plan 门禁按「未撤销、未过期、签发医师 = 实例签约医师」自动判定。"""
@@ -450,6 +505,10 @@ class StewardCarePlan(TimestampMixin, Base):
     __tablename__ = "steward_care_plans"
     __table_args__ = (
         UniqueConstraint("user_id", "version", name="uq_steward_care_plans_user_version"),
+        CheckConstraint(
+            "issue_source IN ('ops_entry', 'physician_self', 'external_verified')",
+            name="ck_steward_care_plans_issue_source",
+        ),
         Index("ix_steward_care_plans_user", "user_id", "id"),
     )
 
@@ -471,9 +530,24 @@ class StewardCarePlan(TimestampMixin, Base):
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoke_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 签发来源（C3，2026-10-26）：ops_entry=运营录入（不可信，不能进门禁 / 医学工单）；
+    # physician_self=录入账号绑定该医师本人；external_verified=外部签发材料经核验责任人核验
+    issue_source: Mapped[str] = mapped_column(
+        String(24), default="ops_entry", server_default="ops_entry", nullable=False
+    )
+    evidence_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)  # 私有材料引用，不公开
+    evidence_source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    verified_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
     )
+
+    @property
+    def trusted(self) -> bool:
+        return self.issue_source in TRUSTED_PLAN_SOURCES
 
 
 class StewardActivationCredential(TimestampMixin, Base):
@@ -500,6 +574,12 @@ class StewardActivationCredential(TimestampMixin, Base):
     physician_id: Mapped[int] = mapped_column(ForeignKey("steward_staff.id", ondelete="RESTRICT"), nullable=False)
     service_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     service_ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # C3：激活凭证保存真实计划、签发来源与责任人快照（录入人 / 核验人 / 各人工门禁完成人）
+    plan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("steward_care_plans.id", ondelete="SET NULL"), nullable=True
+    )
+    plan_issue_source: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    responsibility_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class StewardCareRules(TimestampMixin, Base):

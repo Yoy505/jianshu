@@ -19,15 +19,70 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_migration_cycle_on_pg(pg_engine):
-    """（pg_engine 已升级到 head）全量回退 base → 再次升级 → current 指向 head（真实 PG 方言）。"""
-    from tests.integration.conftest import PG_URL, alembic_run
+    """（pg_engine 已升级到 head）全量回退 base → 再次升级 → current 指向迁移配置的有效头（真实 PG 方言）。"""
+    from tests.integration.conftest import PG_URL, alembic_run, expected_migration_head
 
     out = alembic_run("downgrade", "base", url=PG_URL)
     assert "Running downgrade" in out
     out = alembic_run("upgrade", "head", url=PG_URL)
     assert "Running upgrade" in out
     out = alembic_run("current", url=PG_URL)
-    assert "a7d0e4f6b8c3" in out
+    assert expected_migration_head() in out
+
+
+@pytest.mark.parametrize(
+    "old_head",
+    ["a7d0e4f6b8c3", "e9a4c7f1b5d8"],
+    ids=["work1_old_head", "work2_old_head"],
+)
+def test_old_head_upgrades_to_merge_head_on_pg(old_head):
+    """F01 两条旧库路径（PG 方言）：旧头 → 合并头不得重复加列；回退到分叉点再升级同样通过。"""
+    from tests.integration.conftest import (
+        alembic_run, expected_migration_head, pg_column_count, scratch_database,
+    )
+
+    ts_columns = ("created_at", "updated_at")
+    with scratch_database(f"f01_{old_head[:6]}") as url:
+        alembic_run("upgrade", old_head, url=url)
+        assert pg_column_count(url, "mp_user_consents", ts_columns) == 2
+        alembic_run("upgrade", "head", url=url)
+        assert expected_migration_head() in alembic_run("current", url=url)
+        assert pg_column_count(url, "mp_user_consents", ts_columns) == 2
+        alembic_run("downgrade", "e5c9a3f7b1d8", url=url)
+        assert pg_column_count(url, "mp_user_consents", ts_columns) == 0
+        alembic_run("upgrade", "head", url=url)
+        assert pg_column_count(url, "mp_user_consents", ts_columns) == 2
+
+
+def test_snapshot_data_migration_on_pg():
+    from tests.integration.conftest import alembic_run, scratch_database
+    from tests.test_snapshot_migration import PREVIOUS_HEAD, seed_legacy_rules, assert_frozen_rules
+
+    with scratch_database("snapshot") as url:
+        alembic_run("upgrade", PREVIOUS_HEAD, url=url)
+        asyncio.run(seed_legacy_rules(url))
+        alembic_run("upgrade", "head", url=url)
+        asyncio.run(assert_frozen_rules(url))
+        alembic_run("downgrade", PREVIOUS_HEAD, url=url)
+        asyncio.run(assert_frozen_rules(url))
+        alembic_run("upgrade", "head", url=url)
+        asyncio.run(assert_frozen_rules(url))
+
+
+def test_pending_event_migration_on_pg():
+    from tests.integration.conftest import alembic_run, scratch_database
+    from tests.test_phone_pending_migration import (
+        PARENT, seed_callback_history, add_pending_and_assert, assert_downgraded_history,
+    )
+
+    with scratch_database("pending") as url:
+        alembic_run("upgrade", PARENT, url=url)
+        asyncio.run(seed_callback_history(url))
+        alembic_run("upgrade", "head", url=url)
+        asyncio.run(add_pending_and_assert(url))
+        alembic_run("downgrade", PARENT, url=url)
+        asyncio.run(assert_downgraded_history(url))
+        alembic_run("upgrade", "head", url=url)
 
 
 @pytest.mark.asyncio

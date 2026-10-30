@@ -260,6 +260,8 @@ async def test_close_checks_high_priority_hook(client):
 
     ctx = await _activate(client)
     a = ctx["admin"]
+    from tests.test_physician_identity_chain import _bind, _admin_id
+    link_id = await _bind(client, ctx["admin"], ctx["staff"]["physician"]["id"], await _admin_id(client))
     instance_id = ctx["instance"]["id"]
 
     async with client.session_factory() as session:  # type: ignore[attr-defined]

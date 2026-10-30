@@ -245,6 +245,14 @@ class ReleaseOut(BaseModel):
     created_at: UTCDateTime
 
 
+class ExternalEvidenceIn(BaseModel):
+    """外部签发材料（C3）：私有材料引用 + 来源说明；由当前后台账号作为核验责任人留痕。"""
+
+    evidence_ref: str = Field(min_length=1, max_length=500)
+    evidence_source: str = Field(min_length=1, max_length=100)
+    note: str | None = Field(default=None, max_length=200)
+
+
 class CarePlanCreateIn(BaseModel):
     user_id: int
     physician_id: int
@@ -253,6 +261,12 @@ class CarePlanCreateIn(BaseModel):
     content: dict = Field(default_factory=dict)
     rules_version: str | None = Field(default=None, pattern=r"^v\d+$")
     valid_until: UTCDateTime | None = None
+    # 不带且录入账号未绑定该医师 → 仅运营录入（ops_entry），不能进门禁 / 医学工单
+    external_evidence: ExternalEvidenceIn | None = None
+
+
+class CarePlanVerifyIn(ExternalEvidenceIn):
+    pass
 
 
 class CarePlanRevokeIn(BaseModel):
@@ -272,6 +286,12 @@ class CarePlanOut(BaseModel):
     valid_until: UTCDateTime | None
     revoked_at: UTCDateTime | None
     revoke_reason: str | None
+    issue_source: str
+    trusted: bool
+    evidence_source: str | None = None
+    verified_by_admin_id: int | None = None
+    verified_at: UTCDateTime | None = None
+    created_by_admin_id: int | None = None
     created_at: UTCDateTime
 
 
@@ -305,6 +325,40 @@ class StaffOut(BaseModel):
     license_no: str | None
     status: str
     note: str | None
+    # C2 资质核验（credential_ref 私有不返回）
+    service_scope: str | None = None
+    credential_valid: bool = False
+    credential_source: str | None = None
+    credential_verified_by_admin_id: int | None = None
+    credential_verified_at: UTCDateTime | None = None
+    credential_valid_until: UTCDateTime | None = None
+    credential_revoked_at: UTCDateTime | None = None
+    credential_revoke_reason: str | None = None
+    created_at: UTCDateTime
+
+
+class StaffCredentialVerifyIn(BaseModel):
+    credential_ref: str = Field(min_length=1, max_length=500)
+    credential_source: str = Field(min_length=1, max_length=100)
+    valid_until: UTCDateTime | None = None
+    service_scope: str | None = Field(default=None, max_length=200)
+
+
+class ScheduleCreateIn(BaseModel):
+    starts_on: date
+    ends_on: date | None = None
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ScheduleOut(BaseModel):
+    id: int
+    staff_id: int
+    starts_on: date
+    ends_on: date | None
+    status: str
+    note: str | None
+    cancelled_at: UTCDateTime | None
+    cancel_reason: str | None
     created_at: UTCDateTime
 
 

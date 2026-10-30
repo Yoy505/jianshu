@@ -63,7 +63,8 @@ async def test_instance_scope_by_staff_binding(client, two_instances):
     resp = await client.get(f"{API}/admin/steward/instances", headers=a)
     assert resp.json()["total"] == 2
 
-    # 绑定为实例 1 的管家 → 只见实例 1；实例 2 详情/日历/时间线 404
+    # 绑定为实例 1 的管家 → 只见实例 1；实例 2 详情/日历/时间线 403
+    # （F02 统一范围模型：越范围 403 明示而非 404 隐藏，与 docs/api.md 一致）
     await _bind_editor_to(client, a, ctx1["staff"]["butler"]["id"])
     resp = await client.get(f"{API}/admin/steward/instances", headers=editor)
     body = resp.json()
@@ -75,7 +76,7 @@ async def test_instance_scope_by_staff_binding(client, two_instances):
         f"/admin/steward/instances/{ctx2['instance']['id']}/timeline",
     ):
         resp = await client.get(f"{API}{path}", headers=editor)
-        assert resp.status_code == 404, f"{path} -> {resp.status_code}"
+        assert resp.status_code == 403, f"{path} -> {resp.status_code}"
     # 本人范围内实例详情可见
     resp = await client.get(
         f"{API}/admin/steward/instances/{ctx1['instance']['id']}", headers=editor
@@ -100,10 +101,11 @@ async def test_professional_order_scope_physician_only(client, two_instances):
         )
         assert resp.status_code == 201, resp.text
 
-    # 绑定管家（非医师）→ 工单零可见（医学隔离）
+    # 绑定管家（非医师）→ 按实例级可见性可见本实例工单（F02 统一模型，
+    # 健康正文含专业工单随实例范围走；批次十一的"医学隔离"例外已并入统一谓词）
     await _bind_editor_to(client, a, ctx1["staff"]["butler"]["id"])
     resp = await client.get(f"{API}/admin/steward/professional/orders", headers=editor)
-    assert resp.json()["total"] == 0
+    assert resp.json()["total"] == 1
 
     # 追加绑定为医师 → 看到该医师全部工单（full_setup 门禁要求同用户同医师，
     # 两实例共用医师，故两单均可见）；详情可见

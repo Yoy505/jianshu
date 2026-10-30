@@ -348,11 +348,12 @@ async def test_callback_signature_idempotent(client, monkeypatch):
     resp = await _create_order(client, a, ctx, script_id)
     order_id = resp.json()["id"]
     await client.post(f"{API}/admin/phone/orders/{order_id}/review", json={"approve": True}, headers=a)
-    svc.register_adapter("ccc", SyncAdapter(["no_answer"]))
+    from tests.test_phone_callback_idempotency import AcceptedAdapter
+    svc.register_adapter("ccc", AcceptedAdapter())
     async with client.session_factory() as session:  # type: ignore[attr-defined]
         await svc.dispatch_order(session, order_id)
 
-    body = json.dumps({"order_id": order_id, "outcome": "completed", "receipt_ref": "CCC-2026-0001"}).encode()
+    body = json.dumps({"order_id": order_id, "outcome": "completed", "receipt_ref": "CCC-2026-0001", "attempt_no": 1}).encode()
     signature = hmac.new(b"test-ccc-secret", body, hashlib.sha256).hexdigest()
     auth = {"Authorization": a["Authorization"], "Content-Type": "application/json"}
     # 无签名 → 403

@@ -188,9 +188,18 @@ async def test_transfer_and_deactivation(client):
     )
     assert resp.status_code == 403  # admin 未绑定接收医师
 
-    # 停用医师不能作为接收人
-    await client.patch(f"{API}/admin/steward/staff/{receiver['id']}", json={"status": "inactive"}, headers=a)
+    # 停用医师不能作为接收人；F04：名下仍有未结工单的医师不能直接停用（须先转交）
+    resp = await client.patch(f"{API}/admin/steward/staff/{receiver['id']}", json={"status": "inactive"}, headers=a)
+    assert resp.status_code == 409 and "未结专业工单" in resp.json()["detail"]
     other2 = await create_staff(client, a, "physician", "医师戊")
+    resp = await client.post(
+        f"{API}/admin/steward/professional/orders/{order_id}/transfer",
+        json={"to_physician_id": other2["id"], "reason": "接收医师离岗前转交"},
+        headers=a,
+    )
+    assert resp.status_code == 200
+    resp = await client.patch(f"{API}/admin/steward/staff/{receiver['id']}", json={"status": "inactive"}, headers=a)
+    assert resp.status_code == 200 and resp.json()["status"] == "inactive"
     resp = await client.post(
         f"{API}/admin/steward/professional/orders/{order_id}/transfer",
         json={"to_physician_id": receiver["id"], "reason": "再次转交"},
@@ -232,6 +241,8 @@ async def test_close_blocked_by_high_priority_and_report_versions(client):
     """高优先级未结阻断结案；明确转交后可结案并生成报告 v1；更正形成 v2。"""
     ctx = await _activate(client)
     a, u = ctx["admin"], ctx["user"]
+    from tests.test_physician_identity_chain import _bind, _admin_id
+    link_id = await _bind(client, ctx["admin"], ctx["staff"]["physician"]["id"], await _admin_id(client))
     instance_id = ctx["instance"]["id"]
     physician = ctx["staff"]["physician"]
 
@@ -285,6 +296,8 @@ async def test_close_blocked_by_high_priority_and_report_versions(client):
     reports = resp.json()
     assert len(reports) == 1 and reports[0]["version"] == 1
     assert reports[0]["data_summary"]["high_priority_transfers"] >= 1  # 转交依据入摘要
+
+    assert (await client.delete(f"{API}/admin/steward/staff-links/{link_id}", headers=a)).status_code == 200
 
     # 结案后更正：未绑定签约医师 → 403；绑定后新版本 v2 且不覆盖 v1
     resp = await client.post(
@@ -361,3 +374,45 @@ async def test_followup_record_and_mp_view(client):
     resp = await client.get(f"{API}/mp/steward/instances/{instance_id}/professional",
                             headers={"Authorization": "Bearer bad"})
     assert resp.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_staff_link_validation_paths(client):
+    """F06：绑定前真实核验目标账号与人员（SQLite 夹具不强制外键，404 必须来自业务校验）。
+    不存在账号 404、不存在人员 404、停用人员 422、合法 201、重复 409、解绑后可重新绑定。"""
+    from tests.commerce_helpers import admin_headers
+
+    a = await admin_headers(client)
+    physician = await create_staff(client, a, "physician", "绑定校验医师")
+    retired = await create_staff(client, a, "physician", "已停用医师")
+    resp = await client.patch(f"{API}/admin/steward/staff/{retired['id']}", json={"status": "inactive"}, headers=a)
+    assert resp.status_code == 200 and resp.json()["status"] == "inactive"
+    async with client.session_factory() as session:  # type: ignore[attr-defined]
+        from app.models import AdminUser
+
+        admin_id = (await session.execute(select(AdminUser).where(AdminUser.username == "admin"))).scalar_one().id
+
+    links = f"{API}/admin/steward/staff-links"
+    resp = await client.post(links, json={"staff_id": physician["id"], "admin_id": 999_999}, headers=a)
+    assert resp.status_code == 404 and "账号" in resp.json()["detail"]
+    resp = await client.post(links, json={"staff_id": 999_999, "admin_id": admin_id}, headers=a)
+    assert resp.status_code == 404 and "人员" in resp.json()["detail"]
+    resp = await client.post(links, json={"staff_id": retired["id"], "admin_id": admin_id}, headers=a)
+    assert resp.status_code == 422
+    resp = await client.post(links, json={"staff_id": physician["id"], "admin_id": admin_id}, headers=a)
+    assert resp.status_code == 201
+    resp = await client.post(links, json={"staff_id": physician["id"], "admin_id": admin_id}, headers=a)
+    assert resp.status_code == 409
+
+    resp = await client.get(links, headers=a)
+    assert resp.status_code == 200
+    mine = [row for row in resp.json() if row["staff_id"] == physician["id"] and row["admin_id"] == admin_id]
+    assert len(mine) == 1
+    resp = await client.delete(f"{links}/{mine[0]['id']}", headers=a)
+    assert resp.status_code == 200
+    resp = await client.get(links, headers=a)
+    assert all(not (row["staff_id"] == physician["id"] and row["admin_id"] == admin_id) for row in resp.json())
+    resp = await client.delete(f"{links}/{mine[0]['id']}", headers=a)
+    assert resp.status_code == 404
+    resp = await client.post(links, json={"staff_id": physician["id"], "admin_id": admin_id}, headers=a)
+    assert resp.status_code == 201

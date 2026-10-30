@@ -29,6 +29,9 @@ interface PackageVersion {
   benefits: Benefit[]
   service_desc: string
   terms: string
+  fulfillment_type: 'none' | 'steward'
+  service_days: number | null
+  fulfillment_config: { template_version?: string; followup_days?: number[] } | null
   created_by: string | null
   created_at: string
 }
@@ -245,7 +248,7 @@ export default function CommercePackages() {
                   <TableCell>{p.current_version ? `v${p.current_version.version_no}` : '—'}</TableCell>
                   <TableCell>{p.current_version ? `${yuan(p.current_version.price_cents)} 元` : '—'}</TableCell>
                   <TableCell>{p.current_version?.points_cost ?? '—'}</TableCell>
-                  <TableCell>{p.current_version ? `${p.current_version.validity_days} 天` : '—'}</TableCell>
+                  <TableCell>{p.current_version ? `${p.current_version.validity_days} 天 · ${fulfillmentLabel(p.current_version)}` : '—'}</TableCell>
                   <TableCell className="max-w-52 text-[12px] text-[#a1665c]">{p.blockers.join('、') || '—'}</TableCell>
                   <TableCell className="text-[12px]">{formatDateTime(p.updated_at)}</TableCell>
                 </TableRow>
@@ -323,7 +326,7 @@ export default function CommercePackages() {
                         {detail.current_version?.id === v.id && <StatusBadge status="on_shelf" />}
                       </div>
                       <p className="mt-1 text-[13px] text-[#66756d]">
-                        {yuan(v.price_cents)} 元 · {v.points_cost ? `${v.points_cost} 积分` : '不支持积分'} · {v.validity_days} 天 · {v.benefits.length} 项权益
+                        {yuan(v.price_cents)} 元 · {v.points_cost ? `${v.points_cost} 积分` : '不支持积分'} · 权益 {v.validity_days} 天 · {fulfillmentLabel(v)} · {v.benefits.length} 项权益
                       </p>
                       <ul className="mt-2 list-disc pl-5 text-[13px] text-[#5b6a62]">
                         {v.benefits.map((b) => <li key={b.name}>{b.name}{b.desc ? `：${b.desc}` : ''}</li>)}
@@ -390,6 +393,10 @@ function CreatePackageForm({ submitting, onSubmit }: {
   )
 }
 
+function fulfillmentLabel(v: Pick<PackageVersion, 'fulfillment_type' | 'service_days'>): string {
+  return v.fulfillment_type === 'steward' ? `管家履约 ${v.service_days ?? '?'} 天` : '普通商品'
+}
+
 function VersionForm({ submitting, onSubmit }: {
   submitting: boolean
   onSubmit: (payload: Record<string, unknown>) => void
@@ -400,8 +407,16 @@ function VersionForm({ submitting, onSubmit }: {
   const [benefitsText, setBenefitsText] = useState('')
   const [serviceDesc, setServiceDesc] = useState('')
   const [terms, setTerms] = useState('')
+  const [fulfillmentType, setFulfillmentType] = useState<'none' | 'steward'>('none')
+  const [serviceDays, setServiceDays] = useState('45')
+  const [templateVersion, setTemplateVersion] = useState('')
+  const [followupDays, setFollowupDays] = useState('')
 
   const priceCents = Math.round(Number(priceYuan) * 100)
+  const followupList = followupDays.split(/[,，\s]+/).map((v) => v.trim()).filter(Boolean).map(Number)
+  const followupValid = followupList.every((n) => Number.isInteger(n) && n >= 1)
+    && followupList.every((n, i) => i === 0 || n > followupList[i - 1])
+    && (fulfillmentType !== 'steward' || followupList.every((n) => n <= (Number(serviceDays) || 0)))
 
   return (
     <form
@@ -413,6 +428,15 @@ function VersionForm({ submitting, onSubmit }: {
           return rest.length ? { name: name.trim(), desc: rest.join('：').trim() } : { name: line }
         })
         if (!Number.isFinite(priceCents) || priceCents <= 0 || !benefits.length || !serviceDesc.trim() || !terms.trim()) return
+        if (fulfillmentType === 'steward' && (!(Number(serviceDays) >= 1) || !followupValid)) return
+        const fulfillment: Record<string, unknown> = { fulfillment_type: fulfillmentType }
+        if (fulfillmentType === 'steward') {
+          fulfillment.service_days = Number(serviceDays)
+          const config: Record<string, unknown> = {}
+          if (templateVersion.trim()) config.template_version = templateVersion.trim()
+          if (followupList.length) config.followup_days = followupList
+          if (Object.keys(config).length) fulfillment.fulfillment_config = config
+        }
         onSubmit({
           price_cents: priceCents,
           points_cost: points ? Number(points) : null,
@@ -420,6 +444,7 @@ function VersionForm({ submitting, onSubmit }: {
           benefits,
           service_desc: serviceDesc.trim(),
           terms: terms.trim(),
+          ...fulfillment,
         })
       }}
     >
@@ -433,9 +458,43 @@ function VersionForm({ submitting, onSubmit }: {
           <Input id="v-points" type="number" min="1" value={points} onChange={(e) => setPoints(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="v-validity">有效期（天）</Label>
+          <Label htmlFor="v-validity">权益有效期（天）</Label>
           <Input id="v-validity" type="number" min="1" max="3650" value={validity} onChange={(e) => setValidity(e.target.value)} />
         </div>
+      </div>
+      <div className="rounded-md border border-[#e2e9e4] p-3 space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="v-fulfillment">履约类型</Label>
+            <select id="v-fulfillment" value={fulfillmentType} onChange={(e) => setFulfillmentType(e.target.value as 'none' | 'steward')}
+              className="h-9 w-full rounded-md border border-[#d5ded8] bg-white px-2 text-[13px]">
+              <option value="none">普通商品（只发权益，不建服务实例）</option>
+              <option value="steward">全域健康管家履约</option>
+            </select>
+          </div>
+          {fulfillmentType === 'steward' && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-service-days">实际服务期（天，1–365）</Label>
+                <Input id="v-service-days" type="number" min="1" max="365" value={serviceDays} onChange={(e) => setServiceDays(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="v-template">服务模板版本（可选）</Label>
+                <Input id="v-template" maxLength={32} value={templateVersion} onChange={(e) => setTemplateVersion(e.target.value)} placeholder="如 sleep_45d_v1" />
+              </div>
+            </>
+          )}
+        </div>
+        {fulfillmentType === 'steward' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="v-followup">随访节点（服务日序号，逗号分隔、递增且不超过服务期；留空用全局默认）</Label>
+            <Input id="v-followup" value={followupDays} onChange={(e) => setFollowupDays(e.target.value)} placeholder="7,14,21,28" />
+            {!followupValid && <p className="text-[12px] text-[#c0392b]">随访节点须为 ≥1、严格递增且不超过服务期的整数</p>}
+          </div>
+        )}
+        <p className="text-[12px] text-[#8a978e]">
+          权益有效期与实际服务期是两个独立字段：有效期约束领取 / 激活窗口，服务期决定管家任务日历长度；历史订单按购买时版本解释。
+        </p>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="v-benefits">权益项目（每行一项，可用「名称：说明」格式，1–20 项）</Label>

@@ -120,3 +120,33 @@ server {
 - **配置**：全部 `STEWARD_*` 项见 `backend/.env.example`（条款已表驱动；CCC 密钥仅生产注入）。
 - **监控点位（告警阈值由运维依据定，不自造医疗阈值）**：Celery 失败/积压、`device_sync_logs` 中 failed/blocked 增长、`outreach_intents` failed 堆积、`steward_professional_orders` 超时未结与高优先级未结（阻断结案）、`phone_call_orders` pending_config 长期滞留（CCC 未接）、`steward_pilot_releases` 全部撤销（激活全阻断）。人工入口：各后台工作台页面与接口。
 - **外部阻断态（预期现象，非故障）**：无设备适配器 → 设备同步逐条 blocked 待配置；无 CCC → 电话工单审核后待配置；通道未决策 → 触达仅人工处理；均不伪造接通/送达。
+
+## 代码整改与功能补齐部署补充（2026-10-26）
+
+- **迁移链（合并后）**：工作一线 `… → f6c9d3e5a7b2 → a7d0e4f6b8c3` 与工作二线 `… → d4f7b2c8e6a1 → e9a4c7f1b5d8` 在 `9d5def0e96c6` 合并，之后 `b3c7e9d1a5f2`（商品版本履约配置 + 实例配置快照，F03）→ `c4d8f2a6b9e3`（电话回调事件表 + 在途请求号，F05）→ `d5e9a3b7c1f4`（签发计划来源 / 核验责任人 + 激活凭证责任人快照，C3；存量计划回填 ops_entry）→ `e6f1b4c8d2a7`（人员资质核验字段 + 排班表，C2）。**C2/C3 上线后尚未激活的实例门禁会按事实显示缺项**（存量人员无核验记录、无排班；存量计划为运营录入），需运营补核验、排班、签发或 verify 后方可激活；已激活实例不受影响。
+- **升级前先核对当前修订**：`alembic current`。无论库停在工作一旧头 `a7d0e4f6b8c3`、工作二旧头 `e9a4c7f1b5d8` 还是更早，直接 `alembic upgrade head` 均已在 SQLite 与 PG 16.9 实测通过（F01 修补：两条线对 `mp_user_consents` 时间戳列的同源修复改为"列归属感知"，升级只补缺失列、回退只在另一条线不再需要时删列）。回退到分叉点 `e5c9a3f7b1d8` 与全量回退同样验证通过；存量同意记录不丢失。
+- **`b3c7e9d1a5f2` 数据回填**：迁移前已存在的全部商品版本回填为 `fulfillment_type='steward'`、`service_days=45`（即此前"所有权益一律生成 45 天管家实例"的既成事实），并加 CHECK 约束；回退（`downgrade -1`）删除三列与约束，不可恢复回填值以外的信息。新建版本默认 `none`（普通商品不建实例），需要管家履约的商品在后台版本表单显式选择并填写实际服务期。
+- **后台行为变化（F02）**：`editor` 等非管理员账号须经「账号↔人员绑定」（`/admin/steward/staff-links`）绑定到在职人员后，才能看到该人员当前指派实例的健康正文；未绑定账号列表为空、详情 403。管理员（`steward.scope.all`）不受限但跨范围读详情会写审计 `steward.scope.cross_read`。上线前为运营人员建立绑定。
+- **F04**：医师名下有未结专业工单时 `PATCH /admin/steward/staff/{id}` 停用返回 409，须先转交；停用 / 撤销绑定 / 转交后的医师账号不能再完成工单或签发更正报告。
+- **Makefile**：`make backend-run / worker / beat / seed / test / test-integration` 统一使用 `VENV_BIN := $(abspath $(VENV))/bin`，可用 `VENV=` 覆盖为相对或绝对路径；`seed` 仅开发库。
+
+### 审核后修补补充（2026-10-26，修订 f7a2c9e4b6d8）
+
+本轮已验证本机 SQLite 与隔离 PG，尚未部署。上线需先备份并执行 `alembic upgrade head`，该批次修订为 `f7a2c9e4b6d8`；当前目标头见下方 2026-10-27 补充。
+
+- 电话尝试在调用适配器前持久化，适配器必须传递工单 ID 与当前尝试号；回调至少返回 `attempt_no` 或持久化的供应商 `request_id`。旧在途工单缺可靠关联的回调拒绝推进，需供应商查询与人工对账，不能默认关联最新轮次。回退删除关联列，`accepted` 尝试转为 `blocked` 历史，须复核在途工单。
+- 新商品版本冻结完整随访规则，旧版本与实例仅补缺项，明确配置和已生成任务保留。未知的购买时全局参数无法恢复；固定兼容基线为 7/14/21/28/35/42（按服务期截断），上线前核对已售条款和原始配置证据。回退保留冻结后的 JSON。
+- 医师资质有效性开始约束实际签发、复评、工单完成、结案和更正；运营账号不能完成医学复评或签发报告。历史复评缺可信签发证据时，创建 `order_type=final_review` 且关联复评 `task_id` 的专业工单，由当前合资格医师完成，再结案；原任务结果保留。
+- 业务 PG 测试必须使用 `.venv-py315/bin/python -m pytest --business-db=postgres tests/…` 并注入 `JIANSHU_PG_TEST_URL=postgresql+asyncpg://…@127.0.0.1:54329/…test`。每例创建并清理独立 schema；账号须具备建 schema 权限。`DATABASE_URL` 不能选择业务夹具，连不上 PG 直接失败。专用 SQLite 夹具与无数据库断言需另计，Redis 仍使用内存桩；独立 `tests/integration` 按其入口验证实际 PG/Redis/Celery。
+
+交付记录第 2.3、5.3、6.3 节此前无效的 PG 业务结论已撤回；本轮证据与未验收范围见该记录第 8 节。
+
+### 并发修补与复审（2026-10-27，当前目标头 a8d3f5b7c9e1）
+
+- 上线先备份并执行 `alembic upgrade head` 至 `a8d3f5b7c9e1`（父修订 `f7a2c9e4b6d8`）。本修订扩展 `phone_callback_events.result` 至 `VARCHAR(24)`，CHECK 加入 `pending_correlation`；没有业务事件的伪造回填。旧的商品规则、资质、拨打关联处理要求仍按前两节执行。
+- 请求号先到、受理响应后到时，签名有效的回调可先落待关联事件。事件仅归属接收时的尝试号；受理信息落库的同一事务自动匹配并应用，未知请求不推进，旧请求和终态保持拒绝。调度与回调先锁工单、再处理尝试和事件，同一结果不能互相覆盖。
+- 监控待关联事件长期积压、`in_progress` 工单长期未收尾及 `stale / rejected_state` 增长；本修补未实现供应商查询、真实 CCC 或中断任务恢复的外部验收，超时未知结果仍需按实际供应商对账。
+- 回退前须清理或对账 `pending_correlation` 事件并备份。`alembic downgrade f7a2c9e4b6d8` 会把尚未关联事件留为 `rejected_state`（绝不标为已完成），恢复旧 CHECK 和 `VARCHAR(16)`；原事件号、报文摘要和详情保留。升级回来不会把这些拒绝记录自动当成成功回执。
+- `tests/test_postgres_write_races.py` 为常驻真实 PG 并发入口，必须显式使用 `--business-db=postgres` 与本机隔离 `JIANSHU_PG_TEST_URL`。测试用独立连接及 `pg_blocking_pids()` 确认真实阻塞；不连 PG 时这些用例明确跳过，不计为通过。业务 Redis 仍为桩，PG 业务回归不等于 Redis/Celery 完整联调。
+
+本次未部署、未变更 H5 与 nginx 原有未提交内容。验证结果与修补前后对照见交付记录第 9 节。

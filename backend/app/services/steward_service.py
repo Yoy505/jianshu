@@ -22,12 +22,17 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models import (
+    PLAN_SOURCE_EXTERNAL,
+    PLAN_SOURCE_OPS,
+    PLAN_SOURCE_PHYSICIAN,
+    TRUSTED_PLAN_SOURCES,
+    MpPackageVersion,
     CONSENT_PURPOSE_STEWARD_CALL_RECORDING,
     CONSENT_PURPOSE_STEWARD_CONTACT_OUTREACH,
     PhoneCallOrder,
@@ -51,8 +56,11 @@ from app.models import (
     StewardPauseRecord,
     StewardPilotRelease,
     StewardPrepCheck,
+    StewardProfessionalOrder,
+    StewardProfessionalEvent,
     StewardServiceInstance,
     StewardStaff,
+    StewardStaffSchedule,
     StewardTask,
     StewardTaskStatus,
     StewardTimelineEvent,
@@ -104,6 +112,25 @@ def service_date_for_day(activated_at: datetime, day: int, shift_days: int = 0) 
     return base + timedelta(days=day - 1 + shift_days)
 
 
+LEGACY_FOLLOWUP_DAYS = [7, 14, 21, 28, 35, 42]
+
+
+def snapshot_fulfillment_config(config: dict | None, service_days: int, *, legacy: bool = False) -> dict:
+    """新版本冻结当时默认；旧数据缺项只使用固定兼容规则，不读取运行期全局配置。"""
+    snapshot = dict(config or {})
+    snapshot.setdefault("template_version", "steward_v1")
+    if snapshot.get("followup_days") is None:
+        snapshot["followup_days"] = [
+            d for d in (LEGACY_FOLLOWUP_DAYS if legacy else followup_days()) if d <= service_days
+        ]
+    return snapshot
+
+
+def instance_followup_days(instance: StewardServiceInstance) -> list[int]:
+    """实例只按已冻结的配置解释；空列表表示没有随访节点。"""
+    return snapshot_fulfillment_config(instance.fulfillment_config, instance.service_days, legacy=True)["followup_days"]
+
+
 def followup_days() -> list[int]:
     raw = settings.STEWARD_FOLLOWUP_DAYS or ""
     days: list[int] = []
@@ -152,14 +179,20 @@ def user_actor_name(user: User) -> str:
 
 async def _create_instance_for_entitlement(
     db: AsyncSession, ent: MpEntitlement
-) -> StewardServiceInstance:
-    """为一份 active 权益创建 preparing 实例与九项门禁行；UNIQUE 兜底幂等。
+) -> StewardServiceInstance | None:
+    """为一份 active 权益创建 preparing 实例与门禁行；UNIQUE 兜底幂等；不适用商品返回 None。
 
+    F03：只有商品版本 fulfillment_type='steward' 才进入履约；服务期与履约模板取版本快照
+    （普通商品 30 天服务包不会再生成 45 天管家实例）。
     renewed_from_instance_id 不做自动推断：普通再次购买与显式续期是两个业务事实，
     续期链仅由后续显式续期动作写入（A3 复核修正，防误标）。
     """
     from app.services.commerce_service import gen_no
 
+    version = await db.get(MpPackageVersion, ent.package_version_id)
+    if version is None or version.fulfillment_type != "steward":
+        return None
+    service_days = version.service_days or settings.STEWARD_SERVICE_DAYS
     instance = StewardServiceInstance(
         instance_no=gen_no("SL"),
         entitlement_id=ent.id,
@@ -170,7 +203,8 @@ async def _create_instance_for_entitlement(
         version_no=ent.version_no,
         benefits=ent.benefits or [],
         validity_days=ent.validity_days,
-        service_days=settings.STEWARD_SERVICE_DAYS,
+        service_days=service_days,
+        fulfillment_config=snapshot_fulfillment_config(version.fulfillment_config, service_days, legacy=True),
         status=StewardInstanceStatus.PREPARING.value,
     )
     db.add(instance)
@@ -197,7 +231,11 @@ async def _create_instance_for_entitlement(
             instance_id=instance.id,
             user_id=instance.user_id,
             event_type="instance_created",
-            detail={"entitlement_id": ent.id, "service_days": instance.service_days},
+            detail={
+                "entitlement_id": ent.id,
+                "service_days": instance.service_days,
+                "fulfillment_config": instance.fulfillment_config,
+            },
         )
     )
     await db.commit()
@@ -340,6 +378,8 @@ async def ensure_instances_for_user(db: AsyncSession, user: User) -> list[Stewar
             if ent.status != EntitlementStatus.ACTIVE.value:
                 continue
             instance = await _create_instance_for_entitlement(db, ent)
+            if instance is None:  # 普通商品（不进入履约）不建实例
+                continue
         instances.append(await lazy_transition(db, instance))
     return instances
 
@@ -399,19 +439,21 @@ async def _matched_consent(
 
 
 async def valid_care_plan(
-    db: AsyncSession, user_id: int, physician_id: int | None
+    db: AsyncSession, user_id: int, physician_id: int | None, *, trusted_only: bool = True
 ) -> StewardCarePlan | None:
-    """本人最新有效签发计划；physician_id 给出时须与签发医师一致。"""
-    stmt = (
-        select(StewardCarePlan)
-        .where(
-            StewardCarePlan.user_id == user_id,
-            StewardCarePlan.revoked_at.is_(None),
-            (StewardCarePlan.valid_until.is_(None)) | (StewardCarePlan.valid_until >= now_utc()),
-        )
-        .order_by(StewardCarePlan.id.desc())
-        .limit(1)
-    )
+    """本人最新有效签发计划；physician_id 给出时须与签发医师一致。
+
+    C3：默认只认可信来源（医师本人签发 / 外部凭据已核验）；运营录入（ops_entry）不能
+    作为激活门禁或医学判断类工单的依据。trusted_only=False 仅供展示 / 诊断。
+    """
+    conditions = [
+        StewardCarePlan.user_id == user_id,
+        StewardCarePlan.revoked_at.is_(None),
+        (StewardCarePlan.valid_until.is_(None)) | (StewardCarePlan.valid_until >= now_utc()),
+    ]
+    if trusted_only:
+        conditions.append(StewardCarePlan.issue_source.in_(TRUSTED_PLAN_SOURCES))
+    stmt = select(StewardCarePlan).where(*conditions).order_by(StewardCarePlan.id.desc()).limit(1)
     plan = (await db.execute(stmt)).scalar_one_or_none()
     if plan is None:
         return None
@@ -473,14 +515,20 @@ async def _auto_check_states(
         states[PrepCheckType.PHYSICIAN_PLAN.value] = None
     elif instance.physician_id is None:
         states[PrepCheckType.PHYSICIAN_PLAN.value] = "未指派签约医师，无法核验签发计划"
+    elif await valid_care_plan(db, instance.user_id, instance.physician_id, trusted_only=False) is not None:
+        states[PrepCheckType.PHYSICIAN_PLAN.value] = (
+            "签发计划仅为运营录入，须医师本人账号签发或补外部签发凭据并核验后方可激活"
+        )
     else:
         states[PrepCheckType.PHYSICIAN_PLAN.value] = "医师初评签发计划缺失、已撤销或与签约医师不一致"
 
     staffing_missing = []
-    for field, role_label in (
-        ("butler_id", "负责管家"),
-        ("backup_butler_id", "替补管家"),
-        ("physician_id", "签约医师"),
+    today = sh_today()
+    now = now_utc()
+    for field, role_label, needs_schedule in (
+        ("butler_id", "负责管家", True),
+        ("backup_butler_id", "替补管家", True),
+        ("physician_id", "签约医师", False),
     ):
         staff_id = getattr(instance, field)
         if staff_id is None:
@@ -489,6 +537,12 @@ async def _auto_check_states(
         staff = await db.get(StewardStaff, staff_id)
         if staff is None or staff.status != "active":
             staffing_missing.append(f"{role_label}不可用")
+            continue
+        # C2：资质须已核验且未撤销 / 未到期；管家两岗须在当日有有效排班（不以"已指派"代替）
+        if not staff.credential_valid(now):
+            staffing_missing.append(f"{role_label}资质未核验、已撤销或已到期")
+        if needs_schedule and not await staff_on_duty(db, staff.id, today):
+            staffing_missing.append(f"{role_label}当日无有效排班")
     if instance.butler_id is not None and instance.butler_id == instance.backup_butler_id:
         staffing_missing.append("负责管家与替补不能为同一人")
     states[PrepCheckType.STAFFING_READY.value] = (
@@ -684,6 +738,19 @@ async def activate_instance(
             physician_id=instance.physician_id,
             service_started_at=activated,
             service_ends_at=ends_at,
+            plan_id=plan.id,
+            plan_issue_source=plan.issue_source,
+            responsibility_snapshot={
+                "plan": {
+                    "id": plan.id, "issue_source": plan.issue_source, "physician_id": plan.physician_id,
+                    "created_by_admin_id": plan.created_by_admin_id,
+                    "verified_by_admin_id": plan.verified_by_admin_id,
+                },
+                "manual_checks": {
+                    row.check_type: {"completed_by_admin_id": row.completed_by_admin_id}
+                    for row in checks if row.source == PrepCheckSource.MANUAL.value
+                },
+            },
         )
     )
     await generate_calendar(db, instance)
@@ -742,7 +809,7 @@ def build_task_specs(instance: StewardServiceInstance) -> list[dict]:
         spec(day, "daily", f"第 {day} 天 · 日常记录与计划执行", "user")
         for day in range(1, service_days + 1)
     ]
-    for fd in followup_days():
+    for fd in instance_followup_days(instance):
         if fd <= service_days:
             specs.append(
                 spec(fd, "follow_up", f"第 {fd} 天 · 管家随访", "butler", butler_id=instance.butler_id)
@@ -980,14 +1047,34 @@ async def record_task_result(
         raise HTTPException(
             status_code=422, detail="登记未来日期任务须提供实际发生时间与补录原因"
         )
-    task.status = StewardTaskStatus.DONE.value
-    task.result = result
-    task.completed_at = now_utc()
-    task.completed_by_admin_id = admin.id
-    if is_backfill:
-        task.actual_occurred_at = actual_occurred_at
-        task.backfill_reason = backfill_reason
     instance = await db.get(StewardServiceInstance, task.instance_id)
+    signature = None
+    if task.task_type == "final_review":
+        from app.services import professional_service
+
+        physician = await professional_service.require_physician_identity(
+            db, admin, instance.physician_id, action="完成期末复评"
+        )
+        await professional_service.guard_physician_authorization(db, physician.id, admin.id)
+        # 锁住当前指派关系，避免核验后改派导致旧医师继续签发。
+        locked = await db.execute(update(StewardServiceInstance).where(
+            StewardServiceInstance.id == instance.id,
+            StewardServiceInstance.physician_id == physician.id,
+        ).values(physician_id=StewardServiceInstance.physician_id))
+        if locked.rowcount != 1:
+            raise HTTPException(status_code=409, detail="实例医师已改派，请刷新后重试")
+        signature = professional_service.physician_signature(physician, admin)
+    values = {"status": StewardTaskStatus.DONE.value, "result": result,
+              "completed_at": now_utc(), "completed_by_admin_id": admin.id}
+    if signature is not None:
+        values["physician_id"] = signature["physician_id"]
+    if is_backfill:
+        values.update(actual_occurred_at=actual_occurred_at, backfill_reason=backfill_reason)
+    saved = await db.execute(update(StewardTask).where(
+        StewardTask.id == task.id, StewardTask.status == StewardTaskStatus.PENDING.value,
+    ).values(**values))
+    if saved.rowcount != 1:
+        raise HTTPException(status_code=409, detail="该任务已有结果，更正不覆盖原记录")
     if instance is not None:
         await add_timeline(
             db,
@@ -1001,6 +1088,7 @@ async def record_task_result(
                 "task_type": task.task_type,
                 "service_day": task.service_day,
                 "backfill": is_backfill,
+                "physician_signature": signature,
             },
         )
     await audit(
@@ -1355,11 +1443,45 @@ async def close_instance(
         raise HTTPException(status_code=409, detail="期末复评未完成，不能结案")
     if await _open_high_priority_tickets(db, instance.id) > 0:
         raise HTTPException(status_code=409, detail="存在未结高优先级医师工单，须处理或明确转交后才能结案")
+    from app.services import professional_service
+
+    physician = await professional_service.require_physician_identity(db, admin, instance.physician_id, action="签发结案报告")
+    await professional_service.guard_physician_authorization(db, physician.id, admin.id)
+    signatures = (await db.execute(select(StewardTimelineEvent.detail).where(
+        StewardTimelineEvent.instance_id == instance.id,
+        StewardTimelineEvent.event_type == "task_completed",
+        StewardTimelineEvent.detail["task_id"].as_integer() == final_review.id,
+    ))).scalars().all()
+    signed_task = final_review.physician_id == physician.id and any(
+        (d.get("physician_signature") or {}).get("physician_id") == physician.id
+        and (d.get("physician_signature") or {}).get("admin_id") == final_review.completed_by_admin_id
+        for d in signatures
+    )
+    # 存量运营复评或改派后的复核走现有专业工单，追加签发而不覆盖原任务结果。
+    reviews = (await db.execute(select(StewardProfessionalOrder).where(
+        StewardProfessionalOrder.instance_id == instance.id,
+        StewardProfessionalOrder.task_id == final_review.id,
+        StewardProfessionalOrder.order_type == "final_review",
+        StewardProfessionalOrder.status == "done",
+        StewardProfessionalOrder.physician_id == physician.id,
+    ))).scalars().all()
+    review_signatures = (await db.execute(select(StewardProfessionalEvent).where(
+        StewardProfessionalEvent.order_id.in_([r.id for r in reviews]),
+        StewardProfessionalEvent.action == "completed",
+    ))).scalars().all()
+    signed_review = any(
+        ((event.detail or {}).get("physician_signature") or {}).get("physician_id") == physician.id
+        and ((event.detail or {}).get("physician_signature") or {}).get("admin_id") == event.actor_admin_id
+        for event in review_signatures
+    )
+    if not signed_task and not signed_review:
+        raise HTTPException(status_code=409, detail="期末复评缺少当前医师的可信签发记录，须追加期末复评专业工单并由当前医师完成")
     result = await db.execute(
         update(StewardServiceInstance)
         .where(
             StewardServiceInstance.id == instance.id,
             StewardServiceInstance.status == StewardInstanceStatus.EXPIRED.value,
+            StewardServiceInstance.physician_id == physician.id,
         )
         .values(
             status=StewardInstanceStatus.CLOSED.value,
@@ -1373,7 +1495,7 @@ async def close_instance(
     # 切片 D：结案同事务生成版本化报告 v1（服务数据摘要 + 高优先级转交依据）
     from app.services import professional_service
 
-    await professional_service.create_closure_report(db, instance, closure_report)
+    await professional_service.create_closure_report(db, admin, instance, closure_report)
     await add_timeline(
         db,
         instance,
@@ -1631,6 +1753,22 @@ async def create_care_plan(
         from app.services import professional_service
 
         await professional_service.validate_rules_version(db, payload["org_name"], rules_version)
+    # C3 签发来源：录入账号绑定该医师 → 医师本人签发；带外部签发材料 → 由当前账号核验为
+    # external_verified（核验责任人留痕）；否则只是运营录入，不能进门禁 / 医学工单
+    from app.services import professional_service
+
+    evidence = payload.get("external_evidence") or None
+    if await professional_service.admin_bound_to_physician(db, admin.id, physician.id):
+        await professional_service.require_physician_identity(db, admin, physician.id, action="签发计划")
+        await professional_service.guard_physician_authorization(db, physician.id, admin.id)
+        issue_source = PLAN_SOURCE_PHYSICIAN
+    elif evidence:
+        if not physician.credential_valid(now_utc()):
+            raise HTTPException(status_code=403, detail="签发医师资质无效，不能核验可信计划")
+        await professional_service.guard_physician_authorization(db, physician.id)
+        issue_source = PLAN_SOURCE_EXTERNAL
+    else:
+        issue_source = PLAN_SOURCE_OPS
     plan = StewardCarePlan(
         user_id=payload["user_id"],
         physician_id=payload["physician_id"],
@@ -1639,6 +1777,11 @@ async def create_care_plan(
         content=payload.get("content") or {},
         rules_version=rules_version,
         valid_until=payload.get("valid_until"),
+        issue_source=issue_source,
+        evidence_ref=(evidence or {}).get("evidence_ref"),
+        evidence_source=(evidence or {}).get("evidence_source"),
+        verified_by_admin_id=admin.id if issue_source == PLAN_SOURCE_EXTERNAL else None,
+        verified_at=now_utc() if issue_source == PLAN_SOURCE_EXTERNAL else None,
         created_by_admin_id=admin.id,
     )
     db.add(plan)
@@ -1655,6 +1798,8 @@ async def create_care_plan(
     ).scalar_one_or_none()
     if preparing is not None and preparing.physician_id == payload["physician_id"]:
         plan.instance_id = preparing.id
+    if issue_source != PLAN_SOURCE_OPS:
+        professional_service.validate_physician_signer(physician)
     try:
         await db.flush()
     except IntegrityError:
@@ -1675,9 +1820,49 @@ async def create_care_plan(
         action="steward.careplan.create",
         resource_type="steward_care_plan",
         resource_id=plan.id,
-        detail={"user_id": plan.user_id, "version": plan.version, "physician_id": plan.physician_id},
+        detail={"user_id": plan.user_id, "version": plan.version, "physician_id": plan.physician_id,
+                "issue_source": plan.issue_source, "evidence_source": plan.evidence_source},
         actor_id=admin.id,
         actor_name=admin.name,
+    )
+    await db.commit()
+    await db.refresh(plan)
+    return plan
+
+
+async def verify_care_plan(
+    db: AsyncSession, admin, plan: StewardCarePlan, evidence_ref: str, evidence_source: str, note: str | None
+) -> StewardCarePlan:
+    """为运营录入的计划补外部签发材料并核验（C3）：来源升级为 external_verified，核验责任人留痕。
+    医师本人签发的计划无需核验（409）；已撤销计划不能核验（409）。"""
+    if plan.revoked_at is not None:
+        raise HTTPException(status_code=409, detail="已撤销的签发计划不能核验")
+    if plan.issue_source == PLAN_SOURCE_PHYSICIAN:
+        raise HTTPException(status_code=409, detail="医师本人签发的计划无需外部核验")
+    physician = await db.get(StewardStaff, plan.physician_id)
+    if physician is None or physician.status != "active":
+        raise HTTPException(status_code=422, detail="签发医师已停用，不能核验其计划；请改派后重新签发")
+    if physician.role != "physician" or not physician.credential_valid(now_utc()):
+        raise HTTPException(status_code=403, detail="签发医师资质无效，不能核验其计划")
+    from app.services import professional_service
+
+    await professional_service.guard_physician_authorization(db, physician.id)
+    plan.issue_source = PLAN_SOURCE_EXTERNAL
+    plan.evidence_ref = evidence_ref
+    plan.evidence_source = evidence_source
+    plan.verified_by_admin_id = admin.id
+    plan.verified_at = now_utc()
+    if plan.instance_id is not None:
+        instance = await db.get(StewardServiceInstance, plan.instance_id)
+        if instance is not None:
+            await add_timeline(
+                db, instance, "care_plan_verified", actor_type="admin", actor_id=admin.id,
+                actor_name=admin.name, detail={"plan_id": plan.id, "evidence_source": evidence_source},
+            )
+    await audit(
+        db, action="steward.careplan.verify", resource_type="steward_care_plan", resource_id=plan.id,
+        detail={"evidence_source": evidence_source, "note": note},
+        actor_id=admin.id, actor_name=admin.name,
     )
     await db.commit()
     await db.refresh(plan)
@@ -1705,10 +1890,14 @@ async def revoke_care_plan(
     return plan
 
 
-async def list_care_plans(db: AsyncSession, user_id: int | None) -> list[StewardCarePlan]:
+async def list_care_plans(
+    db: AsyncSession, user_id: int | None, extra_where=None
+) -> list[StewardCarePlan]:
     stmt = select(StewardCarePlan).order_by(StewardCarePlan.id.desc())
     if user_id:
         stmt = stmt.where(StewardCarePlan.user_id == user_id)
+    if extra_where is not None:
+        stmt = stmt.where(extra_where)
     return list((await db.execute(stmt)).scalars().all())
 
 
@@ -1858,12 +2047,111 @@ async def create_staff(db: AsyncSession, admin, payload: dict) -> StewardStaff:
     return staff
 
 
+async def staff_on_duty(db: AsyncSession, staff_id: int, day: date) -> bool:
+    """当日有效排班：active 且 starts_on ≤ day ≤ ends_on（ends_on 为空视为长期）。"""
+    hit = (
+        await db.execute(
+            select(StewardStaffSchedule.id)
+            .where(
+                StewardStaffSchedule.staff_id == staff_id,
+                StewardStaffSchedule.status == "active",
+                StewardStaffSchedule.starts_on <= day,
+                (StewardStaffSchedule.ends_on.is_(None)) | (StewardStaffSchedule.ends_on >= day),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return hit is not None
+
+
+async def verify_staff_credential(
+    db: AsyncSession, admin, staff: StewardStaff, *, credential_ref: str, credential_source: str,
+    valid_until: datetime | None, service_scope: str | None,
+) -> StewardStaff:
+    """资质核验（C2）：记录私有材料引用、来源、核验责任人与时间、有效期；重复核验覆盖并清除撤销。"""
+    if staff.status != "active":
+        raise HTTPException(status_code=422, detail="已停用人员不能核验资质")
+    if valid_until is not None and as_utc(valid_until) <= now_utc():
+        raise HTTPException(status_code=422, detail="资质有效期须晚于当前时间")
+    staff.credential_ref = credential_ref
+    staff.credential_source = credential_source
+    staff.credential_verified_by_admin_id = admin.id
+    staff.credential_verified_at = now_utc()
+    staff.credential_valid_until = valid_until
+    staff.credential_revoked_at = None
+    staff.credential_revoke_reason = None
+    if service_scope is not None:
+        staff.service_scope = service_scope
+    await audit(
+        db, action="steward.staff.credential_verify", resource_type="steward_staff", resource_id=staff.id,
+        detail={"credential_source": credential_source, "valid_until": valid_until.isoformat() if valid_until else None,
+                "service_scope": service_scope},
+        actor_id=admin.id, actor_name=admin.name,
+    )
+    await db.commit()
+    await db.refresh(staff)
+    return staff
+
+
+async def revoke_staff_credential(db: AsyncSession, admin, staff: StewardStaff, reason: str) -> StewardStaff:
+    """撤销资质：门禁在下一次读取即重判；已激活实例不回改（历史留痕），待运营改派。"""
+    if staff.credential_verified_at is None:
+        raise HTTPException(status_code=409, detail="该人员尚无已核验资质")
+    if staff.credential_revoked_at is not None:
+        raise HTTPException(status_code=409, detail="资质已撤销")
+    staff.credential_revoked_at = now_utc()
+    staff.credential_revoke_reason = reason
+    await audit(
+        db, action="steward.staff.credential_revoke", resource_type="steward_staff", resource_id=staff.id,
+        detail={"reason": reason}, actor_id=admin.id, actor_name=admin.name,
+    )
+    await db.commit()
+    await db.refresh(staff)
+    return staff
+
+
+async def create_schedule(
+    db: AsyncSession, admin, staff: StewardStaff, *, starts_on: date, ends_on: date | None, note: str | None
+) -> StewardStaffSchedule:
+    if staff.status != "active":
+        raise HTTPException(status_code=422, detail="已停用人员不能排班")
+    if ends_on is not None and ends_on < starts_on:
+        raise HTTPException(status_code=422, detail="排班结束日不能早于开始日")
+    schedule = StewardStaffSchedule(
+        staff_id=staff.id, starts_on=starts_on, ends_on=ends_on, note=note, created_by_admin_id=admin.id
+    )
+    db.add(schedule)
+    await db.flush()
+    await audit(
+        db, action="steward.schedule.create", resource_type="steward_staff_schedule", resource_id=schedule.id,
+        detail={"staff_id": staff.id, "starts_on": starts_on.isoformat(), "ends_on": ends_on.isoformat() if ends_on else None},
+        actor_id=admin.id, actor_name=admin.name,
+    )
+    await db.commit()
+    await db.refresh(schedule)
+    return schedule
+
+
+async def cancel_schedule(db: AsyncSession, admin, schedule: StewardStaffSchedule, reason: str) -> StewardStaffSchedule:
+    result = await db.execute(
+        update(StewardStaffSchedule)
+        .where(StewardStaffSchedule.id == schedule.id, StewardStaffSchedule.status == "active")
+        .values(status="cancelled", cancelled_at=now_utc(), cancel_reason=reason)
+    )
+    if result.rowcount != 1:
+        raise HTTPException(status_code=409, detail="排班已取消")
+    await audit(
+        db, action="steward.schedule.cancel", resource_type="steward_staff_schedule", resource_id=schedule.id,
+        detail={"staff_id": schedule.staff_id, "reason": reason}, actor_id=admin.id, actor_name=admin.name,
+    )
+    await db.commit()
+    await db.refresh(schedule)
+    return schedule
+
+
 async def update_staff(db: AsyncSession, admin, staff: StewardStaff, payload: dict) -> StewardStaff:
-    if (
-        payload.get("status") == "inactive"
-        and staff.status == "active"
-        and staff.role == "butler"
-    ):
+    deactivating = payload.get("status") == "inactive" and staff.status == "active"
+    if deactivating and staff.role == "butler":
         from app.services import outreach_service
 
         open_count = await outreach_service.open_intent_count_for_staff(db, staff.id)
@@ -1872,14 +2160,50 @@ async def update_staff(db: AsyncSession, admin, staff: StewardStaff, payload: di
                 status_code=409,
                 detail=f"该管家名下仍有 {open_count} 条未完成触达待办，须先完成触达交接再停用",
             )
+    if deactivating and staff.role == "physician":
+        # F04：停用前未结专业工单须显式转交给在职医师（转交留 from/to/reason 痕迹），
+        # 不自动替医师选择接收人；历史签发记录（已完成工单 / 报告 / 计划）全部保留。
+        from app.services import professional_service
+
+        open_orders = await professional_service.open_order_count_for_physician(db, staff.id)
+        if open_orders > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"该医师名下仍有 {open_orders} 条未结专业工单，须先转交给在职医师再停用",
+            )
+    assigned_open_instances = 0
+    if deactivating:
+        assigned_open_instances = int(
+            (
+                await db.execute(
+                    select(func.count())
+                    .select_from(StewardServiceInstance)
+                    .where(
+                        or_(
+                            StewardServiceInstance.butler_id == staff.id,
+                            StewardServiceInstance.backup_butler_id == staff.id,
+                            StewardServiceInstance.physician_id == staff.id,
+                        ),
+                        StewardServiceInstance.status.notin_(
+                            [StewardInstanceStatus.CLOSED.value, StewardInstanceStatus.TERMINATED.value]
+                        ),
+                    )
+                )
+            ).scalar()
+            or 0
+        )
     for field, value in payload.items():
         setattr(staff, field, value)
+    detail = dict(payload)
+    if deactivating:
+        # 停用即失权（范围按当前指派 × 在职实时计算）；仍挂在未结实例上的指派留待运营重判与改派
+        detail["assigned_open_instances"] = assigned_open_instances
     await audit(
         db,
         action="steward.staff.update",
         resource_type="steward_staff",
         resource_id=staff.id,
-        detail=payload,
+        detail=detail,
         actor_id=admin.id,
         actor_name=admin.name,
     )

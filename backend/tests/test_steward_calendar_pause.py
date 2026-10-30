@@ -506,6 +506,8 @@ async def test_expiry_close_and_backfill(client):
     """到期懒迁移 expired；未来复评任务登记须补录字段；结案后 closed。"""
     ctx = await activate(client)
     a, u = ctx["admin"], ctx["user"]
+    from tests.test_physician_identity_chain import _bind, _admin_id
+    link_id = await _bind(client, ctx["admin"], ctx["staff"]["physician"]["id"], await _admin_id(client))
     instance_id = ctx["instance"]["id"]
 
     async with client.session_factory() as session:  # type: ignore[attr-defined]

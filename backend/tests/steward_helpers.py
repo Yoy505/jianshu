@@ -6,7 +6,7 @@
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date as _date, timedelta as _timedelta, datetime, timezone
 
 import httpx
 import pytest_asyncio
@@ -110,7 +110,9 @@ async def claim_entitlement(client: httpx.AsyncClient, ent_id: int) -> dict:
     return resp.json()
 
 
-async def create_staff(client: httpx.AsyncClient, a_headers: dict, role: str, name: str) -> dict:
+async def create_staff(
+    client: httpx.AsyncClient, a_headers: dict, role: str, name: str, *, ready: bool = True
+) -> dict:
     resp = await client.post(
         f"{API}/admin/steward/staff",
         json={
@@ -124,7 +126,22 @@ async def create_staff(client: httpx.AsyncClient, a_headers: dict, role: str, na
         headers=a_headers,
     )
     assert resp.status_code == 201, resp.text
-    return resp.json()
+    staff = resp.json()
+    if ready:
+        # C2：默认把人员做成"可上岗"事实——资质已核验 + 自今日起长期排班；用例可传 ready=False 测缺项
+        resp = await client.post(
+            f"{API}/admin/steward/staff/{staff['id']}/credential/verify",
+            json={"credential_ref": f"private://credentials/{staff['id']}.pdf", "credential_source": "机构核验件（测试）"},
+            headers=a_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        resp = await client.post(
+            f"{API}/admin/steward/staff/{staff['id']}/schedules",
+            json={"starts_on": (_date.today() - _timedelta(days=1)).isoformat()}, headers=a_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        return {**staff, "credential_valid": True}
+    return staff
 
 
 async def create_pilot_release(client: httpx.AsyncClient, a: dict, pkg: dict) -> dict:
@@ -209,11 +226,15 @@ async def full_setup(
                 "version": "v1",
                 "org_name": "杏临汇签约服务机构",
                 "content": {"sleep_window": "23:00-07:00", "followup_focus": "睡眠效率"},
+                # C3：测试 admin 未绑定医师，以外部签发材料核验为可信来源（external_verified）
+                "external_evidence": {"evidence_ref": "private://care-plans/test-v1.pdf",
+                                      "evidence_source": "机构签发件（测试）"},
             },
             headers=a,
         )
         assert resp.status_code == 201, resp.text
         care_plan = resp.json()
+        assert care_plan["issue_source"] == "external_verified" and care_plan["trusted"] is True
 
     release = None
     if with_release:
@@ -327,10 +348,22 @@ async def file_db_steward(tmp_path):
         )
         session.add(entitlement)
         await session.flush()
-        butler = StewardStaff(name="管家甲", role="butler", status="active")
-        backup = StewardStaff(name="管家乙", role="butler", status="active")
-        physician = StewardStaff(name="医师丙", role="physician", status="active")
+        from datetime import datetime as _dt, timezone as _tz
+
+        from app.models import StewardStaffSchedule
+
+        _verified = dict(credential_verified_at=_dt.now(_tz.utc), credential_source="机构核验件（并发测试）",
+                         credential_ref="private://credentials/concurrent.pdf")
+        butler = StewardStaff(name="管家甲", role="butler", status="active", **_verified)
+        backup = StewardStaff(name="管家乙", role="butler", status="active", **_verified)
+        physician = StewardStaff(name="医师丙", role="physician", status="active", **_verified)
         session.add_all([butler, backup, physician])
+        await session.flush()
+        # C2：管家两岗自今日起长期排班（医师不要求排班）
+        session.add_all([
+            StewardStaffSchedule(staff_id=butler.id, starts_on=_date.today() - _timedelta(days=1)),
+            StewardStaffSchedule(staff_id=backup.id, starts_on=_date.today() - _timedelta(days=1)),
+        ])
         await session.flush()
         instance = StewardServiceInstance(
             instance_no="SLCONC0001", entitlement_id=entitlement.id, user_id=1,
@@ -379,7 +412,8 @@ async def file_db_steward(tmp_path):
                                 title="厂商数据条款", text="并发条款", status="active"),
             StewardCarePlan(user_id=1, physician_id=physician.id,
                             org_name="并发机构", version="v1",
-                            content={"plan": "concurrent"}),
+                            content={"plan": "concurrent"},
+                            issue_source="external_verified", evidence_source="机构签发件（并发测试）"),
             StewardPilotRelease(package_id=package.id, package_version_id=version.id,
                                 env=settings.APP_ENV, owner_name="并发放行人",
                                 evidence=[{"item": "contract_attachment", "source": "s", "reference": "r"}]),

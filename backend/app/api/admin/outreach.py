@@ -29,6 +29,7 @@ from app.schemas.outreach import (
     SummaryOut,
 )
 from app.services import outreach_service as svc
+from app.services import scope_service as scope_svc
 from app.services import steward_service
 
 router = APIRouter(prefix="/admin/outreach", tags=["admin-outreach"])
@@ -98,6 +99,19 @@ def _attempt_out(log: OutreachAttempt):
     )
 
 
+async def _guard_intent(
+    db: AsyncSession, admin, intent_id: int, *, audit_cross_scope: bool = False
+) -> OutreachIntent:
+    """意图入口：404 → 所属实例范围校验（F02）。操作类不重复记跨范围审计（操作本身有审计）。"""
+    intent = await db.get(OutreachIntent, intent_id)
+    if intent is None:
+        raise HTTPException(status_code=404, detail="触达意图不存在")
+    await scope_svc.require_instance_access(
+        db, admin, intent.instance_id, audit_cross_scope=audit_cross_scope
+    )
+    return intent
+
+
 @router.get("/intents", response_model=Page[IntentOut])
 async def list_intents(
     status: str | None = Query(default=None, max_length=16),
@@ -110,7 +124,8 @@ async def list_intents(
     db: AsyncSession = Depends(get_db),
 ) -> Page[IntentOut]:
     page, page_size = pagination
-    filters = []
+    scope = await scope_svc.load_scope(db, admin)
+    filters = [scope_svc.instance_predicate(scope, OutreachIntent.instance_id)]
     if status:
         filters.append(OutreachIntent.status == status)
     if instance_id:
@@ -167,9 +182,7 @@ async def intent_detail(
     admin=Depends(require_permission("outreach.read")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
-    intent = await db.get(OutreachIntent, intent_id)
-    if intent is None:
-        raise HTTPException(status_code=404, detail="触达意图不存在")
+    intent = await _guard_intent(db, admin, intent_id, audit_cross_scope=True)
     return await _intent_detail(db, intent)
 
 
@@ -180,6 +193,7 @@ async def route_manual(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.route_manual(db, admin, intent_id, payload.assignee_staff_id, payload.note)
     return await _intent_detail(db, intent)
 
@@ -191,6 +205,7 @@ async def assign_intent(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.assign(db, admin, intent_id, payload.assignee_staff_id, payload.note)
     return await _intent_detail(db, intent)
 
@@ -202,6 +217,7 @@ async def release_intent(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.release(db, admin, intent_id, payload.reason)
     return await _intent_detail(db, intent)
 
@@ -213,6 +229,7 @@ async def submit_intent(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.submit_result(
         db, admin, intent_id, payload.contact_method, payload.outcome, payload.note
     )
@@ -226,6 +243,7 @@ async def confirm_intent(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.confirm(db, admin, intent_id, payload.note)
     return await _intent_detail(db, intent)
 
@@ -237,6 +255,7 @@ async def reject_intent(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.reject(db, admin, intent_id, payload.reason)
     return await _intent_detail(db, intent)
 
@@ -248,6 +267,7 @@ async def cancel_intent(
     admin=Depends(require_permission("outreach.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> IntentDetailOut:
+    await _guard_intent(db, admin, intent_id)
     intent = await svc.cancel_intent(db, admin, intent_id, payload.reason)
     return await _intent_detail(db, intent)
 
@@ -271,10 +291,14 @@ async def summary(
     db: AsyncSession = Depends(get_db),
 ) -> SummaryOut:
     day = date_param or steward_service.sh_today()
+    scope = await scope_svc.load_scope(db, admin)
     rows = (
         await db.execute(
             select(OutreachIntent.status, func.count())
-            .where(OutreachIntent.service_date == day)
+            .where(
+                OutreachIntent.service_date == day,
+                scope_svc.instance_predicate(scope, OutreachIntent.instance_id),
+            )
             .group_by(OutreachIntent.status)
         )
     ).all()

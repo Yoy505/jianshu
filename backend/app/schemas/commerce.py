@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.common import Page, UTCDateTime
 
@@ -48,6 +48,8 @@ class PackageSummaryOut(BaseModel):
     price_cents: int
     points_cost: int | None
     validity_days: int
+    fulfillment_type: str
+    service_days: int | None
     benefit_count: int
     purchasable: Purchasable
 
@@ -237,6 +239,25 @@ class PackagePatchIn(BaseModel):
     sort: int | None = Field(default=None, ge=0, le=9999)
 
 
+FulfillmentType = Literal["none", "steward"]
+
+
+class FulfillmentConfigIn(BaseModel):
+    """履约模板配置快照（F03）：模板版本 + 随访节点（服务日序号，严格递增且不超过服务期）。"""
+
+    template_version: str | None = Field(default=None, min_length=1, max_length=32)
+    followup_days: list[int] | None = Field(default=None, max_length=60)
+
+    @field_validator("followup_days")
+    @classmethod
+    def _increasing(cls, value: list[int] | None) -> list[int] | None:
+        if value is None:
+            return None
+        if any(d < 1 for d in value) or any(b <= a for a, b in zip(value, value[1:])):
+            raise ValueError("随访节点须为 ≥1 且严格递增的服务日序号")
+        return value
+
+
 class VersionCreateIn(BaseModel):
     price_cents: int = Field(gt=0, le=100_000_000)
     points_cost: int | None = Field(default=None, gt=0, le=100_000_000)
@@ -244,6 +265,11 @@ class VersionCreateIn(BaseModel):
     benefits: list[BenefitItem] = Field(min_length=1, max_length=20)
     service_desc: str = Field(min_length=1, max_length=5000)
     terms: str = Field(min_length=1, max_length=5000)
+    # 履约配置（F03）：默认普通商品不建实例；steward 可不传 service_days，由服务端以
+    # STEWARD_SERVICE_DAYS 作受控默认写入版本快照
+    fulfillment_type: FulfillmentType = "none"
+    service_days: int | None = Field(default=None, ge=1, le=365)
+    fulfillment_config: FulfillmentConfigIn | None = None
 
     @field_validator("service_desc", "terms")
     @classmethod
@@ -252,6 +278,16 @@ class VersionCreateIn(BaseModel):
         if not stripped:
             raise ValueError("内容不能为空白")
         return stripped
+
+    @model_validator(mode="after")
+    def _fulfillment_consistent(self):
+        if self.fulfillment_type == "none":
+            if self.service_days is not None or self.fulfillment_config is not None:
+                raise ValueError("普通商品（fulfillment_type=none）不能设置服务期或履约模板")
+        elif self.fulfillment_config and self.fulfillment_config.followup_days and self.service_days:
+            if max(self.fulfillment_config.followup_days) > self.service_days:
+                raise ValueError("随访节点不能超过服务期")
+        return self
 
 
 class ShelfIn(BaseModel):
@@ -268,6 +304,9 @@ class VersionOut(BaseModel):
     benefits: list[BenefitItem]
     service_desc: str
     terms: str
+    fulfillment_type: str
+    service_days: int | None
+    fulfillment_config: dict | None
     created_by: str | None
     created_at: UTCDateTime
 

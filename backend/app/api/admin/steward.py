@@ -45,6 +45,7 @@ from app.schemas.steward import (
     CarePlanCreateIn,
     CarePlanOut,
     CarePlanRevokeIn,
+    CarePlanVerifyIn,
     CloseIn,
     InstanceDetailOut,
     PauseIn,
@@ -56,7 +57,10 @@ from app.schemas.steward import (
     ReleaseOut,
     ReleaseRevokeIn,
     ResumeIn,
+    ScheduleCreateIn,
+    ScheduleOut,
     StaffCreateIn,
+    StaffCredentialVerifyIn,
     StaffOut,
     StaffRef,
     StaffUpdateIn,
@@ -67,6 +71,7 @@ from app.schemas.steward import (
     TimelineOut,
 )
 from app.services import professional_service as prof
+from app.services import scope_service as scope_svc
 from app.services import steward_service as svc
 
 router = APIRouter(prefix="/admin/steward", tags=["admin-steward"])
@@ -148,10 +153,8 @@ async def list_instances(
     db: AsyncSession = Depends(get_db),
 ) -> Page[InstanceDetailOut]:
     page, page_size = pagination
+    scope = await scope_svc.load_scope(db, admin)
     filters = []
-    scope_ids = await svc.admin_staff_scope(db, admin)
-    if scope_ids is not None:
-        filters.append(svc._instance_scope_condition(scope_ids))
     if status:
         filters.append(StewardServiceInstance.status == status)
     if q:
@@ -164,6 +167,7 @@ async def list_instances(
                 User.phone.like(like),
             )
         )
+    filters.append(scope_svc.instance_predicate(scope))
     count_stmt = select(func.count()).select_from(StewardServiceInstance).join(
         User, StewardServiceInstance.user_id == User.id
     )
@@ -195,7 +199,7 @@ async def instance_detail(
     admin=Depends(require_permission("steward.read")),
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id)
     data = await _instance_base(db, instance)
     checks = await svc.evaluate_prep_checks(db, instance)
     data["prep_checks"] = [
@@ -264,7 +268,7 @@ async def instance_calendar(
     admin=Depends(require_permission("steward.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[CalendarDayOut]:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     year, month_no = (int(part) for part in month.split("-"))
     days = await svc.calendar_month(db, instance, date(year, month_no, 1))
     return [
@@ -281,7 +285,7 @@ async def instance_timeline(
     admin=Depends(require_permission("steward.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[TimelineOut]:
-    await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     result = await db.execute(
         select(StewardTimelineEvent)
         .where(StewardTimelineEvent.instance_id == instance_id)
@@ -312,7 +316,7 @@ async def pass_check(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> PrepCheckOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     row = await svc.pass_prep_check(db, admin, instance, check_type, payload.evidence)
     return PrepCheckOut(
         check_type=row.check_type,
@@ -335,7 +339,7 @@ async def reset_check(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> PrepCheckOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     row = await svc.reset_prep_check(db, admin, instance, check_type, payload.reason)
     return PrepCheckOut(
         check_type=row.check_type,
@@ -355,7 +359,7 @@ async def assign(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     instance = await svc.assign_staff(
         db, admin, instance, payload.model_dump(exclude_unset=True)
     )
@@ -372,7 +376,7 @@ async def pause(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     instance = await svc.pause_instance(db, admin, instance, payload.cause, payload.reason)
     data = await _instance_base(db, instance)
     data["prep_checks"] = []
@@ -387,7 +391,7 @@ async def resume(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     instance = await svc.resume_instance(db, admin, instance, payload.note)
     data = await _instance_base(db, instance)
     data["prep_checks"] = []
@@ -402,7 +406,7 @@ async def close(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailOut:
-    instance = await svc.instance_for_admin_scoped(db, instance_id, await svc.admin_staff_scope(db, admin))
+    instance = await scope_svc.require_instance_access(db, admin, instance_id, audit_cross_scope=False)
     instance = await svc.close_instance(db, admin, instance, payload.closure_report)
     data = await _instance_base(db, instance)
     data["prep_checks"] = []
@@ -417,6 +421,10 @@ async def task_result(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> StewardTaskOut:
+    task = await db.get(StewardTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    await scope_svc.require_instance_access(db, admin, task.instance_id, audit_cross_scope=False)
     task = await svc.record_task_result(
         db, admin, task_id, payload.result, payload.actual_occurred_at, payload.backfill_reason
     )
@@ -529,6 +537,12 @@ def _care_plan_out(p) -> CarePlanOut:
         valid_until=p.valid_until,
         revoked_at=p.revoked_at,
         revoke_reason=p.revoke_reason,
+        issue_source=p.issue_source,
+        trusted=p.trusted,
+        evidence_source=p.evidence_source,
+        verified_by_admin_id=p.verified_by_admin_id,
+        verified_at=p.verified_at,
+        created_by_admin_id=p.created_by_admin_id,
         created_at=p.created_at,
     )
 
@@ -539,7 +553,11 @@ async def list_care_plans(
     admin=Depends(require_permission("steward.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[CarePlanOut]:
-    return [_care_plan_out(p) for p in await svc.list_care_plans(db, user_id)]
+    scope = await scope_svc.load_scope(db, admin)
+    plans = await svc.list_care_plans(
+        db, user_id, extra_where=scope_svc.user_predicate(scope, StewardCarePlan.user_id)
+    )
+    return [_care_plan_out(p) for p in plans]
 
 
 @router.post("/care-plans", response_model=CarePlanOut, status_code=201)
@@ -548,7 +566,24 @@ async def create_care_plan(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> CarePlanOut:
+    await scope_svc.require_user_access(db, admin, payload.user_id, audit_cross_scope=False)
     plan = await svc.create_care_plan(db, admin, payload.model_dump())
+    return _care_plan_out(plan)
+
+
+@router.post("/care-plans/{plan_id}/verify", response_model=CarePlanOut)
+async def verify_care_plan(
+    plan_id: int,
+    payload: CarePlanVerifyIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> CarePlanOut:
+    """为运营录入的计划补外部签发材料并核验（C3）；当前账号为核验责任人。"""
+    plan = await db.get(StewardCarePlan, plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="签发计划不存在")
+    await scope_svc.require_user_access(db, admin, plan.user_id, audit_cross_scope=False)
+    plan = await svc.verify_care_plan(db, admin, plan, payload.evidence_ref, payload.evidence_source, payload.note)
     return _care_plan_out(plan)
 
 
@@ -562,6 +597,7 @@ async def revoke_care_plan(
     plan = await db.get(StewardCarePlan, plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail="签发计划不存在")
+    await scope_svc.require_user_access(db, admin, plan.user_id, audit_cross_scope=False)
     plan = await svc.revoke_care_plan(db, admin, plan, payload.reason)
     return _care_plan_out(plan)
 
@@ -580,6 +616,14 @@ def _staff_out(staff: StewardStaff) -> StaffOut:
         license_no=staff.license_no,
         status=staff.status,
         note=staff.note,
+        service_scope=staff.service_scope,
+        credential_valid=staff.credential_valid(svc.now_utc()),
+        credential_source=staff.credential_source,
+        credential_verified_by_admin_id=staff.credential_verified_by_admin_id,
+        credential_verified_at=staff.credential_verified_at,
+        credential_valid_until=staff.credential_valid_until,
+        credential_revoked_at=staff.credential_revoked_at,
+        credential_revoke_reason=staff.credential_revoke_reason,
         created_at=staff.created_at,
     )
 
@@ -631,6 +675,94 @@ async def update_staff(
         raise HTTPException(status_code=404, detail="人员不存在")
     staff = await svc.update_staff(db, admin, staff, payload.model_dump(exclude_unset=True))
     return _staff_out(staff)
+
+
+async def _staff_or_404(db: AsyncSession, staff_id: int) -> StewardStaff:
+    staff = await db.get(StewardStaff, staff_id)
+    if staff is None:
+        raise HTTPException(status_code=404, detail="人员不存在")
+    return staff
+
+
+def _schedule_out(row) -> ScheduleOut:
+    return ScheduleOut(
+        id=row.id, staff_id=row.staff_id, starts_on=row.starts_on, ends_on=row.ends_on, status=row.status,
+        note=row.note, cancelled_at=row.cancelled_at, cancel_reason=row.cancel_reason, created_at=row.created_at,
+    )
+
+
+@router.post("/staff/{staff_id}/credential/verify", response_model=StaffOut)
+async def verify_staff_credential(
+    staff_id: int,
+    payload: StaffCredentialVerifyIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> StaffOut:
+    staff = await _staff_or_404(db, staff_id)
+    staff = await svc.verify_staff_credential(
+        db, admin, staff, credential_ref=payload.credential_ref, credential_source=payload.credential_source,
+        valid_until=payload.valid_until, service_scope=payload.service_scope,
+    )
+    return _staff_out(staff)
+
+
+@router.post("/staff/{staff_id}/credential/revoke", response_model=StaffOut)
+async def revoke_staff_credential(
+    staff_id: int,
+    payload: ReasonIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> StaffOut:
+    staff = await _staff_or_404(db, staff_id)
+    return _staff_out(await svc.revoke_staff_credential(db, admin, staff, payload.reason))
+
+
+@router.get("/staff/{staff_id}/schedules", response_model=list[ScheduleOut])
+async def list_schedules(
+    staff_id: int,
+    admin=Depends(require_permission("steward.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[ScheduleOut]:
+    from app.models import StewardStaffSchedule
+
+    await _staff_or_404(db, staff_id)
+    rows = (
+        await db.execute(
+            select(StewardStaffSchedule)
+            .where(StewardStaffSchedule.staff_id == staff_id)
+            .order_by(StewardStaffSchedule.starts_on.desc(), StewardStaffSchedule.id.desc())
+        )
+    ).scalars().all()
+    return [_schedule_out(r) for r in rows]
+
+
+@router.post("/staff/{staff_id}/schedules", response_model=ScheduleOut, status_code=201)
+async def create_schedule(
+    staff_id: int,
+    payload: ScheduleCreateIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> ScheduleOut:
+    staff = await _staff_or_404(db, staff_id)
+    row = await svc.create_schedule(
+        db, admin, staff, starts_on=payload.starts_on, ends_on=payload.ends_on, note=payload.note
+    )
+    return _schedule_out(row)
+
+
+@router.post("/schedules/{schedule_id}/cancel", response_model=ScheduleOut)
+async def cancel_schedule(
+    schedule_id: int,
+    payload: ReasonIn,
+    admin=Depends(require_permission("steward.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> ScheduleOut:
+    from app.models import StewardStaffSchedule
+
+    row = await db.get(StewardStaffSchedule, schedule_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="排班不存在")
+    return _schedule_out(await svc.cancel_schedule(db, admin, row, payload.reason))
 
 
 # ───────────────────── 专业任务与异常工单（切片 D） ─────────────────────
@@ -735,7 +867,8 @@ async def list_professional_orders(
     from app.models import StewardProfessionalOrder
 
     page, page_size = pagination
-    filters = []
+    scope = await scope_svc.load_scope(db, admin)
+    filters = [scope_svc.instance_predicate(scope, StewardProfessionalOrder.instance_id)]
     if instance_id:
         filters.append(StewardProfessionalOrder.instance_id == instance_id)
     if status:
@@ -744,14 +877,8 @@ async def list_professional_orders(
         filters.append(StewardProfessionalOrder.priority == priority)
     if order_type:
         filters.append(StewardProfessionalOrder.order_type == order_type)
-    scope_ids = await svc.admin_staff_scope(db, admin)
-    if scope_ids is not None:
-        filters.append(StewardProfessionalOrder.physician_id.in_(scope_ids))
-    count_stmt = select(func.count()).select_from(StewardProfessionalOrder)
-    list_stmt = select(StewardProfessionalOrder).order_by(StewardProfessionalOrder.id.desc())
-    if filters:
-        count_stmt = count_stmt.where(*filters)
-        list_stmt = list_stmt.where(*filters)
+    count_stmt = select(func.count()).select_from(StewardProfessionalOrder).where(*filters)
+    list_stmt = select(StewardProfessionalOrder).where(*filters).order_by(StewardProfessionalOrder.id.desc())
     total = (await db.execute(count_stmt)).scalar()
     rows = (
         (await db.execute(list_stmt.offset((page - 1) * page_size).limit(page_size))).scalars().all()
@@ -780,11 +907,9 @@ async def professional_order_detail(
     from app.schemas.steward import OrderEventOut
 
     order = await db.get(StewardProfessionalOrder, order_id)
-    scope_ids = await svc.admin_staff_scope(db, admin)
-    if order is not None and scope_ids is not None and order.physician_id not in scope_ids:
-        order = None
     if order is None:
         raise HTTPException(status_code=404, detail="工单不存在")
+    await scope_svc.require_instance_access(db, admin, order.instance_id)
     base = await _order_out(db, order)
     events = (
         (
@@ -809,13 +934,13 @@ async def professional_order_detail(
     )
 
 
-async def _get_order(db: AsyncSession, order_id: int):
-    """写路径共用取单（steward.manage 全局权限；读路径的范围校验在详情端点内）。"""
+async def _get_order(db: AsyncSession, admin, order_id: int):
     from app.models import StewardProfessionalOrder
 
     order = await db.get(StewardProfessionalOrder, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="工单不存在")
+    await scope_svc.require_instance_access(db, admin, order.instance_id, audit_cross_scope=False)
     return order
 
 
@@ -825,7 +950,7 @@ async def start_professional_order(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
-    order = await prof.start_order(db, admin, await _get_order(db, order_id))
+    order = await prof.start_order(db, admin, await _get_order(db, admin, order_id))
     return await _order_out(db, order)
 
 
@@ -837,7 +962,7 @@ async def transfer_professional_order(
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
     order = await prof.transfer_order(
-        db, admin, await _get_order(db, order_id), payload.to_physician_id, payload.reason
+        db, admin, await _get_order(db, admin, order_id), payload.to_physician_id, payload.reason
     )
     return await _order_out(db, order)
 
@@ -850,7 +975,7 @@ async def complete_professional_order(
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
     order = await prof.complete_order(
-        db, admin, await _get_order(db, order_id), payload.result, payload.result_meta
+        db, admin, await _get_order(db, admin, order_id), payload.result, payload.result_meta
     )
     return await _order_out(db, order)
 
@@ -862,7 +987,7 @@ async def cancel_professional_order(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
-    order = await prof.cancel_order(db, admin, await _get_order(db, order_id), payload.reason)
+    order = await prof.cancel_order(db, admin, await _get_order(db, admin, order_id), payload.reason)
     return await _order_out(db, order)
 
 
@@ -874,10 +999,12 @@ async def list_reports(
 ) -> list[ReportOut]:
     from app.models import StewardServiceReport
 
-    stmt = select(StewardServiceReport).order_by(StewardServiceReport.id.desc())
-    scope_ids = await svc.admin_staff_scope(db, admin)
-    if scope_ids is not None:
-        stmt = stmt.where(StewardServiceReport.physician_id.in_(scope_ids))
+    scope = await scope_svc.load_scope(db, admin)
+    stmt = (
+        select(StewardServiceReport)
+        .where(scope_svc.instance_predicate(scope, StewardServiceReport.instance_id))
+        .order_by(StewardServiceReport.id.desc())
+    )
     if instance_id:
         stmt = stmt.where(StewardServiceReport.instance_id == instance_id)
     rows = (await db.execute(stmt)).scalars().all()
@@ -898,7 +1025,7 @@ async def correct_report(
     admin=Depends(require_permission("steward.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> ReportOut:
-    instance = await svc.instance_for_admin(db, payload.instance_id)
+    instance = await scope_svc.require_instance_access(db, admin, payload.instance_id, audit_cross_scope=False)
     report = await prof.create_correction_report(
         db, admin, instance, payload.title, payload.content, payload.basis
     )
@@ -918,17 +1045,12 @@ async def list_followups(
 ) -> list[FollowupRecordOut]:
     from app.models import StewardFollowupRecord
 
-    stmt = select(StewardFollowupRecord).order_by(StewardFollowupRecord.service_day.asc())
-    scope_ids = await svc.admin_staff_scope(db, admin)
-    if scope_ids is not None:
-        from app.models import StewardServiceInstance
-        stmt = stmt.where(
-            StewardFollowupRecord.instance_id.in_(
-                select(StewardServiceInstance.id).where(
-                    svc._instance_scope_condition(scope_ids)
-                )
-            )
-        )
+    scope = await scope_svc.load_scope(db, admin)
+    stmt = (
+        select(StewardFollowupRecord)
+        .where(scope_svc.instance_predicate(scope, StewardFollowupRecord.instance_id))
+        .order_by(StewardFollowupRecord.service_day.asc())
+    )
     if instance_id:
         stmt = stmt.where(StewardFollowupRecord.instance_id == instance_id)
     rows = (await db.execute(stmt)).scalars().all()
@@ -951,7 +1073,7 @@ async def record_followup(
     task = await db.get(StewardTask, payload.task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="随访任务不存在")
-    instance = await svc.instance_for_admin(db, task.instance_id)
+    instance = await scope_svc.require_instance_access(db, admin, task.instance_id, audit_cross_scope=False)
     record = await prof.record_followup(db, admin, instance, payload.task_id, payload.model_dump())
     return FollowupRecordOut(
         id=record.id, instance_id=record.instance_id, task_id=record.task_id,
@@ -970,10 +1092,11 @@ async def workbench(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """今日工作台聚合：实例分布、触达待办、超时专业工单、电话工单、设备同步失败、
-    放行与条款缺口。只读汇总，明细进各列表页。"""
+    放行与条款缺口。只读汇总，明细进各列表页；汇总与列表共用同一范围谓词（F02）。"""
     from datetime import timedelta
 
     from app.models import (
+        DeviceBinding,
         DeviceSyncLog,
         OutreachIntent,
         PhoneCallOrder,
@@ -983,29 +1106,25 @@ async def workbench(
     )
     from app.services import steward_service
 
+    scope = await scope_svc.load_scope(db, admin)
     today = steward_service.sh_today()
-    scope_ids = await steward_service.admin_staff_scope(db, admin)
-    instance_where = (
-        [steward_service._instance_scope_condition(scope_ids)] if scope_ids is not None else []
-    )
-    scoped_instance_ids = (
-        select(StewardServiceInstance.id).where(*instance_where) if scope_ids is not None else None
-    )
     instance_rows = (
         await db.execute(
             select(StewardServiceInstance.status, func.count())
+            .where(scope_svc.instance_predicate(scope))
             .group_by(StewardServiceInstance.status)
-            .where(*instance_where)
         )
     ).all()
-    outreach_query = (
-        select(OutreachIntent.status, func.count())
-        .where(OutreachIntent.service_date == today)
-        .group_by(OutreachIntent.status)
-    )
-    if scoped_instance_ids is not None:
-        outreach_query = outreach_query.where(OutreachIntent.instance_id.in_(scoped_instance_ids))
-    outreach_rows = (await db.execute(outreach_query)).all()
+    outreach_rows = (
+        await db.execute(
+            select(OutreachIntent.status, func.count())
+            .where(
+                OutreachIntent.service_date == today,
+                scope_svc.instance_predicate(scope, OutreachIntent.instance_id),
+            )
+            .group_by(OutreachIntent.status)
+        )
+    ).all()
     overdue_prof = int(
         (
             await db.execute(
@@ -1015,11 +1134,7 @@ async def workbench(
                     StewardProfessionalOrder.status.in_(["pending", "in_progress"]),
                     StewardProfessionalOrder.due_at.is_not(None),
                     StewardProfessionalOrder.due_at < steward_service.now_utc(),
-                    *(
-                        [StewardProfessionalOrder.physician_id.in_(scope_ids)]
-                        if scope_ids is not None
-                        else []
-                    ),
+                    scope_svc.instance_predicate(scope, StewardProfessionalOrder.instance_id),
                 )
             )
         ).scalar()
@@ -1034,28 +1149,29 @@ async def workbench(
                     StewardProfessionalOrder.priority == "high",
                     StewardProfessionalOrder.status.in_(["pending", "in_progress"]),
                     StewardProfessionalOrder.transferred_at.is_(None),
-                    *(
-                        [StewardProfessionalOrder.physician_id.in_(scope_ids)]
-                        if scope_ids is not None
-                        else []
-                    ),
+                    scope_svc.instance_predicate(scope, StewardProfessionalOrder.instance_id),
                 )
             )
         ).scalar()
         or 0
     )
-    phone_query = select(PhoneCallOrder.status, func.count()).group_by(PhoneCallOrder.status)
-    if scoped_instance_ids is not None:
-        phone_query = phone_query.where(PhoneCallOrder.instance_id.in_(scoped_instance_ids))
-    phone_rows = (await db.execute(phone_query)).all()
+    phone_rows = (
+        await db.execute(
+            select(PhoneCallOrder.status, func.count())
+            .where(scope_svc.instance_predicate(scope, PhoneCallOrder.instance_id))
+            .group_by(PhoneCallOrder.status)
+        )
+    ).all()
     device_failures = int(
         (
             await db.execute(
                 select(func.count())
                 .select_from(DeviceSyncLog)
+                .join(DeviceBinding, DeviceBinding.id == DeviceSyncLog.binding_id)
                 .where(
                     DeviceSyncLog.status.in_(["failed", "blocked"]),
                     DeviceSyncLog.started_at >= steward_service.now_utc() - timedelta(days=1),
+                    scope_svc.user_predicate(scope, DeviceBinding.user_id),
                 )
             )
         ).scalar()
@@ -1063,16 +1179,19 @@ async def workbench(
     )
     from app.models import StewardScheduleIntent
 
-    schedule_intents_query = (
-        select(func.count())
-        .select_from(StewardScheduleIntent)
-        .where(StewardScheduleIntent.status == "pending")
+    schedule_intents_pending = int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(StewardScheduleIntent)
+                .where(
+                    StewardScheduleIntent.status == "pending",
+                    scope_svc.instance_predicate(scope, StewardScheduleIntent.instance_id),
+                )
+            )
+        ).scalar()
+        or 0
     )
-    if scoped_instance_ids is not None:
-        schedule_intents_query = schedule_intents_query.where(
-            StewardScheduleIntent.instance_id.in_(scoped_instance_ids)
-        )
-    schedule_intents_pending = int((await db.execute(schedule_intents_query)).scalar() or 0)
     active_releases = int(
         (
             await db.execute(
@@ -1105,16 +1224,14 @@ async def list_schedule_intents(
     admin=Depends(require_permission("steward.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[ScheduleIntentOut]:
-    from app.models import StewardScheduleIntent, StewardServiceInstance
+    from app.models import StewardScheduleIntent
 
-    stmt = select(StewardScheduleIntent).order_by(StewardScheduleIntent.id.desc())
-    scope_ids = await svc.admin_staff_scope(db, admin)
-    if scope_ids is not None:
-        stmt = stmt.where(
-            StewardScheduleIntent.instance_id.in_(
-                select(StewardServiceInstance.id).where(svc._instance_scope_condition(scope_ids))
-            )
-        )
+    scope = await scope_svc.load_scope(db, admin)
+    stmt = (
+        select(StewardScheduleIntent)
+        .where(scope_svc.instance_predicate(scope, StewardScheduleIntent.instance_id))
+        .order_by(StewardScheduleIntent.id.desc())
+    )
     if status:
         stmt = stmt.where(StewardScheduleIntent.status == status)
     if instance_id:

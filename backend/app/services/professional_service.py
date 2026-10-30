@@ -8,7 +8,7 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,7 +102,9 @@ async def create_staff_link(db: AsyncSession, admin, staff_id: int, admin_id: in
     staff = await db.get(StewardStaff, staff_id)
     if staff is None:
         raise HTTPException(status_code=404, detail="人员不存在")
-    target = link_admin_or_404(db, admin_id)
+    if staff.status != "active":
+        raise HTTPException(status_code=422, detail="人员已停用，不能新建账号绑定")
+    target = await link_admin_or_404(db, admin_id)
     if target is None:
         raise HTTPException(status_code=404, detail="后台账号不存在")
     link = StewardStaffAdminLink(staff_id=staff_id, admin_id=admin_id, created_by_admin_id=admin.id)
@@ -150,6 +152,75 @@ async def admin_bound_to_physician(db: AsyncSession, admin_id: int, physician_id
         )
     ).scalar_one_or_none()
     return exists is not None
+
+
+async def require_physician_identity(db: AsyncSession, admin, physician_id: int | None, *, action: str) -> StewardStaff:
+    """可信签发身份链（F04）：工单完成 / 更正报告等专业操作共用。
+
+    依次核验：存在指派医师 → 人员角色为医师 → 人员在职且资质有效 → 当前账号绑定该医师。任一环节
+    不成立即 403，不区分"运营账号""停用医师""已转交"以外的内部细节。调用方仍须在条件
+    更新里带上同一约束（见 complete_order），避免核验与写入之间人员被停用或工单被转交。
+    """
+    if physician_id is None:
+        raise HTTPException(status_code=403, detail=f"该对象没有指派医师，不能{action}")
+    physician = await db.get(StewardStaff, physician_id)
+    if physician is None or physician.role != "physician":
+        raise HTTPException(status_code=403, detail=f"指派对象不是医师，不能{action}")
+    if physician.status != "active":
+        raise HTTPException(status_code=403, detail=f"该医师已停用，不能继续{action}；请先转交")
+    if not physician.credential_valid(now_utc()):
+        raise HTTPException(status_code=403, detail=f"该医师资质未核验、已撤销或已到期，不能{action}")
+    if not await admin_bound_to_physician(db, admin.id, physician.id):
+        raise HTTPException(
+            status_code=403, detail=f"仅绑定当前指派医师的账号可{action}，运营账号不能代医师签发"
+        )
+    return physician
+
+
+def _active_physician_ids():
+    return select(StewardStaff.id).where(
+        StewardStaff.role == "physician", StewardStaff.status == "active",
+        StewardStaff.credential_verified_at.is_not(None),
+        StewardStaff.credential_revoked_at.is_(None),
+        or_(StewardStaff.credential_valid_until.is_(None), StewardStaff.credential_valid_until > now_utc()),
+    )
+
+
+async def guard_physician_authorization(db: AsyncSession, physician_id: int, admin_id: int | None = None) -> None:
+    """写入前再次核验并锁住资质行与绑定行，撤销与签发按事务顺序生效。"""
+    if admin_id is not None:
+        link = (await db.execute(select(StewardStaffAdminLink.id).where(
+            StewardStaffAdminLink.staff_id == physician_id, StewardStaffAdminLink.admin_id == admin_id,
+        ).with_for_update())).scalar_one_or_none()
+        if link is None:
+            raise HTTPException(status_code=409, detail="医师账号绑定已变化，请刷新后重试")
+    result = await db.execute(update(StewardStaff).where(
+        # 资格条件必须直接约束被更新的行；IN 子查询可能保留锁等待前的快照。
+        StewardStaff.id == physician_id,
+        StewardStaff.role == "physician", StewardStaff.status == "active",
+        StewardStaff.credential_verified_at.is_not(None),
+        StewardStaff.credential_revoked_at.is_(None),
+        or_(StewardStaff.credential_valid_until.is_(None), StewardStaff.credential_valid_until > now_utc()),
+    ).values(status=StewardStaff.status))
+    if result.rowcount != 1:
+        raise HTTPException(status_code=409, detail="医师状态或资质已变化，请刷新后重试")
+    physician = await db.get(StewardStaff, physician_id, populate_existing=True)
+    # 有效期也可能在等待行锁期间到达；签发证据须使用锁后的最新核验记录。
+    if not physician.credential_valid(now_utc()):
+        raise HTTPException(status_code=409, detail="医师资质已到期，请刷新后重试")
+
+
+def validate_physician_signer(physician: StewardStaff) -> None:
+    """人员行已锁定；实例或工单行等待结束后仍须检查时间推进导致的到期。"""
+    if physician.role != "physician" or physician.status != "active" or not physician.credential_valid(now_utc()):
+        raise HTTPException(status_code=409, detail="签发时医师状态或资质已失效，请刷新后重试")
+
+
+def physician_signature(physician: StewardStaff, admin) -> dict:
+    """仅服务端生成签发时的责任证据，历史绑定变化不抹除当时的签发事实。"""
+    validate_physician_signer(physician)
+    return {"physician_id": physician.id, "admin_id": admin.id,
+            "credential_verified_at": as_utc(physician.credential_verified_at).isoformat()}
 
 
 # ───────────────────────── 专业工单 ─────────────────────────
@@ -276,26 +347,31 @@ async def complete_order(
 ) -> StewardProfessionalOrder:
     if order.status not in OPEN_ORDER_STATUSES:
         raise HTTPException(status_code=409, detail="仅未结工单可完成")
-    # 签发身份一致：录入账号须绑定指派医师（转交后按接收医师校验）
-    if not await admin_bound_to_physician(db, admin.id, order.physician_id):
-        raise HTTPException(status_code=403, detail="仅绑定该指派医师的账号可录入结果，运营账号不能代医师签发")
+    # 签发身份一致（F04 可信身份链）：录入账号须绑定当前指派医师，且该医师在职（转交后按接收医师校验）
+    physician = await require_physician_identity(db, admin, order.physician_id, action="录入工单结果")
+    await guard_physician_authorization(db, physician.id, admin.id)
     result = await db.execute(
         update(StewardProfessionalOrder)
         .where(
             StewardProfessionalOrder.id == order.id,
             StewardProfessionalOrder.status.in_(OPEN_ORDER_STATUSES),
+            # 条件更新同时锁定"仍指派给该医师"与"该医师仍在职"，覆盖停用 / 转交与完成并发
+            StewardProfessionalOrder.physician_id == physician.id,
+            StewardProfessionalOrder.physician_id.in_(_active_physician_ids()),
         )
         .values(
             status=ProfessionalOrderStatus.DONE.value,
             result=result_text,
-            result_meta=result_meta,
+            result_meta={**(result_meta or {}), "physician_signature": physician_signature(physician, admin)},
             completed_at=now_utc(),
             completed_by_admin_id=admin.id,
         )
     )
     if result.rowcount != 1:
-        raise HTTPException(status_code=409, detail="完成状态冲突，请刷新后重试")
-    await _add_event(db, order, "completed", admin, detail={"result": result_text[:200]})
+        raise HTTPException(status_code=409, detail="完成状态冲突（工单已变更、已转交或医师已停用），请刷新后重试")
+    await _add_event(db, order, "completed", admin, detail={
+        "result": result_text[:200], "physician_signature": physician_signature(physician, admin),
+    })
     await audit(
         db, action="steward.proforder.complete", resource_type="steward_professional_order",
         resource_id=order.id,
@@ -328,6 +404,23 @@ async def cancel_order(db: AsyncSession, admin, order: StewardProfessionalOrder,
     await db.commit()
     await db.refresh(order)
     return order
+
+
+async def open_order_count_for_physician(db: AsyncSession, physician_id: int) -> int:
+    """停用前置校验（F04）：该医师名下未结专业工单数。"""
+    return int(
+        (
+            await db.execute(
+                select(func.count())
+                .select_from(StewardProfessionalOrder)
+                .where(
+                    StewardProfessionalOrder.physician_id == physician_id,
+                    StewardProfessionalOrder.status.in_(OPEN_ORDER_STATUSES),
+                )
+            )
+        ).scalar()
+        or 0
+    )
 
 
 async def open_high_priority_count(db: AsyncSession, instance_id: int) -> int:
@@ -394,9 +487,11 @@ async def professional_sweep(db: AsyncSession) -> dict[str, int]:
 
 
 async def create_closure_report(
-    db: AsyncSession, instance: StewardServiceInstance, closure_report: str
+    db: AsyncSession, admin, instance: StewardServiceInstance, closure_report: str
 ) -> StewardServiceReport:
     """结案报告 v1（close_instance 同事务调用）：服务数据摘要 + 签发医师。"""
+    physician = await require_physician_identity(db, admin, instance.physician_id, action="签发结案报告")
+    await guard_physician_authorization(db, physician.id, admin.id)
     task_counts: dict[str, int] = {}
     rows = (
         await db.execute(
@@ -420,6 +515,7 @@ async def create_closure_report(
         ).scalar()
         or 0
     )
+    validate_physician_signer(physician)
     report = StewardServiceReport(
         instance_id=instance.id,
         user_id=instance.user_id,
@@ -431,6 +527,7 @@ async def create_closure_report(
                       "high_priority_transfers": transferred},
         basis="结案报告依据期末复评与高优先级工单处理/转交记录" if transferred else "结案报告依据期末复评记录",
         physician_id=instance.physician_id,
+        created_by_admin_id=admin.id,
     )
     db.add(report)
     return report
@@ -442,8 +539,15 @@ async def create_correction_report(
     """结案后更正：形成新版本（supersedes 链），不覆盖原报告；须绑定实例签约医师。"""
     if instance.status != StewardInstanceStatus.CLOSED.value:
         raise HTTPException(status_code=409, detail="仅已结案实例可更正报告")
-    if instance.physician_id is None or not await admin_bound_to_physician(db, admin.id, instance.physician_id):
-        raise HTTPException(status_code=403, detail="仅绑定该实例签约医师的账号可签发更正报告")
+    physician = await require_physician_identity(db, admin, instance.physician_id, action="签发更正报告")
+    await guard_physician_authorization(db, physician.id, admin.id)
+    locked = await db.execute(update(StewardServiceInstance).where(
+        StewardServiceInstance.id == instance.id,
+        StewardServiceInstance.status == StewardInstanceStatus.CLOSED.value,
+        StewardServiceInstance.physician_id == physician.id,
+    ).values(physician_id=StewardServiceInstance.physician_id))
+    if locked.rowcount != 1:
+        raise HTTPException(status_code=409, detail="实例状态或指派医师已变化，请刷新后重试")
     latest = (
         await db.execute(
             select(StewardServiceReport)
@@ -454,6 +558,7 @@ async def create_correction_report(
     ).scalar_one_or_none()
     if latest is None:
         raise HTTPException(status_code=409, detail="尚无原报告，不能更正")
+    validate_physician_signer(physician)
     report = StewardServiceReport(
         instance_id=instance.id,
         user_id=instance.user_id,

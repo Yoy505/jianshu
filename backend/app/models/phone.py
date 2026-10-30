@@ -185,6 +185,8 @@ class PhoneCallOrder(TimestampMixin, Base):
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     result: Mapped[str | None] = mapped_column(String(500), nullable=True)
     receipt_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)  # 真实回执引用；mock 恒 null
+    # 当前在途外部请求号（真实 CCC 发起回执，F05）：回调带 request_id 且不一致 → 判旧尝试晚回
+    external_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     taken_over_by_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
     )
@@ -195,13 +197,14 @@ class PhoneCallOrder(TimestampMixin, Base):
 
 
 class PhoneCallAttempt(TimestampMixin, Base):
-    """尝试记录（只追加）：结果、回执引用与是否模拟（mock 不计真实接通）。"""
+    """每次拨打先落 accepted，再由同步结果或验签回调完成；旧尝试与人工记录保留。"""
 
     __tablename__ = "phone_call_attempts"
     __table_args__ = (
         Index("ix_phone_attempts_order", "order_id", "id"),
+        UniqueConstraint("order_id", "attempt_no", name="uq_phone_attempts_number"),
         CheckConstraint(
-            "outcome IN ('no_answer', 'busy', 'wrong_number', 'refused', 'needs_human', 'completed', 'blocked')",
+            "outcome IN ('accepted', 'no_answer', 'busy', 'wrong_number', 'refused', 'needs_human', 'completed', 'blocked')",
             name="ck_phone_attempts_outcome",
         ),
         CheckConstraint("actor IN ('system', 'admin')", name="ck_phone_attempts_actor"),
@@ -212,6 +215,8 @@ class PhoneCallAttempt(TimestampMixin, Base):
         ForeignKey("phone_call_orders.id", ondelete="CASCADE"), nullable=False
     )
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempt_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     actor: Mapped[str] = mapped_column(String(8), default="system", server_default="system", nullable=False)
     actor_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True
@@ -221,3 +226,39 @@ class PhoneCallAttempt(TimestampMixin, Base):
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+PHONE_CALLBACK_RESULTS = ("applied", "duplicate", "stale", "rejected_state", "pending_correlation")
+
+
+class PhoneCallbackEvent(TimestampMixin, Base):
+    """供应商回调事件（只追加，F05 防重）：先持久化再应用。
+
+    event_key = 供应商事件号（payload.event_id），缺省为报文 sha256；UNIQUE(order_id, event_key)
+    使同一事件串行 / 并发重复投递只应用一次，不依赖进程内集合。result 保留重放（duplicate）、
+    乱序（stale：attempt_no / request_id 对不上当前尝试）、状态拒绝（rejected_state：工单终态或
+    未在拨打中）的事实，便于对账与供应商重发排查。
+    """
+
+    __tablename__ = "phone_callback_events"
+    __table_args__ = (
+        UniqueConstraint("order_id", "event_key", name="uq_phone_callback_events_key"),
+        Index("ix_phone_callback_events_order", "order_id", "id"),
+        CheckConstraint(
+            "result IN ('applied', 'duplicate', 'stale', 'rejected_state', 'pending_correlation')",
+            name="ck_phone_callback_events_result",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("phone_call_orders.id", ondelete="CASCADE"), nullable=False
+    )
+    event_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    attempt_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    receipt_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[str] = mapped_column(String(24), nullable=False)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)

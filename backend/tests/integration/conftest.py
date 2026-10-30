@@ -12,6 +12,7 @@
 import os
 import subprocess
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -63,6 +64,74 @@ def alembic_run(*args: str, url: str) -> str:
         cwd=BACKEND_DIR, env=env, capture_output=True, text=True, check=True,
     )
     return proc.stdout + proc.stderr
+
+
+def expected_migration_head() -> str:
+    """迁移配置的有效目标头（单头；多头说明需要先合并）。断言不再写死修订号。"""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    heads = ScriptDirectory.from_config(cfg).get_heads()
+    assert len(heads) == 1, f"迁移存在多个头，需先合并: {heads}"
+    return heads[0]
+
+
+@contextmanager
+def scratch_database(suffix: str):
+    """在同一隔离 PG 实例上建一个一次性库（名称沿用隔离库名 + 后缀，仍受防误连守卫约束）。"""
+    import asyncio
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    base = make_url(PG_URL)
+    name = f"{base.database}_{suffix}"
+    _guard_pg(str(base.set(database=name)))
+    scratch_url = str(base.set(database=name))
+
+    async def _admin(sql: str) -> None:
+        engine = create_async_engine(PG_URL, isolation_level="AUTOCOMMIT")
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text(sql))
+        finally:
+            await engine.dispose()
+
+    try:
+        asyncio.run(_admin(f'DROP DATABASE IF EXISTS "{name}"'))
+        asyncio.run(_admin(f'CREATE DATABASE "{name}"'))
+    except Exception as exc:  # 无 CREATEDB 权限等：如实跳过，不伪装通过
+        pytest.skip(f"隔离 PG 无法建一次性库（{type(exc).__name__}: {exc}）")
+    try:
+        yield scratch_url
+    finally:
+        asyncio.run(_admin(f'DROP DATABASE IF EXISTS "{name}"'))
+
+
+def pg_column_count(url: str, table: str, columns: tuple[str, ...]) -> int:
+    import asyncio
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    async def _count() -> int:
+        engine = create_async_engine(url)
+        try:
+            async with engine.connect() as conn:
+                row = await conn.execute(
+                    text(
+                        "SELECT count(*) FROM information_schema.columns "
+                        "WHERE table_name = :t AND column_name = ANY(:cols)"
+                    ),
+                    {"t": table, "cols": list(columns)},
+                )
+                return int(row.scalar_one())
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_count())
 
 
 # ───────────────────────── PostgreSQL ─────────────────────────

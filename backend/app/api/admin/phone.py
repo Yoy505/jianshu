@@ -28,6 +28,7 @@ from app.schemas.phone import (
     TakeoverIn,
 )
 from app.services import phone_service as svc
+from app.services import scope_service as scope_svc
 
 router = APIRouter(prefix="/admin/phone", tags=["admin-phone"])
 
@@ -102,8 +103,10 @@ async def list_contacts(
     db: AsyncSession = Depends(get_db),
 ) -> Page[ContactOut]:
     page, page_size = pagination
-    stmt = select(PhoneContact).order_by(PhoneContact.id.desc())
-    count_stmt = select(func.count()).select_from(PhoneContact)
+    scope = await scope_svc.load_scope(db, admin)
+    scope_filter = scope_svc.user_predicate(scope, PhoneContact.user_id)
+    stmt = select(PhoneContact).where(scope_filter).order_by(PhoneContact.id.desc())
+    count_stmt = select(func.count()).select_from(PhoneContact).where(scope_filter)
     if user_id:
         stmt = stmt.where(PhoneContact.user_id == user_id)
         count_stmt = count_stmt.where(PhoneContact.user_id == user_id)
@@ -118,6 +121,7 @@ async def create_contact(
     admin=Depends(require_permission("phone.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> ContactOut:
+    await scope_svc.require_user_access(db, admin, payload.user_id, audit_cross_scope=False)
     contact = await svc.create_contact(db, admin, payload.model_dump())
     return _contact_out(contact)
 
@@ -132,6 +136,7 @@ async def set_contact_consent(
     contact = await db.get(PhoneContact, contact_id)
     if contact is None:
         raise HTTPException(status_code=404, detail="联系人不存在")
+    await scope_svc.require_user_access(db, admin, contact.user_id, audit_cross_scope=False)
     contact = await svc.set_contact_consent(
         db, admin, contact, payload.status, payload.source, payload.note
     )
@@ -148,7 +153,8 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
 ) -> Page[OrderOut]:
     page, page_size = pagination
-    filters = []
+    scope = await scope_svc.load_scope(db, admin)
+    filters = [scope_svc.instance_predicate(scope, PhoneCallOrder.instance_id)]
     if instance_id:
         filters.append(PhoneCallOrder.instance_id == instance_id)
     if status:
@@ -165,10 +171,15 @@ async def list_orders(
     return Page(items=[_order_out(o) for o in rows], total=int(total or 0), page=page, page_size=page_size)
 
 
-async def _get_order(db: AsyncSession, order_id: int) -> PhoneCallOrder:
+async def _get_order(
+    db: AsyncSession, admin, order_id: int, *, audit_cross_scope: bool = False
+) -> PhoneCallOrder:
     order = await db.get(PhoneCallOrder, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="工单不存在")
+    await scope_svc.require_instance_access(
+        db, admin, order.instance_id, audit_cross_scope=audit_cross_scope
+    )
     return order
 
 
@@ -178,6 +189,7 @@ async def create_order(
     admin=Depends(require_permission("phone.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
+    await scope_svc.require_instance_access(db, admin, payload.instance_id, audit_cross_scope=False)
     order = await svc.create_order(db, admin, payload.model_dump())
     return _order_out(order)
 
@@ -188,7 +200,7 @@ async def order_detail(
     admin=Depends(require_permission("phone.read")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderDetailOut:
-    order = await _get_order(db, order_id)
+    order = await _get_order(db, admin, order_id, audit_cross_scope=True)
     logs = (
         (
             await db.execute(
@@ -223,7 +235,7 @@ async def review_order(
     admin=Depends(require_permission("phone.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
-    order = await svc.review_order(db, admin, await _get_order(db, order_id), payload.approve, payload.note or "")
+    order = await svc.review_order(db, admin, await _get_order(db, admin, order_id), payload.approve, payload.note or "")
     return _order_out(order)
 
 
@@ -234,7 +246,7 @@ async def takeover_order(
     admin=Depends(require_permission("phone.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
-    order = await svc.takeover_order(db, admin, await _get_order(db, order_id), payload.note or "")
+    order = await svc.takeover_order(db, admin, await _get_order(db, admin, order_id), payload.note or "")
     return _order_out(order)
 
 
@@ -245,7 +257,7 @@ async def complete_order(
     admin=Depends(require_permission("phone.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
-    order = await svc.complete_order_human(db, admin, await _get_order(db, order_id), payload.result)
+    order = await svc.complete_order_human(db, admin, await _get_order(db, admin, order_id), payload.result)
     return _order_out(order)
 
 
@@ -256,7 +268,7 @@ async def cancel_order(
     admin=Depends(require_permission("phone.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> OrderOut:
-    order = await svc.cancel_order(db, admin, await _get_order(db, order_id), payload.reason)
+    order = await svc.cancel_order(db, admin, await _get_order(db, admin, order_id), payload.reason)
     return _order_out(order)
 
 
