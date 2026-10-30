@@ -130,8 +130,13 @@
 
 .sms-switch { margin-top: 24rpx; text-align: center; color: #6B7280; font-size: 24rpx; padding: 8rpx 0; }
 .sms-form { display: flex; flex-direction: column; gap: 20rpx; margin-top: 24rpx; }
-.sms-row { display: flex; align-items: center; gap: 16rpx; }
-.sms-input { flex: 1; background: #F8FAF9; border-radius: 12rpx; padding: 20rpx 24rpx; font-size: 30rpx; }
-.sms-code-btn { background: #0F766E; color: #fff; border-radius: 12rpx; }
-.sms-code-wait { background: #9CA3AF; color: #fff; }
-.sms-login-btn { background: #E6F2F0; color: #0F766E; border-radius: 12rpx; font-weight: 500; }
+.sms-row { display: flex; align-items: stretch; gap: 16rpx; }
+.sms-input { flex: 1; min-width: 0; background: #F8FAF9; border-radius: 12rpx; padding: 24rpx; font-size: 30rpx; height: 88rpx; box-sizing: border-box; }
+.sms-code-line { width: 100%; }
+.sms-code-btn { flex: none; display: flex; align-items: center; justify-content: center;
+  min-width: 200rpx; padding: 0 28rpx; height: 88rpx; border-radius: 12rpx;
+  background: #0F766E; color: #fff; font-size: 26rpx; }
+.sms-code-wait { background: #9CA3AF; }
+.sms-login-btn { width: 100%; height: 96rpx; border-radius: 12rpx;
+  background: #E6F2F0; color: #0F766E; font-size: 30rpx; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; }

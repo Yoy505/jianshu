@@ -125,16 +125,14 @@
               <view class="sms-row">
                 <input class="sms-input" type="number" maxlength="11" value="{{smsPhone}}"
                   placeholder="手机号" bindinput="onSmsPhone" disabled="{{smsLoggingIn}}" />
-                <button class="sms-code-btn {{smsCountdown > 0 ? 'sms-code-wait' : ''}}" size="mini"
+                <button class="sms-code-btn {{smsCountdown > 0 ? 'sms-code-wait' : ''}}"
                   bindtap="sendSmsCode" disabled="{{smsCountdown > 0 || smsSending}}">
-                  {{smsCountdown > 0 ? smsCountdown + 's' : '获取验证码'}}</button>
+                  {{smsCountdown > 0 ? smsCountdown + 's 后重发' : '获取验证码'}}</button>
               </view>
-              <view class="sms-row">
-                <input class="sms-input" type="number" maxlength="6" value="{{smsCode}}"
-                  placeholder="6 位验证码" bindinput="onSmsCode" disabled="{{smsLoggingIn}}" />
-                <button class="sms-login-btn" size="mini" bindtap="smsLoginTap"
-                  loading="{{smsLoggingIn}}" disabled="{{smsLoggingIn}}">登录</button>
-              </view>
+              <input class="sms-input sms-code-line" type="number" maxlength="6" value="{{smsCode}}"
+                placeholder="6 位验证码" bindinput="onSmsCode" disabled="{{smsLoggingIn}}" />
+              <button class="sms-login-btn" bindtap="smsLoginTap"
+                loading="{{smsLoggingIn}}" disabled="{{smsLoggingIn}}">验证码登录</button>
             </view>
           </block>
           <view class="login-feedback" wx:if="{{loginError}}">{{loginError}}</view>
