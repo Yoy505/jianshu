@@ -27,6 +27,11 @@ Page(require('../../utils/hifi-page')({
     wxLoggingIn: false,
     loginAgreed: false,
     loginError: '',
+    smsPhone: '',
+    smsCode: '',
+    smsCountdown: 0,
+    smsSending: false,
+    smsLoggingIn: false,
     footer: config.COMPLIANCE.footer
   },
 
@@ -37,6 +42,10 @@ Page(require('../../utils/hifi-page')({
       app.globalData.loginRequested = false;
       this.hfOpenLogin();
     }
+  },
+
+  onUnload() {
+    if (this._smsTimer) { clearInterval(this._smsTimer); this._smsTimer = null; }
   },
 
   syncUser() {
@@ -83,6 +92,51 @@ Page(require('../../utils/hifi-page')({
   },
 
   // 手机号授权码与 wx.login 登录码分别获取，均仅交给后端验证。
+  // 手机号验证码登录（微信 getPhoneNumber 不可用时的备用通道，后端复用 /h5/auth/sms/*）
+  onSmsPhone(e) { this.setData({ smsPhone: e.detail.value }); },
+  onSmsCode(e) { this.setData({ smsCode: e.detail.value }); },
+
+  sendSmsCode() {
+    if (this.data.smsSending || this.data.smsCountdown > 0) return;
+    if (!this.data.loginAgreed) { this.requireAgreement(); return; }
+    const phone = (this.data.smsPhone || '').trim();
+    if (!/^1\d{10}$/.test(phone)) {
+      this.setData({ loginError: '请输入 11 位手机号' });
+      return;
+    }
+    this.setData({ smsSending: true, loginError: '' });
+    api.smsSend(phone).then(() => {
+      this.setData({ smsSending: false, smsCountdown: 60 });
+      this._smsTimer = setInterval(() => {
+        const next = this.data.smsCountdown - 1;
+        this.setData({ smsCountdown: next > 0 ? next : 0 });
+        if (next <= 0) { clearInterval(this._smsTimer); this._smsTimer = null; }
+      }, 1000);
+    }).catch(err => {
+      this.setData({ smsSending: false, loginError: err.detail || '验证码发送失败' });
+    });
+  },
+
+  smsLoginTap() {
+    if (this.data.smsLoggingIn) return;
+    if (!this.data.loginAgreed) { this.requireAgreement(); return; }
+    const phone = (this.data.smsPhone || '').trim();
+    const code = (this.data.smsCode || '').trim();
+    if (!/^1\d{10}$/.test(phone) || !/^\d{6}$/.test(code)) {
+      this.setData({ loginError: '请填写 11 位手机号和 6 位验证码' });
+      return;
+    }
+    this.setData({ smsLoggingIn: true, loginError: '' });
+    api.smsLogin(phone, code).then(res => {
+      if (this._smsTimer) { clearInterval(this._smsTimer); this._smsTimer = null; }
+      getApp().setAuth(res);
+      this.setData({ smsLoggingIn: false });
+      this.syncUser();
+    }).catch(err => {
+      this.setData({ smsLoggingIn: false, loginError: err.detail || '登录失败，请检查验证码' });
+    });
+  },
+
   onGetPhoneNumber(e) {
     if (this.data.wxLoggingIn) return;
     if (!this.data.loginAgreed) { this.requireAgreement(); return; }

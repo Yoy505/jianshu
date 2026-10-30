@@ -127,3 +127,13 @@
 .hf .login-agreement label{display:flex;align-items:center;gap:6px;min-height:44px}
 .hf .login-agreement checkbox{flex:none;transform:scale(.8);transform-origin:center}
 .hf .login-feedback{margin-top:10px;color:#986223;font-size:12px;line-height:20px}
+
+.sms-divider { display: flex; align-items: center; gap: 12rpx; margin: 28rpx 0 16rpx; color: #9CA3AF; font-size: 22rpx; }
+.sms-divider::before, .sms-divider::after { content: ''; flex: 1; height: 1rpx; background: #E5E7EB; }
+.sms-form { display: flex; flex-direction: column; gap: 16rpx; }
+.sms-row { display: flex; align-items: center; gap: 16rpx; }
+.sms-input { flex: 1; background: #F8FAF9; border-radius: 12rpx; padding: 16rpx 24rpx; font-size: 30rpx; }
+.sms-code-btn { background: #0F766E; color: #fff; border-radius: 12rpx; }
+.sms-code-wait { background: #9CA3AF; color: #fff; }
+.sms-login-btn { background: #E6F2F0; color: #0F766E; border-radius: 12rpx; font-weight: 500; }
+.sms-note { color: #9CA3AF; font-size: 22rpx; }

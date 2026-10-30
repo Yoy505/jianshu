@@ -120,6 +120,23 @@
           <button wx:if="{{loginAgreed}}" class="primary wx-login" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber" loading="{{wxLoggingIn}}" disabled="{{wxLoggingIn}}">
             <text class="ph ph-wechat-logo"></text>微信手机号快捷登录</button>
           <button wx:else class="primary wx-login" bindtap="requireAgreement">微信手机号快捷登录</button>
+          <view class="sms-divider"><text>微信授权不可用时，可改用手机号验证码</text></view>
+          <view class="sms-form">
+            <view class="sms-row">
+              <input class="sms-input" type="number" maxlength="11" value="{{smsPhone}}"
+                placeholder="手机号" bindinput="onSmsPhone" disabled="{{smsCountdown > 0 || smsLoggingIn}}" />
+              <button class="sms-code-btn {{smsCountdown > 0 ? 'sms-code-wait' : ''}}" size="mini"
+                bindtap="sendSmsCode" disabled="{{smsCountdown > 0 || smsSending}}">
+                {{smsCountdown > 0 ? smsCountdown + 's' : '获取验证码'}}</button>
+            </view>
+            <view class="sms-row">
+              <input class="sms-input sms-code-input" type="number" maxlength="6" value="{{smsCode}}"
+                placeholder="6 位验证码" bindinput="onSmsCode" disabled="{{smsLoggingIn}}" />
+              <button class="sms-login-btn" size="mini" bindtap="smsLoginTap"
+                loading="{{smsLoggingIn}}" disabled="{{smsLoggingIn}}">验证码登录</button>
+            </view>
+            <view class="sms-note">验证码登录即视为同意上述协议；未注册的手机号将自动创建账号</view>
+          </view>
           <view class="login-feedback" wx:if="{{loginError}}">{{loginError}}</view>
           <checkbox-group bindchange="onLoginAgreement" class="login-agreement">
             <label><checkbox value="agree" checked="{{loginAgreed}}" color="#0f766e" disabled="{{wxLoggingIn}}"/><text>我已阅读并同意用户协议与隐私政策</text></label>
