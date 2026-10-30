@@ -18,7 +18,7 @@ Page(require('../../utils/hifi-page')({
     metric: 'sleep_duration',
     metrics: METRICS,
     trend: null,
-    chartReady: false,
+    chartState: 'none',
     points: [],
     unbinding: false
   },
@@ -48,10 +48,12 @@ Page(require('../../utils/hifi-page')({
       (trend.gaps || []).forEach((gap) => points.push({ date: gap, value: null, isGap: true }));
       points.sort((a, b) => (a.date < b.date ? -1 : 1));
       const validValues = points.filter((p) => !p.isGap).map((p) => p.value);
+      // 通用积累期三态：none（0 天，引导占位）/ single（1 天，画单点+提示差一天）/ ready（≥2 天，趋势线）
+      const chartState = validValues.length === 0 ? 'none' : validValues.length === 1 ? 'single' : 'ready';
       this.setData({
         trend,
         points,
-        chartReady: validValues.length >= 2,
+        chartState,
         lastSyncText: trend.last_synced_at ? format.full(trend.last_synced_at) : '尚未同步'
       }, () => this.drawChart());
     }).catch((err) => {
@@ -77,8 +79,9 @@ Page(require('../../utils/hifi-page')({
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, w, h);
 
-      const values = points.filter((p) => !p.isGap).map((p) => p.value);
-      if (values.length < 2) return;
+      const validPoints = points.filter((p) => !p.isGap);
+      if (!validPoints.length) return;
+      const values = validPoints.map((p) => p.value);
       let min = Math.min.apply(null, values);
       let max = Math.max.apply(null, values);
       if (max === min) { max = min + 1; min = min - 1; }
@@ -98,24 +101,26 @@ Page(require('../../utils/hifi-page')({
         ctx.stroke();
       });
 
-      ctx.strokeStyle = '#0F766E';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      let drawing = false;
-      ctx.beginPath();
-      points.forEach((p, i) => {
-        const x = pad.l + stepX * i;
-        if (p.isGap) { drawing = false; return; }
-        const y = yOf(p.value);
-        if (!drawing) { ctx.moveTo(x, y); drawing = true; } else { ctx.lineTo(x, y); }
-      });
-      ctx.stroke();
-      ctx.fillStyle = '#0F766E';
-      points.forEach((p, i) => {
-        if (p.isGap) return;
-        const x = pad.l + stepX * i;
+      const xOf = (i) => pad.l + stepX * i;
+      if (validPoints.length >= 2) {
+        ctx.strokeStyle = '#0F766E';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        let drawing = false;
         ctx.beginPath();
-        ctx.arc(x, yOf(p.value), 1.8, 0, Math.PI * 2);
+        points.forEach((p, i) => {
+          if (p.isGap) { drawing = false; return; }
+          const x = xOf(i);
+          const y = yOf(p.value);
+          if (!drawing) { ctx.moveTo(x, y); drawing = true; } else { ctx.lineTo(x, y); }
+        });
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#0F766E';
+      validPoints.forEach((p) => {
+        const i = points.indexOf(p);
+        ctx.beginPath();
+        ctx.arc(xOf(i), yOf(p.value), validPoints.length === 1 ? 3 : 1.8, 0, Math.PI * 2);
         ctx.fill();
       });
 

@@ -39,8 +39,17 @@
         </scroll-view>
         <view class="kv"><text class="t-span">最近同步</text><text class="t-b">{{lastSyncText}}</text></view>
 
-        <canvas wx:if="{{chartReady}}" type="2d" id="trendChart" class="trend-canvas"></canvas>
-        <view wx:elif="{{points.length}}" class="t-p quiet-note">有效数据不足两个日期，暂无法绘制曲线；明细如下。</view>
+        <block wx:if="{{chartState === 'ready'}}">
+          <canvas type="2d" id="trendChart" class="trend-canvas"></canvas>
+        </block>
+        <block wx:elif="{{chartState === 'single'}}">
+          <canvas type="2d" id="trendChart" class="trend-canvas"></canvas>
+          <view class="t-p quiet-note">已收到 1 天数据 · 再积累 1 天自动生成趋势线</view>
+        </block>
+        <view wx:else class="trend-empty">
+          <view class="trend-empty-title">数据积累后这里会展示近 14 天趋势</view>
+          <view class="trend-empty-desc">设备每天自动同步；收到 2 天及以上数据后生成曲线，缺失的日期不填补</view>
+        </view>
 
         <block wx:if="{{points.length}}">
           <view class="kv" wx:for="{{points}}" wx:key="date">
