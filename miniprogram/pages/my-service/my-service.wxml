@@ -155,32 +155,6 @@
             </view>
           </block>
           <view wx:else class="t-p">今天没有安排事项；打开服务日历查看整体安排。</view>
-
-          <view wx:if="{{intentOpen}}" class="intent-form">
-            <view class="t-h3">随访时间意向</view>
-            <view class="t-p">申报你方便的时段，服务方确认后再联系；提交的是意向，不代表已确认预约。</view>
-            <view class="intent-row">
-              <text class="t-span">日期</text>
-              <picker mode="date" value="{{intentDate}}" start="{{todayStr}}" bindchange="onIntentDate">
-                <view class="intent-value">{{intentDate}}</view>
-              </picker>
-            </view>
-            <view class="intent-row">
-              <text class="t-span">时段</text>
-              <picker range="{{periods}}" value="{{intentPeriodIndex}}" bindchange="onIntentPeriod">
-                <view class="intent-value">{{periods[intentPeriodIndex]}}</view>
-              </picker>
-            </view>
-            <view class="intent-row">
-              <text class="t-span">备注</text>
-              <input class="intent-input" value="{{intentNote}}" maxlength="60"
-                placeholder="选填，如：下午3点后方便" bindinput="onIntentNote" />
-            </view>
-            <view class="intent-actions">
-              <button class="secondary" size="mini" bindtap="closeIntent">取消</button>
-              <button class="mini" size="mini" loading="{{intentSubmitting}}" bindtap="submitIntent">提交意向</button>
-            </view>
-          </view>
         </view>
 
         <view class="card" wx:if="{{instance.butler || instance.physician}}">
@@ -263,6 +237,34 @@
         </view>
       </block>
     </block>
+  </view>
+</view>
+
+<view class="intent-mask" wx:if="{{intentOpen}}" bindtap="closeIntent"></view>
+<view class="intent-sheet" wx:if="{{intentOpen}}" catchtap="hfNoop">
+  <view class="intent-sheet-bar"></view>
+  <view class="t-h3">随访时间意向</view>
+  <view class="t-p">申报你方便的时段，服务方确认后再联系；提交的是意向，不代表已确认预约。</view>
+  <view class="intent-row">
+    <text class="t-span">日期</text>
+    <picker mode="date" value="{{intentDate}}" start="{{todayStr}}" bindchange="onIntentDate">
+      <view class="intent-value">{{intentDate}}</view>
+    </picker>
+  </view>
+  <view class="intent-row">
+    <text class="t-span">时段</text>
+    <picker range="{{periods}}" value="{{intentPeriodIndex}}" bindchange="onIntentPeriod">
+      <view class="intent-value">{{periods[intentPeriodIndex]}}</view>
+    </picker>
+  </view>
+  <view class="intent-row">
+    <text class="t-span">备注</text>
+    <input class="intent-input" value="{{intentNote}}" maxlength="60"
+      placeholder="选填，如：下午3点后方便" bindinput="onIntentNote" />
+  </view>
+  <view class="intent-actions">
+    <button class="secondary" size="mini" bindtap="closeIntent">取消</button>
+    <button class="mini" size="mini" loading="{{intentSubmitting}}" bindtap="submitIntent">提交意向</button>
   </view>
 </view>
 </block>
