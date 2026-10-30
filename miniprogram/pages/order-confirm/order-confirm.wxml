@@ -1,6 +1,6 @@
 <block wx:if="{{!accessBlocked}}">
-<view class="hf has-actions" style="padding-top:{{hfStatus}}px">
-  <view class="hf-nav hf-status">
+<view class="hf has-actions">
+  <view class="hf-nav hf-status" style="padding-top:{{hfStatus}}px">
     <view class="hf-nav-inner">
       <button class="hf-back" bindtap="hfBack">返回</button>
       <view class="hf-nav-title">{{hfTitle}}</view>
