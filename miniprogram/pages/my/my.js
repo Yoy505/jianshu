@@ -27,6 +27,7 @@ Page(require('../../utils/hifi-page')({
     wxLoggingIn: false,
     loginAgreed: false,
     loginError: '',
+    smsMode: false,
     smsPhone: '',
     smsCode: '',
     smsCountdown: 0,
@@ -93,6 +94,10 @@ Page(require('../../utils/hifi-page')({
 
   // 手机号授权码与 wx.login 登录码分别获取，均仅交给后端验证。
   // 手机号验证码登录（微信 getPhoneNumber 不可用时的备用通道，后端复用 /h5/auth/sms/*）
+  toggleSmsMode() {
+    this.setData({ smsMode: !this.data.smsMode, loginError: '' });
+  },
+
   onSmsPhone(e) { this.setData({ smsPhone: e.detail.value }); },
   onSmsCode(e) { this.setData({ smsCode: e.detail.value }); },
 
