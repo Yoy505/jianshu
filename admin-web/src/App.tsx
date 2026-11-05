@@ -21,6 +21,7 @@ import StewardProfessional from '@/pages/StewardProfessional'
 import StewardDevices from '@/pages/StewardDevices'
 import StewardPhone from '@/pages/StewardPhone'
 import VolunteerApplications from '@/pages/VolunteerApplications'
+import DoctorVolunteers from '@/pages/DoctorVolunteers'
 import { useAuthStore } from '@/stores/auth'
 
 /** 未登录访问受保护路由时重定向 /login */
@@ -47,6 +48,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="occupational-submissions" element={<OccupationalSubmissions />} />
         <Route path="volunteer-applications" element={<VolunteerApplications />} />
+        <Route path="doctor-volunteers" element={<DoctorVolunteers />} />
         <Route path="mp/appointments" element={<MpAppointments />} />
         <Route path="mp/consults" element={<MpConsults />} />
         <Route path="mp/providers" element={<MpProviders />} />

@@ -43,6 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/', label: '运营工作台', icon: LayoutDashboard },
       { to: '/occupational-submissions', label: '职业健康投稿', icon: FileText, permission: 'occupational.read' },
       { to: '/volunteer-applications', label: '志愿者报名', icon: HeartHandshake, permission: 'volunteer.read' },
+      { to: '/doctor-volunteers', label: '医师志愿者', icon: Stethoscope, permission: 'volunteer.read' },
     ],
   },
   {
