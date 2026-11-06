@@ -119,6 +119,7 @@ export default function DoctorVolunteers() {
   const [keyword, setKeyword] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [comment, setComment] = useState('')
+  const [resetPwd, setResetPwd] = useState('')
 
   const canRead = can(admin?.role, 'volunteer.read')
   const headers = { 'X-ClinInsOS-Token': token }
@@ -170,6 +171,21 @@ export default function DoctorVolunteers() {
     setToken('')
     toast.error('备案库登录已过期，请重新连接')
   }
+
+  const resetPwdMutation = useMutation({
+    mutationFn: async (payload: { phone: string; new_password: string }) => {
+      const { data } = await api.post('/admin/clininsos-volunteers/h5-password/reset', payload, { headers })
+      return data
+    },
+    onSuccess: async () => {
+      toast.success('登录密码已重置')
+      setResetPwd('')
+    },
+    onError: (error: { response?: { status?: number; data?: { detail?: string } } }) => {
+      if (error.response?.status === 401) return handleUnauthorized()
+      toast.error(error.response?.data?.detail || '重置失败，请重试')
+    },
+  })
 
   const reviewMutation = useMutation({
     mutationFn: async (payload: { action: 'approve' | 'reject'; level: number; comment: string }) => {
@@ -398,6 +414,26 @@ export default function DoctorVolunteers() {
                 </div>
               )}
 
+              <div className="space-y-2 border-t pt-4">
+                <p className="text-sm font-medium">重置 H5 登录密码（用户忘记密码时使用）</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={resetPwd}
+                    onChange={(e) => setResetPwd(e.target.value)}
+                    placeholder="输入新密码（6-32 位）"
+                    type="text"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={resetPwdMutation.isPending || resetPwd.trim().length < 6}
+                    onClick={() => resetPwdMutation.mutate({ phone: detail.phone, new_password: resetPwd.trim() })}
+                  >
+                    {resetPwdMutation.isPending && <Loader2 className="animate-spin" />}
+                    重置
+                  </Button>
+                </div>
+              </div>
               {detail.status === 'pending' && (
                 <div className="space-y-3 border-t pt-4">
                   <p className="font-medium">审核操作{detail.review_level >= 1 ? '（当前：初审通过，待终审）' : '（当前：待初审）'}</p>

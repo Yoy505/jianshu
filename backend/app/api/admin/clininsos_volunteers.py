@@ -76,6 +76,28 @@ async def list_volunteers(
     return resp.json()
 
 
+@router.post("/h5-password/reset")
+async def reset_h5_password(
+    body: dict = Body(...),
+    _admin=Depends(get_current_admin),
+    x_clininsos_token: str = Header(default=""),
+) -> dict:
+    """重置志愿者 H5 登录密码（按手机号，管理员兜底，无需短信）。"""
+    _require_token(x_clininsos_token)
+    resp = await _forward(
+        x_clininsos_token,
+        "/admin/volunteers/h5-password/reset",
+        method="POST",
+        json_body={
+            "phone": body.get("phone", ""),
+            "new_password": body.get("new_password", ""),
+        },
+    )
+    if resp.status_code != 200:
+        raise HTTPException(502, f"重置失败：{resp.text[:160]}")
+    return resp.json()
+
+
 @router.get("/{public_id}")
 async def volunteer_detail(
     public_id: str,
